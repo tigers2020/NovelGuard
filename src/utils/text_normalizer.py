@@ -8,6 +8,11 @@
 import re
 from typing import Set
 
+# 정규화 성능 최적화를 위한 컴파일된 정규식
+_WHITESPACE_PATTERN = re.compile(r'[ \t]+')
+_CRLF_PATTERN = re.compile(r'\r\n?')
+_ZERO_WIDTH_CHARS = str.maketrans('', '', '\u200b\u200c\u200d\ufeff')
+
 
 # 꼬리표 제거용 키워드 집합
 TAIL_TAGS: Set[str] = {
@@ -71,6 +76,7 @@ def normalize_text_for_comparison(content: str) -> str:
     
     공백/줄바꿈 차이만 있는 파일도 동일하게 인식하기 위한 정규화.
     v1.5 normalized_hash에서도 사용됩니다.
+    성능 최적화: 컴파일된 정규식과 translate를 사용하여 처리 속도 향상.
     
     Args:
         content: 원본 텍스트 내용
@@ -87,25 +93,21 @@ def normalize_text_for_comparison(content: str) -> str:
     if not content:
         return ""
     
-    # 1. 줄바꿈 통일 (CRLF/LF/CR → LF)
-    normalized = content.replace('\r\n', '\n')  # CRLF → LF
-    normalized = normalized.replace('\r', '\n')  # CR → LF
+    # 1. 줄바꿈 통일 (CRLF/LF/CR → LF) - 컴파일된 정규식 사용
+    normalized = _CRLF_PATTERN.sub('\n', content)
     
-    # 2. 연속 공백 축약 (탭 포함)
+    # 2. 연속 공백 축약 (탭 포함) - 컴파일된 정규식 사용
     # 단, 줄바꿈은 유지
     lines = normalized.split('\n')
     normalized_lines = []
     for line in lines:
         # 줄 내 연속 공백을 단일 공백으로
-        normalized_line = re.sub(r'[ \t]+', ' ', line)
+        normalized_line = _WHITESPACE_PATTERN.sub(' ', line)
         normalized_lines.append(normalized_line)
     normalized = '\n'.join(normalized_lines)
     
-    # 3. 제로폭 문자 제거
-    normalized = normalized.replace('\u200b', '')
-    normalized = normalized.replace('\u200c', '')
-    normalized = normalized.replace('\u200d', '')
-    normalized = normalized.replace('\ufeff', '')
+    # 3. 제로폭 문자 제거 - translate 사용 (한 번에 처리)
+    normalized = normalized.translate(_ZERO_WIDTH_CHARS)
     
     # 4. 앞뒤 공백 제거
     normalized = normalized.strip()

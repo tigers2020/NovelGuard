@@ -4,6 +4,8 @@
 데이터 포맷팅 관련 유틸리티 함수를 제공합니다.
 """
 
+from .constants import BYTES_PER_KB
+
 
 def format_file_size(size_bytes: int) -> str:
     """파일 크기를 읽기 쉬운 형식으로 변환합니다.
@@ -34,8 +36,8 @@ def format_file_size(size_bytes: int) -> str:
     unit_index = 0
     size = float(size_bytes)
     
-    while size >= 1024 and unit_index < len(units) - 1:
-        size /= 1024
+    while size >= BYTES_PER_KB and unit_index < len(units) - 1:
+        size /= BYTES_PER_KB
         unit_index += 1
     
     if unit_index == 0:

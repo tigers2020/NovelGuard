@@ -9,12 +9,27 @@ from typing import Optional
 import logging
 
 from PySide6.QtCore import QThread, Signal
-import charset_normalizer
 
 from models.file_record import FileRecord
 from utils.logger import get_logger
 from utils.exceptions import FileScanError, FileEncodingError
-from utils.filename_parser import extract_title, extract_normalized_title, extract_episode_range
+from utils.encoding_detector import detect_encoding_path
+from utils.constants import (
+    SCAN_BATCH_SIZE,
+    DEFAULT_ENCODING,
+    ENCODING_UNKNOWN,
+    ENCODING_EMPTY,
+    ENCODING_NA,
+    ENCODING_NOT_DETECTED,
+)
+from utils.filename_parser import (
+    extract_title, 
+    extract_normalized_title, 
+    extract_episode_range,
+    extract_base_title,
+    extract_episode_end,
+    extract_variant_flags
+)
 
 
 class FileScannerThread(QThread):
@@ -36,17 +51,17 @@ class FileScannerThread(QThread):
     scan_finished = Signal(int)  # 총 파일 개수
     scan_error = Signal(str)  # 오류 메시지
     
-    def __init__(self, folder_path: Path, detect_encoding: bool = False) -> None:
+    def __init__(self, folder_path: Path, detect_encoding: bool = True) -> None:
         """파일 스캐너 스레드 초기화.
         
         Args:
             folder_path: 스캔할 폴더 경로
-            detect_encoding: 인코딩 감지 여부 (기본값: False, 속도 우선)
+            detect_encoding: 인코딩 감지 여부 (기본값: True, 정책 변경: 스캔 단계에서 encoding 확정)
         """
         super().__init__()
         self.folder_path = folder_path
         self.detect_encoding = detect_encoding
-        self._batch_size = 20  # 배치 크기 (UI 반응성 향상)
+        self._batch_size = SCAN_BATCH_SIZE
         self._logger = get_logger("FileScanner")
     
     def run(self) -> None:
@@ -89,19 +104,31 @@ class FileScannerThread(QThread):
                     # 파일 크기 (O(1) - 메타데이터만 읽음)
                     file_size = file_path.stat().st_size
                     
-                    # 인코딩 감지 (선택적)
-                    encoding = "-"
+                    # 인코딩 감지 (정책 변경: 스캔 단계에서 encoding 확정)
+                    # 이후 단계에서 재감지하지 않도록 실제 인코딩 값을 저장
+                    encoding = ENCODING_NOT_DETECTED
                     if self.detect_encoding:
                         try:
-                            encoding = self._detect_encoding_optimized(file_path)
+                            encoding = detect_encoding_path(file_path)
+                            # "Unknown", "Empty", "N/A"는 기본값으로 처리
+                            if encoding in (ENCODING_UNKNOWN, ENCODING_EMPTY, ENCODING_NA):
+                                encoding = DEFAULT_ENCODING
                         except FileEncodingError as e:
                             self._logger.warning(f"인코딩 감지 실패: {file_path} - {e}")
-                            encoding = "N/A"
+                            encoding = DEFAULT_ENCODING
                     
                     # 파일명 파싱 (제목, 정규화 제목, 회차 범위)
                     title = extract_title(file_path.name)
                     normalized_title = extract_normalized_title(file_path.name)
                     episode_range = extract_episode_range(file_path.name)
+                    
+                    # 부분 해싱 기반 중복 탐지용 필드 추출
+                    base_title = extract_base_title(file_path.name)
+                    episode_end = extract_episode_end(file_path.name)
+                    variant_flags = extract_variant_flags(file_path.name)
+                    
+                    # 파일 수정 시간 (mtime)
+                    mtime = file_path.stat().st_mtime
                     
                     # FileRecord 생성
                     file_record = FileRecord(
@@ -112,6 +139,10 @@ class FileScannerThread(QThread):
                         title=title if title else None,
                         normalized_title=normalized_title if normalized_title else None,
                         episode_range=episode_range,
+                        base_title=base_title if base_title else None,
+                        episode_end=episode_end,
+                        variant_flags=variant_flags if variant_flags else None,
+                        mtime=mtime,
                     )
                     
                     batch.append(file_record)
@@ -164,52 +195,4 @@ class FileScannerThread(QThread):
             self._logger.error(error_msg, exc_info=True)
             self.scan_error.emit(f"스캔 중 오류 발생: {str(e)}")
     
-    def _detect_encoding_optimized(self, file_path: Path) -> str:
-        """인코딩을 최적화된 방식으로 감지합니다.
-        
-        전체 파일을 읽지 않고 샘플만 읽어서 인코딩을 감지합니다.
-        시간 복잡도: O(1) - 최대 32KB만 읽음 (더 작은 샘플로 최적화)
-        
-        Args:
-            file_path: 감지할 파일 경로
-            
-        Returns:
-            감지된 인코딩 이름 또는 "Unknown"/"N/A"/"Empty"
-            
-        Raises:
-            FileEncodingError: 인코딩 감지 중 오류 발생 시
-        """
-        # 최대 샘플 크기: 32KB (인코딩 감지에 충분하며 더 빠름)
-        MAX_SAMPLE_SIZE = 32 * 1024
-        
-        try:
-            with open(file_path, "rb") as f:
-                # 파일 크기 확인
-                file_size = file_path.stat().st_size
-                
-                if file_size == 0:
-                    return "Empty"
-                
-                # 샘플만 읽기 (O(1) 상수 시간)
-                sample_size = min(file_size, MAX_SAMPLE_SIZE)
-                raw_data = f.read(sample_size)
-                
-                if not raw_data:
-                    return "Unknown"
-                
-                # charset_normalizer는 샘플로도 정확하게 감지 가능
-                detected = charset_normalizer.detect(raw_data)
-                if detected and detected.get("encoding"):
-                    encoding = detected["encoding"]
-                    self._logger.debug(f"인코딩 감지 성공: {file_path} - {encoding}")
-                    return encoding
-                
-                return "Unknown"
-                
-        except (OSError, PermissionError) as e:
-            self._logger.warning(f"인코딩 감지 중 파일 접근 오류: {file_path} - {e}")
-            raise FileEncodingError(f"파일 접근 오류: {file_path}") from e
-        except Exception as e:
-            self._logger.error(f"인코딩 감지 중 예상치 못한 오류: {file_path} - {e}", exc_info=True)
-            raise FileEncodingError(f"인코딩 감지 실패: {file_path}") from e
 

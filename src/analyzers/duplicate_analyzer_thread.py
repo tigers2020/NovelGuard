@@ -12,6 +12,7 @@ from PySide6.QtCore import QThread, Signal
 
 from models.file_record import FileRecord
 from analyzers.duplicate_analyzer import DuplicateAnalyzer
+from analyzers.duplicate_group import DuplicateGroup
 from utils.logger import get_logger
 from utils.exceptions import DuplicateAnalysisError
 
@@ -25,13 +26,16 @@ class DuplicateAnalyzerThread(QThread):
     Signals:
         analysis_finished: 분석이 완료되었을 때 발생
             Args: duplicate_groups (list[list[FileRecord]]) - 중복 그룹 리스트
+        analysis_finished_with_groups: 분석이 완료되었을 때 발생 (DuplicateGroup 정보 포함)
+            Args: duplicate_groups (list[DuplicateGroup]) - 중복 그룹 리스트 (keep_file 정보 포함)
         analysis_error: 분석 중 오류가 발생했을 때 발생
             Args: error_message (str) - 오류 메시지
         progress_updated: 진행 상황이 업데이트되었을 때 발생 (선택적)
             Args: message (str) - 진행 상황 메시지
     """
     
-    analysis_finished = Signal(list)  # 중복 그룹 리스트
+    analysis_finished = Signal(list)  # 중복 그룹 리스트 (기존 호환성)
+    analysis_finished_with_groups = Signal(list)  # DuplicateGroup 리스트 (keep_file 정보 포함)
     analysis_error = Signal(str)  # 오류 메시지
     progress_updated = Signal(str)  # 진행 상황 메시지
     
@@ -50,96 +54,31 @@ class DuplicateAnalyzerThread(QThread):
         
         백그라운드에서 중복 분석을 수행합니다.
         """
-        # #region agent log
-        import json
-        import time
-        try:
-            with open(r"f:\Python_Projects\NovelGuard\.cursor\debug.log", "a", encoding="utf-8") as f:
-                f.write(json.dumps({
-                    "sessionId": "debug-session",
-                    "runId": "run1",
-                    "hypothesisId": "A",
-                    "location": "duplicate_analyzer_thread.py:run",
-                    "message": "Thread run() started",
-                    "data": {"file_count": len(self.file_records), "thread_id": id(self)},
-                    "timestamp": int(time.time() * 1000)
-                }) + "\n")
-        except: pass
-        # #endregion
-        
         try:
             self._logger.info(f"중복 분석 시작: {len(self.file_records)}개 파일")
-            self.progress_updated.emit("중복 분석 중...")
+            self.progress_updated.emit("중복 분석 시작...")
             
-            # #region agent log
-            try:
-                with open(r"f:\Python_Projects\NovelGuard\.cursor\debug.log", "a", encoding="utf-8") as f:
-                    f.write(json.dumps({
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "B",
-                        "location": "duplicate_analyzer_thread.py:run",
-                        "message": "Before analyzer.analyze()",
-                        "data": {"timestamp": int(time.time() * 1000)},
-                        "timestamp": int(time.time() * 1000)
-                    }) + "\n")
-            except: pass
-            # #endregion
+            # 진행 상황 콜백 함수 정의
+            def progress_callback(message: str) -> None:
+                """진행 상황을 GUI에 전달합니다."""
+                self.progress_updated.emit(message)
             
             # 중복 분석 수행
-            analyzer = DuplicateAnalyzer()
-            duplicate_groups = analyzer.analyze(self.file_records)
+            analyzer = DuplicateAnalyzer(progress_callback=progress_callback)
             
-            # #region agent log
-            try:
-                with open(r"f:\Python_Projects\NovelGuard\.cursor\debug.log", "a", encoding="utf-8") as f:
-                    f.write(json.dumps({
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "B",
-                        "location": "duplicate_analyzer_thread.py:run",
-                        "message": "After analyzer.analyze()",
-                        "data": {"groups_found": len(duplicate_groups), "timestamp": int(time.time() * 1000)},
-                        "timestamp": int(time.time() * 1000)
-                    }) + "\n")
-            except: pass
-            # #endregion
+            # keep_file 정보를 포함한 그룹 정보 가져오기
+            duplicate_groups_with_info = analyzer.analyze_with_groups(self.file_records)
             
-            self._logger.info(f"중복 분석 완료: {len(duplicate_groups)}개 그룹 발견")
-            self.progress_updated.emit("중복 분석 완료")
+            # 기존 호환성을 위해 list[list[FileRecord]] 형태도 생성
+            duplicate_groups_simple = [group.members for group in duplicate_groups_with_info]
             
-            # #region agent log
-            try:
-                with open(r"f:\Python_Projects\NovelGuard\.cursor\debug.log", "a", encoding="utf-8") as f:
-                    f.write(json.dumps({
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "C",
-                        "location": "duplicate_analyzer_thread.py:run",
-                        "message": "Before emit analysis_finished",
-                        "data": {"timestamp": int(time.time() * 1000)},
-                        "timestamp": int(time.time() * 1000)
-                    }) + "\n")
-            except: pass
-            # #endregion
+            self._logger.info(f"중복 분석 완료: {len(duplicate_groups_with_info)}개 그룹 발견")
+            # analyze_with_groups() 내부에서 이미 최종 진행 상황을 emit하므로 여기서는 생략
             
-            # 결과 전송
-            self.analysis_finished.emit(duplicate_groups)
-            
-            # #region agent log
-            try:
-                with open(r"f:\Python_Projects\NovelGuard\.cursor\debug.log", "a", encoding="utf-8") as f:
-                    f.write(json.dumps({
-                        "sessionId": "debug-session",
-                        "runId": "run1",
-                        "hypothesisId": "C",
-                        "location": "duplicate_analyzer_thread.py:run",
-                        "message": "After emit analysis_finished",
-                        "data": {"timestamp": int(time.time() * 1000)},
-                        "timestamp": int(time.time() * 1000)
-                    }) + "\n")
-            except: pass
-            # #endregion
+            # 결과 전송 (기존 호환성)
+            self.analysis_finished.emit(duplicate_groups_simple)
+            # keep_file 정보 포함 그룹 전송
+            self.analysis_finished_with_groups.emit(duplicate_groups_with_info)
             
         except DuplicateAnalysisError as e:
             error_msg = f"중복 분석 오류: {str(e)}"

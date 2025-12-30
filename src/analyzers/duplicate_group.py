@@ -34,6 +34,8 @@ class DuplicateGroup(BaseModel):
         default=None,
         description="관계 엣지 리스트 (선택적, 내부 사용). 각 엣지는 {file1_idx, file2_idx, reason, evidence} 형태"
     )
+    keep_file: Optional[FileRecord] = Field(default=None, description="최신본 파일 (유지할 파일)")
+    duplicate_strength: Optional[str] = Field(default=None, description="중복 강도 (WEAK/STRONG/CERTAIN)")
     
     def to_file_record_groups(self) -> list[list[FileRecord]]:
         """list[list[FileRecord]] 형태로 변환합니다.

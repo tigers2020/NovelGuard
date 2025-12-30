@@ -22,6 +22,11 @@ class FileRecord(BaseModel):
         episode_range: 회차 범위 (시작, 끝) 튜플
         md5_hash: MD5 해시값 (완전 동일 파일 탐지용)
         normalized_hash: 정규화 해시값 (v1.5용, 선택적)
+        base_title: 작품명만 남긴 제목 (에피소드/권수/파트 제거)
+        episode_end: 회차 범위의 끝값 (예: 1-114 → 114)
+        variant_flags: 변형 플래그 리스트 (외전/번외/완결/합본 등)
+        mtime: 파일 수정 시간 (타임스탬프)
+        anchor_hashes: 앵커 해시 딕셔너리 (head/mid/tail)
     """
     
     path: Path
@@ -37,6 +42,13 @@ class FileRecord(BaseModel):
     # 해시 필드 (선택적, 분석 시 계산)
     md5_hash: Optional[str] = Field(default=None, description="MD5 해시값 (완전 동일 파일 탐지용)")
     normalized_hash: Optional[str] = Field(default=None, description="정규화 해시값 (v1.5용)")
+    
+    # 부분 해싱 기반 중복 탐지용 필드
+    base_title: Optional[str] = Field(default=None, description="작품명만 남긴 제목 (에피소드/권수/파트 제거)")
+    episode_end: Optional[int] = Field(default=None, description="회차 범위의 끝값 (예: 1-114 → 114)")
+    variant_flags: Optional[list[str]] = Field(default=None, description="변형 플래그 리스트 (외전/번외/완결/합본 등)")
+    mtime: Optional[float] = Field(default=None, description="파일 수정 시간 (타임스탬프)")
+    anchor_hashes: Optional[dict[str, str]] = Field(default=None, description="앵커 해시 딕셔너리 (head/mid/tail)")
     
     @field_validator("name")
     @classmethod
