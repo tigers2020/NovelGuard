@@ -1,0 +1,10 @@
+# NovelGuard 프로젝트 의존성 패키지
+
+# GUI 프레임워크
+PySide6>=6.6.0
+
+# 파일 인코딩 자동 감지
+charset-normalizer>=3.0.0
+
+# 데이터 모델 검증
+pydantic>=2.0.0
