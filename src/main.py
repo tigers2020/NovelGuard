@@ -6,7 +6,28 @@ GUI 애플리케이션의 진입점입니다.
 
 import sys
 import logging
+import io
 from pathlib import Path
+
+# Windows에서 콘솔 출력 인코딩을 UTF-8로 설정
+if sys.platform == "win32":
+    # 표준 출력/에러 스트림을 UTF-8로 설정
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    # 콘솔 코드 페이지를 UTF-8로 변경 (Windows)
+    try:
+        import os
+        os.system("chcp 65001 >nul 2>&1")
+    except Exception:
+        pass
+
+# src 디렉토리를 Python 경로에 추가
+# 이 파일이 src/main.py에 있으므로, src 디렉토리의 부모를 경로에 추가
+src_dir = Path(__file__).parent
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
 
 from PySide6.QtWidgets import QApplication
 

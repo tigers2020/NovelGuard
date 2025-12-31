@@ -6,12 +6,14 @@
 
 from pathlib import Path
 from typing import Optional, Any
-import shutil
 import logging
 
 from models.file_record import FileRecord
 from analyzers.duplicate_group import DuplicateGroup
 from utils.logger import get_logger
+from utils.file_mover import FileMover
+from utils.path_resolver import PathResolver
+from utils.organization_result_aggregator import OrganizationResultAggregator
 
 
 class FileOrganizer:
@@ -34,24 +36,11 @@ class FileOrganizer:
         """
         self._logger = get_logger("FileOrganizer")
         self._root_folder = root_folder
-        self._old_versions_folder = root_folder / self.OLD_VERSIONS_FOLDER_NAME
-    
-    def create_old_versions_folder(self) -> Path:
-        """old_versions 폴더를 생성합니다.
         
-        Returns:
-            생성된 old_versions 폴더 경로
-        
-        Raises:
-            OSError: 폴더 생성 실패 시
-        """
-        try:
-            self._old_versions_folder.mkdir(exist_ok=True)
-            self._logger.info(f"old_versions 폴더 생성/확인: {self._old_versions_folder}")
-            return self._old_versions_folder
-        except OSError as e:
-            self._logger.error(f"old_versions 폴더 생성 실패: {e}", exc_info=True)
-            raise
+        # 분리된 책임 클래스들 초기화
+        self._mover = FileMover()
+        self._path_resolver = PathResolver()
+        self._result_aggregator = OrganizationResultAggregator()
     
     def move_file_safely(self, source: Path, destination: Path, dry_run: bool = False) -> bool:
         """파일을 안전하게 이동합니다.
@@ -70,44 +59,11 @@ class FileOrganizer:
             FileNotFoundError: 원본 파일이 없을 때
             OSError: 파일 이동 실패 시
         """
-        if not source.exists():
-            error_msg = f"원본 파일이 없습니다: {source}"
-            self._logger.error(error_msg)
-            raise FileNotFoundError(error_msg)
+        # 경로 충돌 해결
+        safe_destination = self._path_resolver.resolve_conflict(destination)
         
-        if dry_run:
-            self._logger.debug(f"[DRY-RUN] 파일 이동 시뮬레이션: {source} -> {destination}")
-            return True
-        
-        # 대상 경로가 이미 존재하는 경우 번호 추가
-        if destination.exists():
-            base_name = destination.stem
-            extension = destination.suffix
-            parent = destination.parent
-            counter = 1
-            
-            while destination.exists():
-                new_name = f"{base_name}_{counter}{extension}"
-                destination = parent / new_name
-                counter += 1
-            
-            self._logger.warning(
-                f"대상 경로 충돌: 원본 경로로 변경됨 - {destination}"
-            )
-        
-        try:
-            # 부모 디렉토리 생성 (필요한 경우)
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            
-            # 파일 이동
-            shutil.move(str(source), str(destination))
-            self._logger.info(f"파일 이동 완료: {source} -> {destination}")
-            return True
-            
-        except OSError as e:
-            error_msg = f"파일 이동 실패: {source} -> {destination}, 오류: {e}"
-            self._logger.error(error_msg, exc_info=True)
-            raise
+        # 파일 이동
+        return self._mover.move(source, safe_destination, dry_run=dry_run)
     
     def organize_duplicates(
         self,
@@ -131,26 +87,18 @@ class FileOrganizer:
         """
         if not duplicate_groups:
             self._logger.info("정리할 중복 그룹이 없습니다.")
-            return {
-                "moved_count": 0,
-                "failed_count": 0,
-                "failed_files": [],
-                "moved_files": []
-            }
+            return self._result_aggregator.create_empty_result()
         
         # old_versions 폴더 생성 (dry_run이 아니면)
+        old_versions_folder: Optional[Path] = None
         if not dry_run:
             try:
-                self.create_old_versions_folder()
+                old_versions_folder = self._path_resolver.create_old_versions_folder(
+                    self._root_folder, self.OLD_VERSIONS_FOLDER_NAME
+                )
             except OSError as e:
                 self._logger.error(f"old_versions 폴더 생성 실패: {e}")
-                return {
-                    "moved_count": 0,
-                    "failed_count": 0,
-                    "failed_files": [],
-                    "moved_files": [],
-                    "error": f"폴더 생성 실패: {e}"
-                }
+                return self._result_aggregator.create_error_result(f"폴더 생성 실패: {e}")
         
         moved_count = 0
         failed_count = 0
@@ -177,9 +125,20 @@ class FileOrganizer:
             # 각 중복 파일을 old_versions 폴더로 이동
             for duplicate in duplicates:
                 try:
-                    # 상대 경로 유지 (루트 폴더 기준)
-                    relative_path = duplicate.path.relative_to(self._root_folder)
-                    destination = self._old_versions_folder / relative_path
+                    # 목적지 경로 생성 (PathResolver 사용)
+                    if old_versions_folder:
+                        destination = self._path_resolver.resolve_destination_path(
+                            duplicate.path,
+                            self._root_folder,
+                            old_versions_folder
+                        )
+                    else:
+                        # dry_run 모드: 임시 경로 생성
+                        destination = self._path_resolver.resolve_destination_path(
+                            duplicate.path,
+                            self._root_folder,
+                            self._root_folder / self.OLD_VERSIONS_FOLDER_NAME
+                        )
                     
                     # 파일 이동
                     success = self.move_file_safely(
@@ -203,15 +162,11 @@ class FileOrganizer:
                         exc_info=True
                     )
         
-        result = {
-            "moved_count": moved_count,
-            "failed_count": failed_count,
-            "failed_files": [str(f) for f in failed_files],
-            "moved_files": moved_files
-        }
+        # 결과 집계
+        result = self._result_aggregator.aggregate(moved_files, failed_files)
         
         self._logger.info(
-            f"파일 정리 완료: {moved_count}개 이동, {failed_count}개 실패"
+            f"파일 정리 완료: {result['moved_count']}개 이동, {result['failed_count']}개 실패"
         )
         
         return result

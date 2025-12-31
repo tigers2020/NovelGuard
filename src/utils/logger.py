@@ -49,8 +49,17 @@ def setup_logger(
     )
     
     # 콘솔 핸들러 (항상 추가)
+    # Windows에서 UTF-8 인코딩 지원
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(level)
+    # Windows에서 UTF-8 출력을 위해 인코딩 설정
+    if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
+        try:
+            # StreamHandler의 기본 인코딩은 시스템 기본값이므로
+            # sys.stdout을 UTF-8로 재구성 (main.py에서 이미 수행됨)
+            pass
+        except Exception:
+            pass
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
     

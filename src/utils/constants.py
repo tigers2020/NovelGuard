@@ -159,3 +159,17 @@ FILE_EXTENSION_TXT: str = ".txt"
 # 바이트 단위 변환 상수
 BYTES_PER_KB: int = 1024
 
+
+# ============================================================================
+# 무결성 검사 관련 상수
+# ============================================================================
+
+# 무결성 검사 시 디코딩 검증에 사용하는 샘플 크기 (32KB)
+# 인코딩 감지와 동일한 크기를 사용하여 일관성을 유지합니다.
+INTEGRITY_DECODE_SAMPLE_SIZE: int = ENCODING_SAMPLE_SIZE
+
+# 무결성 이슈 코드 상수
+# 각 이슈 유형을 식별하는 코드입니다.
+INTEGRITY_ISSUE_CODE_EMPTY_FILE: str = "EMPTY_FILE"
+INTEGRITY_ISSUE_CODE_READ_ERROR: str = "READ_ERROR"
+INTEGRITY_ISSUE_CODE_DECODE_ERROR: str = "DECODE_ERROR"

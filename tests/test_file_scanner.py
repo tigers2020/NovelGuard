@@ -54,7 +54,7 @@ class TestFileScannerThread(unittest.TestCase):
         scanner = FileScannerThread(self.test_dir)
         
         self.assertEqual(scanner.folder_path, self.test_dir)
-        self.assertFalse(scanner.detect_encoding)
+        self.assertTrue(scanner.detect_encoding)  # 기본값이 True로 변경됨
         self.assertEqual(scanner._batch_size, 20)
     
     def test_scanner_with_encoding_detection(self) -> None:

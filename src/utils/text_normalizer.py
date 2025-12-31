@@ -2,19 +2,19 @@
 텍스트 정규화 유틸리티
 
 파일명과 본문 텍스트를 정규화하는 기능을 제공합니다.
-정규화 규칙을 한 곳에 모아 재사용 가능하게 구성합니다.
+하위 호환성을 위해 함수 형태로 래핑된 API를 제공합니다.
 """
 
-import re
 from typing import Set
 
-# 정규화 성능 최적화를 위한 컴파일된 정규식
-_WHITESPACE_PATTERN = re.compile(r'[ \t]+')
-_CRLF_PATTERN = re.compile(r'\r\n?')
-_ZERO_WIDTH_CHARS = str.maketrans('', '', '\u200b\u200c\u200d\ufeff')
+from utils.normalizers.title_normalizer import TitleNormalizer
+from utils.normalizers.text_normalizer import TextNormalizer
 
+# 전역 인스턴스 (성능 최적화)
+_title_normalizer = TitleNormalizer()
+_text_normalizer = TextNormalizer()
 
-# 꼬리표 제거용 키워드 집합
+# 꼬리표 제거용 키워드 집합 (하위 호환성)
 TAIL_TAGS: Set[str] = {
     "완결", "외전", "번역", "수정", "합본", "통합", "합치기", 
     "단행본", "웹", "EPUB에서 변환", "EPUB", "변환",
@@ -39,36 +39,7 @@ def normalize_title(title: str) -> str:
         >>> normalize_title("갓 오브 블랙필드 1부 01권")
         "갓 오브 블랙필드 1부"
     """
-    if not title:
-        return ""
-    
-    # 1. 연속 공백을 단일 공백으로
-    normalized = re.sub(r'\s+', ' ', title)
-    
-    # 2. 괄호 내용 제거 (선택적 - 외전, 번역 등 표기 제거)
-    # 예: "제목 (완결)" -> "제목"
-    normalized = re.sub(r'\s*\([^)]*\)', '', normalized)
-    normalized = re.sub(r'\s*\[[^\]]*\]', '', normalized)
-    
-    # 3. 꼬리표 제거
-    for tag in TAIL_TAGS:
-        # 단어 경계를 고려한 제거
-        pattern = rf'\b{re.escape(tag)}\b'
-        normalized = re.sub(pattern, '', normalized, flags=re.IGNORECASE)
-    
-    # 4. 제로폭 문자 제거
-    normalized = normalized.replace('\u200b', '')  # Zero-width space
-    normalized = normalized.replace('\u200c', '')  # Zero-width non-joiner
-    normalized = normalized.replace('\u200d', '')  # Zero-width joiner
-    normalized = normalized.replace('\ufeff', '')  # Zero-width no-break space
-    
-    # 5. 앞뒤 공백 제거
-    normalized = normalized.strip()
-    
-    # 6. 연속 공백 다시 정리 (꼬리표 제거 후 생긴 공백)
-    normalized = re.sub(r'\s+', ' ', normalized)
-    
-    return normalized.strip()
+    return _title_normalizer.normalize(title)
 
 
 def normalize_text_for_comparison(content: str) -> str:
@@ -90,27 +61,5 @@ def normalize_text_for_comparison(content: str) -> str:
         >>> normalize_text_for_comparison(text1) == normalize_text_for_comparison(text2)
         True
     """
-    if not content:
-        return ""
-    
-    # 1. 줄바꿈 통일 (CRLF/LF/CR → LF) - 컴파일된 정규식 사용
-    normalized = _CRLF_PATTERN.sub('\n', content)
-    
-    # 2. 연속 공백 축약 (탭 포함) - 컴파일된 정규식 사용
-    # 단, 줄바꿈은 유지
-    lines = normalized.split('\n')
-    normalized_lines = []
-    for line in lines:
-        # 줄 내 연속 공백을 단일 공백으로
-        normalized_line = _WHITESPACE_PATTERN.sub(' ', line)
-        normalized_lines.append(normalized_line)
-    normalized = '\n'.join(normalized_lines)
-    
-    # 3. 제로폭 문자 제거 - translate 사용 (한 번에 처리)
-    normalized = normalized.translate(_ZERO_WIDTH_CHARS)
-    
-    # 4. 앞뒤 공백 제거
-    normalized = normalized.strip()
-    
-    return normalized
+    return _text_normalizer.normalize(content)
 
