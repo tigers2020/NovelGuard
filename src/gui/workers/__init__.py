@@ -1,0 +1,2 @@
+"""QRunnable/QThread worker."""
+

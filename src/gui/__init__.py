@@ -1,4 +1,2 @@
-"""
-NovelGuard GUI 모듈
-"""
+"""GUI 모듈."""
 
