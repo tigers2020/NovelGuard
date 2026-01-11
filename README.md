@@ -65,9 +65,23 @@ pip install -r requirements.txt
 
 ### 실행
 
+**권장 방법** (프로젝트 루트에서):
 ```bash
+# 직접 실행
 python src/main.py
+
+# 또는 실행 스크립트 사용
+run.bat      # Windows CMD
+run.ps1      # Windows PowerShell
 ```
+
+**대체 방법** (모듈로 실행):
+```bash
+cd src
+python -m app.main
+```
+
+자세한 내용은 [진입점 문서](./docs/entry_points.md)를 참고하세요.
 
 ### 기본 워크플로우
 

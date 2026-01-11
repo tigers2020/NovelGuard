@@ -1,2 +1,1 @@
-"""QWidget/QMainWindow."""
-
+"""GUI Views Package."""

@@ -1,36 +1,30 @@
-"""NovelGuard 메인 진입점.
-
-GUI 애플리케이션을 시작합니다.
-"""
-
-# 표준 라이브러리
+"""애플리케이션 진입점."""
 import sys
 from pathlib import Path
 
-# 서드파티
 from PySide6.QtWidgets import QApplication
 
-# src 폴더를 sys.path에 추가 (프로토콜의 import 예시와 일치)
-src_path = Path(__file__).parent.parent
-if str(src_path) not in sys.path:
-    sys.path.insert(0, str(src_path))
-
-# 로컬
 from gui.views.main_window import MainWindow
+from gui.styles.dark_theme import get_dark_theme_stylesheet
 
 
-def main() -> None:
-    """메인 함수."""
+def main() -> int:
+    """애플리케이션 메인 함수."""
+    # QApplication 생성
     app = QApplication(sys.argv)
-    app.setApplicationName("NovelGuard")
+    app.setApplicationName("텍스트 정리 프로그램")
     app.setOrganizationName("NovelGuard")
     
+    # 다크 테마 적용
+    app.setStyleSheet(get_dark_theme_stylesheet())
+    
+    # 메인 윈도우 생성 및 표시
     window = MainWindow()
     window.show()
     
-    sys.exit(app.exec())
+    # 이벤트 루프 실행
+    return app.exec()
 
 
 if __name__ == "__main__":
-    main()
-
+    sys.exit(main())

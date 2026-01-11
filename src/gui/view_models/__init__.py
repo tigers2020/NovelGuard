@@ -1,2 +1,1 @@
-"""UI용 경량 모델."""
-
+"""GUI ViewModels Package."""

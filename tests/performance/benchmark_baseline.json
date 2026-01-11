@@ -1,0 +1,70 @@
+{
+  "measured_at": "2026-01-09T19:17:19.446498",
+  "environment": {
+    "os": "win32",
+    "python_version": "3.14.0"
+  },
+  "scan_throughput": {
+    "files_per_sec": 139016.44,
+    "num_files": 100,
+    "avg_elapsed_sec": 0.001,
+    "tolerance": 0.05,
+    "runs": [
+      {
+        "num_files": 100,
+        "elapsed": 0.0007266998291015625,
+        "throughput": 137608.39895013123
+      },
+      {
+        "num_files": 100,
+        "elapsed": 0.0006499290466308594,
+        "throughput": 153862.94937637565
+      },
+      {
+        "num_files": 100,
+        "elapsed": 0.0007963180541992188,
+        "throughput": 125577.96407185629
+      }
+    ]
+  },
+  "duplicate_detection": {
+    "groups_per_sec": 0.0,
+    "comparisons_per_sec": 4063304.96,
+    "num_groups": 0,
+    "num_records": 100,
+    "avg_elapsed_sec": 0.001,
+    "tolerance": 0.05,
+    "runs": [
+      {
+        "num_groups": 0,
+        "num_records": 100,
+        "elapsed": 0.0014426708221435547,
+        "throughput": 0.0,
+        "comparisons_per_sec": 3431136.142786316
+      },
+      {
+        "num_groups": 0,
+        "num_records": 100,
+        "elapsed": 0.0009753704071044922,
+        "throughput": 0.0,
+        "comparisons_per_sec": 5074995.062331948
+      },
+      {
+        "num_groups": 0,
+        "num_records": 100,
+        "elapsed": 0.0013437271118164062,
+        "throughput": 0.0,
+        "comparisons_per_sec": 3683783.676366217
+      }
+    ]
+  },
+  "memory_usage": {
+    "initial_rss_mb": 25.56,
+    "final_rss_mb": 25.56,
+    "delta_rss_mb": 0.0,
+    "peak_rss_mb": 25.56
+  },
+  "cpu_time": {
+    "cpu_time_seconds": 0.0
+  }
+}

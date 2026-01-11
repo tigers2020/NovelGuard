@@ -1,0 +1,243 @@
+{
+  "duplicate_groups": [],
+  "integrity_issues": [
+    {
+      "category": "ENCODING",
+      "file_id": 2,
+      "fixable": false,
+      "issue_id": 1,
+      "message": "인코딩 감지 실패",
+      "metrics": {},
+      "severity": "WARN",
+      "suggested_fix": null
+    },
+    {
+      "category": "TOO_SHORT",
+      "file_id": 2,
+      "fixable": true,
+      "issue_id": 2,
+      "message": "빈 파일",
+      "metrics": {},
+      "severity": "INFO",
+      "suggested_fix": "DELETE"
+    },
+    {
+      "category": "ENCODING",
+      "file_id": 3,
+      "fixable": false,
+      "issue_id": 3,
+      "message": "인코딩 감지 실패",
+      "metrics": {},
+      "severity": "WARN",
+      "suggested_fix": null
+    },
+    {
+      "category": "ENCODING",
+      "file_id": 4,
+      "fixable": false,
+      "issue_id": 4,
+      "message": "인코딩 감지 실패",
+      "metrics": {},
+      "severity": "WARN",
+      "suggested_fix": null
+    },
+    {
+      "category": "ENCODING",
+      "file_id": 5,
+      "fixable": false,
+      "issue_id": 5,
+      "message": "인코딩 감지 실패",
+      "metrics": {},
+      "severity": "WARN",
+      "suggested_fix": null
+    },
+    {
+      "category": "ENCODING",
+      "file_id": 6,
+      "fixable": false,
+      "issue_id": 6,
+      "message": "인코딩 감지 실패",
+      "metrics": {},
+      "severity": "WARN",
+      "suggested_fix": null
+    },
+    {
+      "category": "ENCODING",
+      "file_id": 7,
+      "fixable": false,
+      "issue_id": 7,
+      "message": "인코딩 감지 실패",
+      "metrics": {},
+      "severity": "WARN",
+      "suggested_fix": null
+    },
+    {
+      "category": "ENCODING",
+      "file_id": 8,
+      "fixable": false,
+      "issue_id": 8,
+      "message": "인코딩 감지 실패",
+      "metrics": {},
+      "severity": "WARN",
+      "suggested_fix": null
+    },
+    {
+      "category": "ENCODING",
+      "file_id": 9,
+      "fixable": false,
+      "issue_id": 9,
+      "message": "인코딩 감지 실패",
+      "metrics": {},
+      "severity": "WARN",
+      "suggested_fix": null
+    },
+    {
+      "category": "ENCODING",
+      "file_id": 10,
+      "fixable": false,
+      "issue_id": 10,
+      "message": "인코딩 감지 실패",
+      "metrics": {},
+      "severity": "WARN",
+      "suggested_fix": null
+    },
+    {
+      "category": "ENCODING",
+      "file_id": 11,
+      "fixable": false,
+      "issue_id": 11,
+      "message": "인코딩 감지 실패",
+      "metrics": {},
+      "severity": "WARN",
+      "suggested_fix": null
+    }
+  ],
+  "scan_results": [
+    {
+      "encoding_confidence": null,
+      "encoding_detected": null,
+      "ext": ".bin",
+      "file_id": 1,
+      "fingerprint_fast": null,
+      "is_text_guess": false,
+      "name": "binary.bin",
+      "path": "binary.bin",
+      "size": 6
+    },
+    {
+      "encoding_confidence": null,
+      "encoding_detected": null,
+      "ext": ".txt",
+      "file_id": 2,
+      "fingerprint_fast": null,
+      "is_text_guess": true,
+      "name": "empty_file.txt",
+      "path": "empty_file.txt",
+      "size": 0
+    },
+    {
+      "encoding_confidence": null,
+      "encoding_detected": null,
+      "ext": ".txt",
+      "file_id": 3,
+      "fingerprint_fast": null,
+      "is_text_guess": true,
+      "name": "large_file.txt",
+      "path": "large_file.txt",
+      "size": 28000
+    },
+    {
+      "encoding_confidence": null,
+      "encoding_detected": null,
+      "ext": ".txt",
+      "file_id": 4,
+      "fingerprint_fast": null,
+      "is_text_guess": true,
+      "name": "novel_1-114.txt",
+      "path": "novel_1-114.txt",
+      "size": 1615
+    },
+    {
+      "encoding_confidence": null,
+      "encoding_detected": null,
+      "ext": ".txt",
+      "file_id": 5,
+      "fingerprint_fast": null,
+      "is_text_guess": true,
+      "name": "novel_1-158.txt",
+      "path": "novel_1-158.txt",
+      "size": 2275
+    },
+    {
+      "encoding_confidence": null,
+      "encoding_detected": null,
+      "ext": ".txt",
+      "file_id": 6,
+      "fingerprint_fast": null,
+      "is_text_guess": true,
+      "name": "novel_euckr.txt",
+      "path": "novel_euckr.txt",
+      "size": 31
+    },
+    {
+      "encoding_confidence": null,
+      "encoding_detected": null,
+      "ext": ".txt",
+      "file_id": 7,
+      "fingerprint_fast": null,
+      "is_text_guess": true,
+      "name": "novel_title_A.txt",
+      "path": "novel_title_A.txt",
+      "size": 41
+    },
+    {
+      "encoding_confidence": null,
+      "encoding_detected": null,
+      "ext": ".txt",
+      "file_id": 8,
+      "fingerprint_fast": null,
+      "is_text_guess": true,
+      "name": "novel_title_B.txt",
+      "path": "novel_title_B.txt",
+      "size": 41
+    },
+    {
+      "encoding_confidence": null,
+      "encoding_detected": null,
+      "ext": ".txt",
+      "file_id": 9,
+      "fingerprint_fast": null,
+      "is_text_guess": true,
+      "name": "novel_utf8.txt",
+      "path": "novel_utf8.txt",
+      "size": 39
+    },
+    {
+      "encoding_confidence": null,
+      "encoding_detected": null,
+      "ext": ".txt",
+      "file_id": 10,
+      "fingerprint_fast": null,
+      "is_text_guess": true,
+      "name": "special_chars.txt",
+      "path": "special_chars.txt",
+      "size": 62
+    },
+    {
+      "encoding_confidence": null,
+      "encoding_detected": null,
+      "ext": ".txt",
+      "file_id": 11,
+      "fingerprint_fast": null,
+      "is_text_guess": true,
+      "name": "tiny_file.txt",
+      "path": "tiny_file.txt",
+      "size": 1
+    }
+  ],
+  "stats": {
+    "duplicate_groups_count": 0,
+    "integrity_issues_count": 11,
+    "total_files": 11
+  }
+}

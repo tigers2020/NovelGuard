@@ -1,2 +1,1 @@
-"""QRunnable/QThread worker."""
-
+"""GUI 워커 스레드."""

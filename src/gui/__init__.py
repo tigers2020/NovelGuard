@@ -1,2 +1,1 @@
-"""GUI 모듈."""
-
+"""NovelGuard GUI Package."""

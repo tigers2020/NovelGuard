@@ -1,67 +1,64 @@
-"""ScanWorker - 파일 스캔 Worker."""
+"""스캔 워커 스레드."""
+from typing import Optional
 
-from pathlib import Path
-from PySide6.QtCore import QThread, Signal
-from usecases.scan_files import ScanFilesUseCase
-from gui.signals.result_signals import ResultSignals
-from common.logging import setup_logging
+from PySide6.QtCore import QObject, QThread, Signal
 
-logger = setup_logging()
+from application.dto.scan_request import ScanRequest
+from application.dto.scan_result import ScanResult
+from application.ports.file_scanner import FileScanner
+from application.use_cases.scan_folder import ScanFolderUseCase
 
 
 class ScanWorker(QThread):
-    """파일 스캔 Worker.
+    """스캔 워커 스레드.
     
-    usecase 호출 및 signals emit.
+    QThread를 상속하여 별도 스레드에서 스캔 작업을 수행.
+    PreviewWorker와 동일한 패턴 사용.
     """
+    
+    scan_completed = Signal(ScanResult)
+    """스캔 완료 시그널."""
+    
+    scan_error = Signal(str)
+    """스캔 오류 시그널."""
+    
+    scan_progress = Signal(int, str)
+    """스캔 진행률 시그널 (processed_count, message)."""
     
     def __init__(
         self,
-        usecase: ScanFilesUseCase,
-        signals: ResultSignals,
-        root_path: Path,
-        parent=None
+        scanner: FileScanner,
+        request: ScanRequest,
+        parent: Optional[QObject] = None
     ) -> None:
-        """ScanWorker 초기화.
+        """스캔 워커 초기화.
         
         Args:
-            usecase: ScanFilesUseCase
-            signals: ResultSignals
-            root_path: 스캔 대상 경로
-            parent: 부모 객체
+            scanner: 파일 스캐너 (Port 인터페이스).
+            request: 스캔 요청 DTO.
+            parent: 부모 객체.
         """
         super().__init__(parent)
-        self.usecase = usecase
-        self.signals = signals
-        self.root_path = root_path
+        self._scanner = scanner
+        self._request = request
+        self._use_case = ScanFolderUseCase(scanner)
+        self._cancelled = False
+    
+    def cancel(self) -> None:
+        """스캔 취소."""
+        self._cancelled = True
+        # Scanner에도 취소 신호 전달 (Protocol 계약)
+        self._scanner.cancel()
     
     def run(self) -> None:
-        """Worker 실행."""
+        """워커 실행."""
         try:
-            def progress_callback(current: int, total: int, current_path: Path) -> None:
-                """진행 상황 콜백."""
-                self.signals.scan_progress.emit("스캔 중", current, total, str(current_path))
-            
-            # usecase 실행
-            records = self.usecase.execute(self.root_path, progress_callback)
-            
-            # FileRow 변환 (간단한 변환, 실제로는 도메인 모델에서 FileRow로 변환 필요)
-            from gui.view_models.file_row import FileRow
-            rows = []
-            for record in records:
-                row = FileRow(
-                    file_id=record.file_id,
-                    short_path=str(record.path),
-                    size=record.size,
-                    mtime=record.mtime,
-                    encoding=record.encoding_detected
-                )
-                rows.append(row)
-            
-            # Signal emit
-            self.signals.rows_appended.emit(rows)
-            
+            result = self._use_case.execute(
+                self._request,
+                progress_callback=lambda count, msg: self.scan_progress.emit(count, msg)
+            )
+            if not self._cancelled:
+                self.scan_completed.emit(result)
         except Exception as e:
-            logger.error(f"스캔 Worker 오류: {e}")
-            self.signals.log_event.emit("ERROR", f"스캔 실패: {e}", None)
-
+            if not self._cancelled:
+                self.scan_error.emit(str(e))

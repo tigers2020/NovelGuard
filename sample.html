@@ -133,6 +133,30 @@
             background: #1a1a1a;
         }
 
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .page-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #e0e0e0;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
         .action-bar {
             display: flex;
             gap: 16px;
@@ -349,6 +373,11 @@
             color: #f87171;
         }
 
+        .type-integrity {
+            background: #1f3d2f;
+            color: #34d399;
+        }
+
         .result-file {
             font-size: 14px;
             font-weight: 500;
@@ -365,7 +394,7 @@
         }
 
         .log-console {
-            background: #1e1e1e;
+            background: #0d0d0d;
             color: #d4d4d4;
             border-radius: 8px;
             padding: 16px;
@@ -374,6 +403,7 @@
             line-height: 1.6;
             max-height: 400px;
             overflow-y: auto;
+            border: 1px solid #2a2a2a;
         }
 
         .log-line {
@@ -476,6 +506,28 @@
             z-index: 1000;
             border: 1px solid #3a3a3a;
         }
+
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        select.form-control {
+            cursor: pointer;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin: 8px 0;
+        }
+
+        small {
+            color: #808080;
+            font-size: 12px;
+            display: block;
+            margin-top: 4px;
+        }
     </style>
 </head>
 <body>
@@ -510,23 +562,23 @@
             <div class="sidebar">
                 <div class="nav-section">
                     <div class="nav-title">메인 작업</div>
-                    <div class="nav-item active">
+                    <div class="nav-item active" onclick="switchTab('scan')">
                         <div class="nav-icon">📁</div>
                         파일 스캔
                     </div>
-                    <div class="nav-item">
+                    <div class="nav-item" onclick="switchTab('duplicate')">
                         <div class="nav-icon">🔍</div>
                         중복 파일 정리
                     </div>
-                    <div class="nav-item">
+                    <div class="nav-item" onclick="switchTab('small')">
                         <div class="nav-icon">📏</div>
                         작은 파일 정리
                     </div>
-                    <div class="nav-item">
+                    <div class="nav-item" onclick="switchTab('integrity')">
                         <div class="nav-icon">✓</div>
                         무결성 확인
                     </div>
-                    <div class="nav-item">
+                    <div class="nav-item" onclick="switchTab('encoding')">
                         <div class="nav-icon">🔤</div>
                         인코딩 통일
                     </div>
@@ -534,19 +586,19 @@
 
                 <div class="nav-section">
                     <div class="nav-title">관리</div>
-                    <div class="nav-item">
+                    <div class="nav-item" onclick="switchTab('stats')">
                         <div class="nav-icon">📊</div>
                         통계 및 리포트
                     </div>
-                    <div class="nav-item">
+                    <div class="nav-item" onclick="switchTab('logs')">
                         <div class="nav-icon">📝</div>
                         작업 로그
                     </div>
-                    <div class="nav-item">
+                    <div class="nav-item" onclick="switchTab('undo')">
                         <div class="nav-icon">↩️</div>
                         Undo/Rollback
                     </div>
-                    <div class="nav-item">
+                    <div class="nav-item" onclick="switchTab('settings')">
                         <div class="nav-icon">⚙️</div>
                         설정
                     </div>
@@ -554,258 +606,383 @@
             </div>
 
             <div class="content-area">
-                <div class="action-bar">
-                    <button class="btn btn-primary">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="17 8 12 3 7 8"/>
-                            <line x1="12" y1="3" x2="12" y2="15"/>
-                        </svg>
-                        폴더 선택
-                    </button>
-                    <button class="btn btn-primary">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polygon points="5 3 19 12 5 21 5 3"/>
-                        </svg>
-                        스캔 시작
-                    </button>
-                    <button class="btn btn-secondary">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="15" y1="9" x2="9" y2="15"/>
-                            <line x1="9" y1="9" x2="15" y2="15"/>
-                        </svg>
-                        중지
-                    </button>
-                    <button class="btn btn-secondary tooltip" data-tooltip="실제 작업 전 미리보기">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                            <circle cx="12" cy="12" r="3"/>
-                        </svg>
-                        Dry Run
-                    </button>
-                </div>
+                <!-- 파일 스캔 탭 -->
+                <div id="scan" class="tab-content active">
+                    <div class="page-title">📁 파일 스캔</div>
 
-                <div class="progress-section">
-                    <div class="progress-header">
-                        <div class="progress-title">스캔 진행 중...</div>
-                        <div class="progress-percent">45%</div>
+                    <div class="action-bar">
+                        <button class="btn btn-primary">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                            폴더 선택
+                        </button>
+                        <button class="btn btn-primary">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                            스캔 시작
+                        </button>
+                        <button class="btn btn-secondary">중지</button>
                     </div>
-                    <div class="progress-bar">
-                        <div class="progress-fill"></div>
-                    </div>
-                    <div class="progress-info">
-                        5,623 / 12,458 파일 처리 완료 • 평균 속도: 1,234 files/sec • 남은 시간: ~5분
-                    </div>
-                </div>
 
-                <div class="settings-group">
-                    <div class="settings-title">스캔 설정</div>
-                    <div class="form-group">
-                        <label class="form-label">대상 폴더</label>
-                        <input type="text" class="form-control" value="C:\Users\Documents\TextFiles" readonly>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">파일 확장자 필터</label>
-                        <input type="text" class="form-control" placeholder=".txt, .md, .log (비어있으면 모든 텍스트 파일)">
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">스캔 옵션</label>
-                        <div class="checkbox-group">
-                            <label class="checkbox-item">
-                                <input type="checkbox" checked>
-                                <span>하위 폴더 포함</span>
-                            </label>
-                            <label class="checkbox-item">
-                                <input type="checkbox" checked>
-                                <span>증분 스캔 (변경된 파일만)</span>
-                            </label>
-                            <label class="checkbox-item">
-                                <input type="checkbox">
-                                <span>숨김 파일 포함</span>
-                            </label>
-                            <label class="checkbox-item">
-                                <input type="checkbox" checked>
-                                <span>심볼릭 링크 따라가기</span>
-                            </label>
+                    <div class="progress-section">
+                        <div class="progress-header">
+                            <div class="progress-title">스캔 진행 중...</div>
+                            <div class="progress-percent">45%</div>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill"></div>
+                        </div>
+                        <div class="progress-info">
+                            5,623 / 12,458 파일 처리 완료 • 평균 속도: 1,234 files/sec • 남은 시간: ~5분
                         </div>
                     </div>
-                </div>
 
-                <div class="settings-group">
-                    <div class="settings-title">중복 탐지 설정</div>
-                    <div class="form-group">
-                        <label class="form-label">중복 유형</label>
-                        <div class="checkbox-group">
-                            <label class="checkbox-item">
-                                <input type="checkbox" checked>
-                                <span>완전 중복 (Exact)</span>
-                            </label>
-                            <label class="checkbox-item">
-                                <input type="checkbox" checked>
-                                <span>유사 중복 (Near)</span>
-                            </label>
-                            <label class="checkbox-item">
-                                <input type="checkbox" checked>
-                                <span>포함 관계 (Containment)</span>
-                            </label>
+                    <div class="settings-group">
+                        <div class="settings-title">스캔 설정</div>
+                        <div class="form-group">
+                            <label class="form-label">대상 폴더</label>
+                            <input type="text" class="form-control" value="C:\Users\Documents\TextFiles" readonly>
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">유사도 임계값 (%)</label>
-                        <input type="range" class="form-control" min="50" max="100" value="85">
-                        <small style="color: #6c757d;">85% 이상 유사 시 중복으로 판정</small>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">충돌 시 정책</label>
-                        <select class="form-control">
-                            <option>건너뛰기 (Skip)</option>
-                            <option selected>접미사 추가 (Rename)</option>
-                            <option>덮어쓰기 (Overwrite)</option>
-                            <option>병합 (Merge)</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="filter-bar">
-                    <div class="filter-item">
-                        <span>확장자:</span>
-                        <select>
-                            <option>전체</option>
-                            <option>.txt</option>
-                            <option>.md</option>
-                            <option>.log</option>
-                        </select>
-                    </div>
-                    <div class="filter-item">
-                        <span>크기:</span>
-                        <select>
-                            <option>전체</option>
-                            <option>< 1KB</option>
-                            <option>< 10KB</option>
-                            <option>> 1MB</option>
-                        </select>
-                    </div>
-                    <div class="filter-item">
-                        <span>중복군 크기:</span>
-                        <select>
-                            <option>전체</option>
-                            <option>≥ 2개</option>
-                            <option>≥ 5개</option>
-                            <option>≥ 10개</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-card-label">중복 파일 그룹</div>
-                        <div class="stat-card-value">247</div>
-                        <div class="stat-card-unit">총 1,523개 파일</div>
-                    </div>
-                    <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
-                        <div class="stat-card-label">작은 파일 (<1KB)</div>
-                        <div class="stat-card-value">892</div>
-                        <div class="stat-card-unit">정리 가능</div>
-                    </div>
-                    <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
-                        <div class="stat-card-label">인코딩 오류</div>
-                        <div class="stat-card-value">34</div>
-                        <div class="stat-card-unit">수정 필요</div>
-                    </div>
-                    <div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
-                        <div class="stat-card-label">절감 가능 용량</div>
-                        <div class="stat-card-value">2.3</div>
-                        <div class="stat-card-unit">GB</div>
-                    </div>
-                </div>
-
-                <div class="settings-group">
-                    <div class="settings-title" style="margin-bottom: 12px;">
-                        중복 파일 결과 (247개 그룹)
-                    </div>
-                    <div class="results-grid">
-                        <div class="result-card">
-                            <div class="result-header">
-                                <span class="result-type type-duplicate">완전 중복</span>
-                                <span style="font-size: 12px; color: #6c757d;">3개 파일</span>
-                            </div>
-                            <div class="result-file">document_final.txt</div>
-                            <div class="result-meta">
-                                <span>125 KB</span>
-                                <span>•</span>
-                                <span>SHA256: a3f2...</span>
-                            </div>
+                        <div class="form-group">
+                            <label class="form-label">파일 확장자 필터</label>
+                            <input type="text" class="form-control" placeholder=".txt, .md, .log (비어있으면 모든 텍스트 파일)">
                         </div>
-                        <div class="result-card">
-                            <div class="result-header">
-                                <span class="result-type type-duplicate">유사 (92%)</span>
-                                <span style="font-size: 12px; color: #6c757d;">2개 파일</span>
-                            </div>
-                            <div class="result-file">notes_v1.txt</div>
-                            <div class="result-meta">
-                                <span>89 KB</span>
-                                <span>•</span>
-                                <span>SimHash: b8e4...</span>
-                            </div>
-                        </div>
-                        <div class="result-card">
-                            <div class="result-header">
-                                <span class="result-type type-duplicate">포함 관계</span>
-                                <span style="font-size: 12px; color: #6c757d;">포함됨</span>
-                            </div>
-                            <div class="result-file">summary.txt</div>
-                            <div class="result-meta">
-                                <span>12 KB</span>
-                                <span>•</span>
-                                <span>full_report.txt 내 포함</span>
-                            </div>
-                        </div>
-                        <div class="result-card">
-                            <div class="result-header">
-                                <span class="result-type type-small">작은 파일</span>
-                                <span style="font-size: 12px; color: #6c757d;">0 bytes</span>
-                            </div>
-                            <div class="result-file">empty.txt</div>
-                            <div class="result-meta">
-                                <span>빈 파일</span>
-                                <span>•</span>
-                                <span>삭제 권장</span>
-                            </div>
-                        </div>
-                        <div class="result-card">
-                            <div class="result-header">
-                                <span class="result-type type-encoding">인코딩 오류</span>
-                                <span style="font-size: 12px; color: #6c757d;">EUC-KR</span>
-                            </div>
-                            <div class="result-file">old_data.txt</div>
-                            <div class="result-meta">
-                                <span>45 KB</span>
-                                <span>•</span>
-                                <span>UTF-8 변환 필요</span>
-                            </div>
-                        </div>
-                        <div class="result-card">
-                            <div class="result-header">
-                                <span class="result-type type-duplicate">완전 중복</span>
-                                <span style="font-size: 12px; color: #6c757d;">5개 파일</span>
-                            </div>
-                            <div class="result-file">backup_2024.log</div>
-                            <div class="result-meta">
-                                <span>2.1 MB</span>
-                                <span>•</span>
-                                <span>4개 중복 발견</span>
+                        <div class="form-group">
+                            <label class="form-label">스캔 옵션</label>
+                            <div class="checkbox-group">
+                                <label class="checkbox-item">
+                                    <input type="checkbox" checked>
+                                    <span>하위 폴더 포함</span>
+                                </label>
+                                <label class="checkbox-item">
+                                    <input type="checkbox" checked>
+                                    <span>증분 스캔</span>
+                                </label>
+                                <label class="checkbox-item">
+                                    <input type="checkbox">
+                                    <span>숨김 파일 포함</span>
+                                </label>
+                                <label class="checkbox-item">
+                                    <input type="checkbox" checked>
+                                    <span>심볼릭 링크</span>
+                                </label>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="settings-group">
-                    <div class="settings-title">작업 로그</div>
-                    <div class="log-console">
-                        <div class="log-line"><span class="log-time">[14:23:45]</span> <span class="log-info">[INFO]</span> 스캔 시작: C:\Users\Documents\TextFiles</div>
-                        <div class="log-line"><span class="log-time">[14:23:46]</span> <span class="log-info">[INFO]</span> 워커 스레드 8개 초기화 완료</div>
-                        <div class="log-line"><span class="log-time">[14:23:47]</span> <span class="log-info">[INFO]</span> Stage 1: 메타데이터 스캔 (12,458 파일)</div>
-                        <div class="log-line"><span class="log-time">[14:24:12]</span> <span class="log-info">[INFO]</span> Stage 2: 앵커 해시 생성 중...</div>
-                        <div class="log-line"><span class="log-time">[14:24:45]</span> <span class="log-warning">[WARN]</span> 인코딩 감지 실패: old_file.txt (confidence: 0.45)</div>
-                        <div class="log-line"><span class="log-time">[14:25:01]</span> <span class="log-info">[INFO]</span>
+                <!-- 중복 파일 정리 탭 -->
+                <div id="duplicate" class="tab-content">
+                    <div class="page-title">🔍 중복 파일 정리</div>
+
+                    <div class="action-bar">
+                        <button class="btn btn-primary">중복 탐지 시작</button>
+                        <button class="btn btn-secondary tooltip" data-tooltip="실제 작업 전 미리보기">Dry Run</button>
+                        <button class="btn btn-success">적용하기</button>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-title">중복 탐지 설정</div>
+                        <div class="form-group">
+                            <label class="form-label">중복 유형</label>
+                            <div class="checkbox-group">
+                                <label class="checkbox-item">
+                                    <input type="checkbox" checked>
+                                    <span>완전 중복 (Exact)</span>
+                                </label>
+                                <label class="checkbox-item">
+                                    <input type="checkbox" checked>
+                                    <span>유사 중복 (Near)</span>
+                                </label>
+                                <label class="checkbox-item">
+                                    <input type="checkbox" checked>
+                                    <span>포함 관계</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">유사도 임계값 (%)</label>
+                            <input type="range" class="form-control" min="50" max="100" value="85">
+                            <small>85% 이상 유사 시 중복으로 판정</small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">충돌 시 정책</label>
+                            <select class="form-control">
+                                <option>건너뛰기 (Skip)</option>
+                                <option selected>접미사 추가 (Rename)</option>
+                                <option>덮어쓰기 (Overwrite)</option>
+                                <option>병합 (Merge)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="filter-bar">
+                        <div class="filter-item">
+                            <span>확장자:</span>
+                            <select>
+                                <option>전체</option>
+                                <option>.txt</option>
+                                <option>.md</option>
+                            </select>
+                        </div>
+                        <div class="filter-item">
+                            <span>크기:</span>
+                            <select>
+                                <option>전체</option>
+                                <option>< 1KB</option>
+                                <option>> 1MB</option>
+                            </select>
+                        </div>
+                        <div class="filter-item">
+                            <span>중복군:</span>
+                            <select>
+                                <option>전체</option>
+                                <option>≥ 2개</option>
+                                <option>≥ 5개</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-title">중복 파일 결과 (247개 그룹)</div>
+                        <div class="results-grid">
+                            <div class="result-card">
+                                <div class="result-header">
+                                    <span class="result-type type-duplicate">완전 중복</span>
+                                    <span style="font-size: 12px; color: #808080;">3개</span>
+                                </div>
+                                <div class="result-file">document_final.txt</div>
+                                <div class="result-meta">
+                                    <span>125 KB</span>
+                                    <span>•</span>
+                                    <span>SHA256: a3f2...</span>
+                                </div>
+                            </div>
+                            <div class="result-card">
+                                <div class="result-header">
+                                    <span class="result-type type-duplicate">유사 92%</span>
+                                    <span style="font-size: 12px; color: #808080;">2개</span>
+                                </div>
+                                <div class="result-file">notes_v1.txt</div>
+                                <div class="result-meta">
+                                    <span>89 KB</span>
+                                    <span>•</span>
+                                    <span>SimHash</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 작은 파일 정리 탭 -->
+                <div id="small" class="tab-content">
+                    <div class="page-title">📏 작은 파일 정리</div>
+
+                    <div class="action-bar">
+                        <button class="btn btn-primary">분석 시작</button>
+                        <button class="btn btn-danger">선택 파일 삭제</button>
+                        <button class="btn btn-secondary">Dry Run</button>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-title">파일 크기 기준</div>
+                        <div class="form-group">
+                            <label class="form-label">작은 파일 임계값</label>
+                            <select class="form-control">
+                                <option>0 bytes (빈 파일)</option>
+                                <option selected>< 1 KB</option>
+                                <option>< 10 KB</option>
+                                <option>< 100 KB</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-title">작은 파일 목록 (892개)</div>
+                        <div class="results-grid">
+                            <div class="result-card">
+                                <div class="result-header">
+                                    <span class="result-type type-small">0 bytes</span>
+                                    <input type="checkbox" checked>
+                                </div>
+                                <div class="result-file">empty.txt</div>
+                                <div class="result-meta">
+                                    <span>빈 파일</span>
+                                    <span>•</span>
+                                    <span>삭제 권장</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 무결성 확인 탭 -->
+                <div id="integrity" class="tab-content">
+                    <div class="page-title">✓ 무결성 확인</div>
+
+                    <div class="action-bar">
+                        <button class="btn btn-primary">무결성 검사</button>
+                        <button class="btn btn-success">자동 수정</button>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-card" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+                            <div class="stat-card-label">정상 파일</div>
+                            <div class="stat-card-value">11,892</div>
+                            <div class="stat-card-unit">95.5%</div>
+                        </div>
+                        <div class="stat-card" style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);">
+                            <div class="stat-card-label">경고</div>
+                            <div class="stat-card-value">532</div>
+                        </div>
+                        <div class="stat-card" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);">
+                            <div class="stat-card-label">오류</div>
+                            <div class="stat-card-value">34</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 인코딩 통일 탭 -->
+                <div id="encoding" class="tab-content">
+                    <div class="page-title">🔤 인코딩 통일</div>
+
+                    <div class="action-bar">
+                        <button class="btn btn-primary">인코딩 분석</button>
+                        <button class="btn btn-success">UTF-8 변환</button>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-title">변환 설정</div>
+                        <div class="form-group">
+                            <label class="form-label">목표 인코딩</label>
+                            <select class="form-control">
+                                <option selected>UTF-8 (LF)</option>
+                                <option>UTF-8 (CRLF)</option>
+                                <option>UTF-16</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 통계 탭 -->
+                <div id="stats" class="tab-content">
+                    <div class="page-title">📊 통계 및 리포트</div>
+
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-card-label">중복 파일</div>
+                            <div class="stat-card-value">247</div>
+                            <div class="stat-card-unit">그룹</div>
+                        </div>
+                        <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                            <div class="stat-card-label">작은 파일</div>
+                            <div class="stat-card-value">892</div>
+                        </div>
+                        <div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                            <div class="stat-card-label">절감 용량</div>
+                            <div class="stat-card-value">2.3</div>
+                            <div class="stat-card-unit">GB</div>
+                        </div>
+                    </div>
+
+                    <div class="action-bar">
+                        <button class="btn btn-primary">Excel 리포트</button>
+                        <button class="btn btn-secondary">PDF 리포트</button>
+                    </div>
+                </div>
+
+                <!-- 로그 탭 -->
+                <div id="logs" class="tab-content">
+                    <div class="page-title">📝 작업 로그</div>
+
+                    <div class="action-bar">
+                        <button class="btn btn-secondary">로그 지우기</button>
+                        <button class="btn btn-secondary">로그 내보내기</button>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-title">실시간 로그</div>
+                        <div class="log-console">
+                            <div class="log-line"><span class="log-time">[14:23:45]</span> <span class="log-info">[INFO]</span> 스캔 시작</div>
+                            <div class="log-line"><span class="log-time">[14:23:46]</span> <span class="log-info">[INFO]</span> 워커 스레드 8개 초기화</div>
+                            <div class="log-line"><span class="log-time">[14:24:45]</span> <span class="log-warning">[WARN]</span> 인코딩 감지 실패</div>
+                            <div class="log-line"><span class="log-time">[14:25:45]</span> <span class="log-error">[ERROR]</span> 파일 읽기 실패</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Undo 탭 -->
+                <div id="undo" class="tab-content">
+                    <div class="page-title">↩️ Undo / Rollback</div>
+
+                    <div class="action-bar">
+                        <button class="btn btn-primary">선택 작업 되돌리기</button>
+                        <button class="btn btn-danger">모든 작업 초기화</button>
+                    </div>
+
+                    <div class="settings-group">
+                        <div class="settings-title">실행 기록</div>
+                        <div class="results-grid">
+                            <div class="result-card">
+                                <div class="result-header">
+                                    <span class="result-type type-duplicate">중복 삭제</span>
+                                </div>
+                                <div class="result-file">2025-01-10 14:26:45</div>
+                                <div class="result-meta">
+                                    <span>1,523개 파일</span>
+                                    <span>•</span>
+                                    <span>2.3 GB</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 설정 탭 -->
+                <div id="settings" class="tab-content">
+                    <div class="page-title">⚙️ 설정</div>
+
+                    <div class="settings-group">
+                        <div class="settings-title">성능 설정</div>
+                        <div class="form-group">
+                            <label class="form-label">워커 스레드 수</label>
+                            <select class="form-control">
+                                <option>자동</option>
+                                <option selected>8</option>
+                                <option>16</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">캐시 크기 (MB)</label>
+                            <input type="number" class="form-control" value="512">
+                        </div>
+                    </div>
+
+                    <div class="action-bar">
+                        <button class="btn btn-primary">설정 저장</button>
+                        <button class="btn btn-secondary">기본값 복원</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tabName) {
+            const allTabs = document.querySelectorAll('.tab-content');
+            allTabs.forEach(tab => tab.classList.remove('active'));
+            
+            const allNavItems = document.querySelectorAll('.nav-item');
+            allNavItems.forEach(item => item.classList.remove('active'));
+            
+            document.getElementById(tabName).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+    </script>
+</body>
+</html>

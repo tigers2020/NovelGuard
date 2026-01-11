@@ -1,0 +1,180 @@
+{
+  "duplicate_groups": [],
+  "integrity_issues": [
+    {
+      "category": "ENCODING",
+      "file_id": 1,
+      "fixable": false,
+      "issue_id": 1,
+      "message": "인코딩 감지 실패",
+      "metrics": {},
+      "severity": "WARN",
+      "suggested_fix": null
+    },
+    {
+      "category": "ENCODING",
+      "file_id": 2,
+      "fixable": false,
+      "issue_id": 2,
+      "message": "인코딩 감지 실패",
+      "metrics": {},
+      "severity": "WARN",
+      "suggested_fix": null
+    },
+    {
+      "category": "ENCODING",
+      "file_id": 3,
+      "fixable": false,
+      "issue_id": 3,
+      "message": "인코딩 감지 실패",
+      "metrics": {},
+      "severity": "WARN",
+      "suggested_fix": null
+    },
+    {
+      "category": "ENCODING",
+      "file_id": 4,
+      "fixable": false,
+      "issue_id": 4,
+      "message": "인코딩 감지 실패",
+      "metrics": {},
+      "severity": "WARN",
+      "suggested_fix": null
+    },
+    {
+      "category": "ENCODING",
+      "file_id": 5,
+      "fixable": false,
+      "issue_id": 5,
+      "message": "인코딩 감지 실패",
+      "metrics": {},
+      "severity": "WARN",
+      "suggested_fix": null
+    },
+    {
+      "category": "ENCODING",
+      "file_id": 6,
+      "fixable": false,
+      "issue_id": 6,
+      "message": "인코딩 감지 실패",
+      "metrics": {},
+      "severity": "WARN",
+      "suggested_fix": null
+    },
+    {
+      "category": "ENCODING",
+      "file_id": 7,
+      "fixable": false,
+      "issue_id": 7,
+      "message": "인코딩 감지 실패",
+      "metrics": {},
+      "severity": "WARN",
+      "suggested_fix": null
+    },
+    {
+      "category": "ENCODING",
+      "file_id": 8,
+      "fixable": false,
+      "issue_id": 8,
+      "message": "인코딩 감지 실패",
+      "metrics": {},
+      "severity": "WARN",
+      "suggested_fix": null
+    }
+  ],
+  "scan_results": [
+    {
+      "encoding_confidence": null,
+      "encoding_detected": null,
+      "ext": ".txt",
+      "file_id": 1,
+      "fingerprint_fast": null,
+      "is_text_guess": true,
+      "name": "novel_exact_dup_1.txt",
+      "path": "novel_exact_dup_1.txt",
+      "size": 52
+    },
+    {
+      "encoding_confidence": null,
+      "encoding_detected": null,
+      "ext": ".txt",
+      "file_id": 2,
+      "fingerprint_fast": null,
+      "is_text_guess": true,
+      "name": "novel_exact_dup_2.txt",
+      "path": "novel_exact_dup_2.txt",
+      "size": 52
+    },
+    {
+      "encoding_confidence": null,
+      "encoding_detected": null,
+      "ext": ".txt",
+      "file_id": 3,
+      "fingerprint_fast": null,
+      "is_text_guess": true,
+      "name": "novel_exact_dup_3.txt",
+      "path": "novel_exact_dup_3.txt",
+      "size": 52
+    },
+    {
+      "encoding_confidence": null,
+      "encoding_detected": null,
+      "ext": ".txt",
+      "file_id": 4,
+      "fingerprint_fast": null,
+      "is_text_guess": true,
+      "name": "novel_normalized_1.txt",
+      "path": "novel_normalized_1.txt",
+      "size": 57
+    },
+    {
+      "encoding_confidence": null,
+      "encoding_detected": null,
+      "ext": ".txt",
+      "file_id": 5,
+      "fingerprint_fast": null,
+      "is_text_guess": true,
+      "name": "novel_normalized_2.txt",
+      "path": "novel_normalized_2.txt",
+      "size": 52
+    },
+    {
+      "encoding_confidence": null,
+      "encoding_detected": null,
+      "ext": ".txt",
+      "file_id": 6,
+      "fingerprint_fast": null,
+      "is_text_guess": true,
+      "name": "novel_normalized_3.txt",
+      "path": "novel_normalized_3.txt",
+      "size": 62
+    },
+    {
+      "encoding_confidence": null,
+      "encoding_detected": null,
+      "ext": ".txt",
+      "file_id": 7,
+      "fingerprint_fast": null,
+      "is_text_guess": true,
+      "name": "novel_unique_1.txt",
+      "path": "novel_unique_1.txt",
+      "size": 25
+    },
+    {
+      "encoding_confidence": null,
+      "encoding_detected": null,
+      "ext": ".txt",
+      "file_id": 8,
+      "fingerprint_fast": null,
+      "is_text_guess": true,
+      "name": "novel_unique_2.txt",
+      "path": "novel_unique_2.txt",
+      "size": 29
+    }
+  ],
+  "stats": {
+    "duplicate_groups_count": 0,
+    "integrity_issues_count": 8,
+    "total_files": 8
+  }
+}

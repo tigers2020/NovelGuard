@@ -1,2 +1,1 @@
-"""GUI 모델 모듈."""
-
+"""GUI Models Package."""
