@@ -1,6 +1,4 @@
 """인코딩 통일 탭."""
-from typing import Optional
-
 from PySide6.QtWidgets import (
     QComboBox,
     QGroupBox,

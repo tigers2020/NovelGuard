@@ -1,6 +1,4 @@
 """Undo/Rollback 탭."""
-from typing import Optional
-
 from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,

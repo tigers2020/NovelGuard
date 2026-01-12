@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,12 @@ class FileEntry:
     
     extension: str
     """확장자 (소문자, 점 포함, 예: '.txt'). 확장자 없으면 빈 문자열 ''."""
+    
+    file_id: Optional[int] = None
+    """파일 ID (IndexRepository에서 생성, 선택적).
+    
+    None이면 ID가 없음 (점진적 마이그레이션 지원).
+    """
     
     is_symlink: bool = False
     """심볼릭 링크 여부."""

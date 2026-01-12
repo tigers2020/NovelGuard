@@ -6,6 +6,8 @@ from typing import Optional
 from PySide6.QtCore import QObject, QThread, Signal
 
 from app.settings.constants import DEFAULT_TEXT_EXTENSIONS
+from application.ports.log_sink import ILogSink
+from application.utils.debug_logger import debug_step
 from domain.value_objects.preview_stats import PreviewStats
 
 
@@ -29,6 +31,7 @@ class PreviewWorker(QThread):
         include_subdirs: bool = True,
         include_hidden: bool = False,
         include_symlinks: bool = True,
+        log_sink: Optional[ILogSink] = None,
         parent: Optional[QObject] = None
     ) -> None:
         """Preview 워커 초기화.
@@ -40,6 +43,7 @@ class PreviewWorker(QThread):
             include_subdirs: 하위 폴더 포함 여부.
             include_hidden: 숨김 파일 포함 여부.
             include_symlinks: 심볼릭 링크 포함 여부.
+            log_sink: 로그 싱크 (선택적).
             parent: 부모 객체.
         """
         super().__init__(parent)
@@ -49,6 +53,7 @@ class PreviewWorker(QThread):
         self._include_subdirs = include_subdirs
         self._include_hidden = include_hidden
         self._include_symlinks = include_symlinks
+        self._log_sink = log_sink
         self._cancelled = False
     
     def cancel(self) -> None:
@@ -57,12 +62,40 @@ class PreviewWorker(QThread):
     
     def run(self) -> None:
         """워커 실행."""
+        debug_step(
+            self._log_sink,
+            "preview_worker_run_start",
+            {
+                "folder": str(self._folder),
+                "extensions": self._extensions,
+                "include_subdirs": self._include_subdirs,
+                "include_hidden": self._include_hidden,
+                "include_symlinks": self._include_symlinks,
+            }
+        )
+        
         try:
             stats = self._scan_folder(self._folder)
             if not self._cancelled:
+                debug_step(
+                    self._log_sink,
+                    "preview_worker_completed",
+                    {
+                        "estimated_total_files": stats.estimated_total_files,
+                        "top_extensions_count": len(stats.top_extensions),
+                    }
+                )
                 self.preview_completed.emit(stats)
         except Exception as e:
             if not self._cancelled:
+                debug_step(
+                    self._log_sink,
+                    "preview_worker_error",
+                    {
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                    }
+                )
                 self.preview_error.emit(str(e))
     
     def _scan_folder(self, folder: Path) -> PreviewStats:

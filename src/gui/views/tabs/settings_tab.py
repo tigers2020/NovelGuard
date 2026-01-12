@@ -1,6 +1,5 @@
 """설정 탭."""
-from typing import Optional
-
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -9,6 +8,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QSlider,
     QVBoxLayout,
 )
 
@@ -27,6 +27,10 @@ class SettingsTab(BaseTab):
         # 스캔 설정 그룹
         scan_group = self._create_scan_settings_group()
         layout.addWidget(scan_group)
+        
+        # 중복 탐지 설정 그룹
+        duplicate_group = self._create_duplicate_settings_group()
+        layout.addWidget(duplicate_group)
         
         # 성능 설정 그룹
         performance_group = self._create_performance_group()
@@ -83,6 +87,82 @@ class SettingsTab(BaseTab):
         checkbox_layout.addWidget(self._include_symlinks)
         
         layout.addLayout(checkbox_layout)
+        
+        return group
+    
+    def _create_duplicate_settings_group(self) -> QGroupBox:
+        """중복 탐지 설정 그룹 생성."""
+        group = QGroupBox("중복 탐지 설정")
+        group.setObjectName("settingsGroup")
+        
+        layout = QVBoxLayout(group)
+        layout.setSpacing(20)
+        
+        # 중복 유형
+        type_label = QLabel("중복 유형")
+        type_label.setObjectName("formLabel")
+        layout.addWidget(type_label)
+        
+        checkbox_layout = QVBoxLayout()
+        checkbox_layout.setSpacing(12)
+        
+        self._exact_duplicate = QCheckBox("완전 중복 (Exact)")
+        self._exact_duplicate.setChecked(True)
+        checkbox_layout.addWidget(self._exact_duplicate)
+        
+        self._near_duplicate = QCheckBox("유사 중복 (Near)")
+        self._near_duplicate.setChecked(True)
+        checkbox_layout.addWidget(self._near_duplicate)
+        
+        self._include_relation = QCheckBox("포함 관계")
+        self._include_relation.setChecked(True)
+        checkbox_layout.addWidget(self._include_relation)
+        
+        layout.addLayout(checkbox_layout)
+        
+        # 유사도 임계값
+        threshold_layout = QVBoxLayout()
+        threshold_layout.setSpacing(8)
+        
+        threshold_label = QLabel("유사도 임계값 (%)")
+        threshold_label.setObjectName("formLabel")
+        threshold_layout.addWidget(threshold_label)
+        
+        self._similarity_slider = QSlider()
+        self._similarity_slider.setOrientation(Qt.Horizontal)
+        self._similarity_slider.setRange(50, 100)
+        self._similarity_slider.setValue(85)
+        threshold_layout.addWidget(self._similarity_slider)
+        
+        self._similarity_label = QLabel("85%")
+        self._similarity_label.setObjectName("progressPercent")
+        threshold_layout.addWidget(self._similarity_label)
+        
+        self._similarity_slider.valueChanged.connect(
+            lambda v: self._similarity_label.setText(f"{v}%")
+        )
+        
+        layout.addLayout(threshold_layout)
+        
+        # 충돌 시 정책
+        policy_layout = QVBoxLayout()
+        policy_layout.setSpacing(8)
+        
+        policy_label = QLabel("충돌 시 정책")
+        policy_label.setObjectName("formLabel")
+        policy_layout.addWidget(policy_label)
+        
+        self._conflict_policy = QComboBox()
+        self._conflict_policy.addItems([
+            "건너뛰기 (Skip)",
+            "접미사 추가 (Rename)",
+            "덮어쓰기 (Overwrite)",
+            "병합 (Merge)"
+        ])
+        self._conflict_policy.setCurrentIndex(1)  # 접미사 추가
+        policy_layout.addWidget(self._conflict_policy)
+        
+        layout.addLayout(policy_layout)
         
         return group
     
@@ -158,6 +238,14 @@ class SettingsTab(BaseTab):
         self._include_hidden.setChecked(False)
         self._include_symlinks.setChecked(True)
         
+        # 중복 탐지 설정 기본값
+        self._exact_duplicate.setChecked(True)
+        self._near_duplicate.setChecked(True)
+        self._include_relation.setChecked(True)
+        self._similarity_slider.setValue(85)
+        self._similarity_label.setText("85%")
+        self._conflict_policy.setCurrentIndex(1)  # 접미사 추가
+        
         # 성능 설정 기본값
         self._worker_threads.setCurrentIndex(1)  # 8
         self._cache_size.setText("512")
@@ -201,3 +289,43 @@ class SettingsTab(BaseTab):
             심볼릭 링크 포함 여부.
         """
         return self._include_symlinks.isChecked()
+    
+    def get_exact_duplicate(self) -> bool:
+        """완전 중복 탐지 여부 반환.
+        
+        Returns:
+            완전 중복 탐지 여부.
+        """
+        return self._exact_duplicate.isChecked()
+    
+    def get_near_duplicate(self) -> bool:
+        """유사 중복 탐지 여부 반환.
+        
+        Returns:
+            유사 중복 탐지 여부.
+        """
+        return self._near_duplicate.isChecked()
+    
+    def get_include_relation(self) -> bool:
+        """포함 관계 탐지 여부 반환.
+        
+        Returns:
+            포함 관계 탐지 여부.
+        """
+        return self._include_relation.isChecked()
+    
+    def get_similarity_threshold(self) -> int:
+        """유사도 임계값 반환.
+        
+        Returns:
+            유사도 임계값 (50-100).
+        """
+        return self._similarity_slider.value()
+    
+    def get_conflict_policy(self) -> str:
+        """충돌 시 정책 반환.
+        
+        Returns:
+            충돌 시 정책 문자열.
+        """
+        return self._conflict_policy.currentText()

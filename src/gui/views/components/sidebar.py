@@ -1,5 +1,5 @@
 """사이드바 컴포넌트 (네비게이션 메뉴)."""
-from typing import Callable, Optional
+from typing import Optional
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont

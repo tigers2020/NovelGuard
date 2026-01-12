@@ -1,6 +1,4 @@
 """작은 파일 정리 탭."""
-from typing import Optional
-
 from PySide6.QtWidgets import (
     QComboBox,
     QGroupBox,

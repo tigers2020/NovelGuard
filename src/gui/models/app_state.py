@@ -1,8 +1,11 @@
 """전역 애플리케이션 상태 관리."""
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from gui.models.file_data_store import FileDataStore
+
+if TYPE_CHECKING:
+    from application.ports.log_sink import ILogSink
 
 
 @dataclass
@@ -21,8 +24,19 @@ class AppState:
     scan_folder: Optional[str] = None
     is_scanning: bool = False
     
+    # 로그 싱크 (FileDataStore 생성 시 전달)
+    _log_sink: Optional["ILogSink"] = field(default=None, init=False)
+    
     # 파일 데이터 저장소 (인스턴스는 별도로 생성)
     _file_data_store: Optional[FileDataStore] = field(default=None, init=False)
+    
+    def set_log_sink(self, log_sink: Optional["ILogSink"]) -> None:
+        """로그 싱크 설정.
+        
+        Args:
+            log_sink: 로그 싱크.
+        """
+        self._log_sink = log_sink
     
     def update_stats(self, total: int, processed: int, saved_gb: float) -> None:
         """통계 정보 업데이트."""
@@ -34,5 +48,5 @@ class AppState:
     def file_data_store(self) -> FileDataStore:
         """파일 데이터 저장소 반환 (없으면 생성)."""
         if self._file_data_store is None:
-            self._file_data_store = FileDataStore()
+            self._file_data_store = FileDataStore(log_sink=self._log_sink)
         return self._file_data_store
