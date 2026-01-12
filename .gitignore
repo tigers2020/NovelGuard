@@ -215,3 +215,14 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# NovelGuard specific
+# Runtime output directories
+logs/
+SAVE/
+*.zip
+
+# SQLite database files (if generated)
+*.db
+*.sqlite
+*.sqlite3
