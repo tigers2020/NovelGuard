@@ -7,6 +7,7 @@ from typing import Optional
 
 from PySide6.QtCore import QObject, Signal
 
+from app.settings.constants import Constants
 from application.dto.log_entry import LogEntry
 from application.ports.log_sink import ILogSink
 
@@ -22,8 +23,7 @@ class InMemoryLogSink(QObject):
     log_added = Signal(LogEntry)
     """로그 추가 시그널 (GUI에서 실시간 업데이트용)."""
     
-    # 최대 로그 개수
-    MAX_LOGS = 10000
+    # 최대 로그 개수 (Constants.MAX_LOG_ENTRIES 사용)
     
     def __init__(self, parent: Optional[QObject] = None, log_dir: Optional[Path] = None) -> None:
         """인메모리 로그 싱크 초기화.
@@ -34,7 +34,7 @@ class InMemoryLogSink(QObject):
         """
         super().__init__(parent)
         # 순환 버퍼 (deque 사용)
-        self._logs: deque[LogEntry] = deque(maxlen=self.MAX_LOGS)
+        self._logs: deque[LogEntry] = deque(maxlen=Constants.MAX_LOG_ENTRIES)
         
         # 로그 디렉토리 설정
         if log_dir is None:
@@ -195,7 +195,7 @@ class InMemoryLogSink(QObject):
             
             # 파일에 추가 (append 모드)
             if self._current_log_file:
-                with open(self._current_log_file, 'a', encoding='utf-8') as f:
+                with open(self._current_log_file, 'a', encoding=Constants.LOG_FILE_ENCODING) as f:
                     f.write(log_line)
         except Exception as e:
             # 파일 쓰기 실패 시 콘솔에만 에러 출력 (무한 루프 방지)

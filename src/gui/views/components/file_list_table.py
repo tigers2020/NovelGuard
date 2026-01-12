@@ -16,12 +16,13 @@ from PySide6.QtWidgets import (
 )
 
 from gui.models.file_data_store import FileData, FileDataStore
+from gui.views.components.file_list_constants import FileListColumns, FileListRoles, FileListUpdatePolicy
 
 logger = logging.getLogger(__name__)
 
 
 class DuplicateColumnsDelegate(QStyledItemDelegate):
-    """중복 그룹(6), 대표(7) 컬럼을 FileData에서 직접 렌더링.
+    """중복 그룹, 대표 파일 컬럼을 FileData에서 직접 렌더링.
     
     setText() 호출 없이 paint 이벤트에서 FileData를 읽어 표시 문자열을 생성합니다.
     """
@@ -68,16 +69,16 @@ class DuplicateColumnsDelegate(QStyledItemDelegate):
         row = index.row()
         col = index.column()
 
-        # FileData는 0번 컬럼 item의 UserRole에서 가져옴
-        base_item = table.item(row, 0)
+        # FileData는 파일명 컬럼 item의 FILE_DATA Role에서 가져옴
+        base_item = table.item(row, FileListColumns.FILE_NAME)
         if not base_item:
             return
 
-        file_data = base_item.data(Qt.UserRole)
+        file_data = base_item.data(FileListRoles.FILE_DATA)
         if not isinstance(file_data, FileData):
             return
 
-        if col == 6:  # 중복 그룹 컬럼
+        if col == FileListColumns.DUPLICATE_GROUP:  # 중복 그룹 컬럼
             group_text = "-"
             if file_data.duplicate_group_id is not None:
                 # 파일명에서 타이틀 추출
@@ -87,7 +88,7 @@ class DuplicateColumnsDelegate(QStyledItemDelegate):
                     group_text += f" ({file_data.similarity_score:.0%})"
             option.text = group_text
 
-        elif col == 7:  # 대표 파일 컬럼
+        elif col == FileListColumns.CANONICAL:  # 대표 파일 컬럼
             # 그룹이 없는 개인은 자체가 대표
             is_representative = file_data.is_canonical or file_data.duplicate_group_id is None
             option.text = "✓" if is_representative else "-"
@@ -113,7 +114,7 @@ class FileListTableWidget(QWidget):
         self._batch_timer = QTimer(self)
         self._batch_timer.setSingleShot(True)
         self._batch_timer.timeout.connect(self._flush_pending_files)
-        self._batch_timer.setInterval(50)  # 50ms마다 배치 처리
+        self._batch_timer.setInterval(FileListUpdatePolicy.BATCH_TIMER_INTERVAL_MS)
         
         # file_id -> row 인덱스 캐시
         self._row_by_file_id: dict[int, int] = {}
@@ -137,7 +138,7 @@ class FileListTableWidget(QWidget):
         
         # 테이블 생성
         self._table = QTableWidget()
-        self._table.setColumnCount(10)
+        self._table.setColumnCount(FileListColumns.TOTAL_COLUMNS)
         self._table.setHorizontalHeaderLabels([
             "파일명",
             "경로",
@@ -160,26 +161,26 @@ class FileListTableWidget(QWidget):
         
         # 헤더 설정
         header = self._table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # 파일명
-        header.setSectionResizeMode(1, QHeaderView.Stretch)  # 경로
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # 크기
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # 수정일
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # 확장자
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # 인코딩
-        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)  # 중복 그룹
-        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)  # 대표 파일
-        header.setSectionResizeMode(8, QHeaderView.ResizeToContents)  # 무결성
-        header.setSectionResizeMode(9, QHeaderView.ResizeToContents)  # 속성
+        header.setSectionResizeMode(FileListColumns.FILE_NAME, QHeaderView.ResizeToContents)  # 파일명
+        header.setSectionResizeMode(FileListColumns.FILE_PATH, QHeaderView.Stretch)  # 경로
+        header.setSectionResizeMode(FileListColumns.FILE_SIZE, QHeaderView.ResizeToContents)  # 크기
+        header.setSectionResizeMode(FileListColumns.MODIFIED_AT, QHeaderView.ResizeToContents)  # 수정일
+        header.setSectionResizeMode(FileListColumns.EXTENSION, QHeaderView.ResizeToContents)  # 확장자
+        header.setSectionResizeMode(FileListColumns.ENCODING, QHeaderView.ResizeToContents)  # 인코딩
+        header.setSectionResizeMode(FileListColumns.DUPLICATE_GROUP, QHeaderView.ResizeToContents)  # 중복 그룹
+        header.setSectionResizeMode(FileListColumns.CANONICAL, QHeaderView.ResizeToContents)  # 대표 파일
+        header.setSectionResizeMode(FileListColumns.INTEGRITY, QHeaderView.ResizeToContents)  # 무결성
+        header.setSectionResizeMode(FileListColumns.ATTRIBUTES, QHeaderView.ResizeToContents)  # 속성
         
         # 초기 상태: 빈 테이블
         self._table.setRowCount(0)
         
-        # 컬럼 6, 7에 delegate 설정 (중복 그룹, 대표 파일)
+        # 중복 그룹, 대표 파일 컬럼에 delegate 설정
         duplicate_delegate = DuplicateColumnsDelegate(self._table)
-        self._table.setItemDelegateForColumn(6, duplicate_delegate)
-        self._table.setItemDelegateForColumn(7, duplicate_delegate)
+        self._table.setItemDelegateForColumn(FileListColumns.DUPLICATE_GROUP, duplicate_delegate)
+        self._table.setItemDelegateForColumn(FileListColumns.CANONICAL, duplicate_delegate)
         
-        # 헤더 클릭 핸들러 연결 (컬럼 6, 7 정렬 비활성화)
+        # 헤더 클릭 핸들러 연결 (중복 그룹, 대표 파일 컬럼 정렬 비활성화)
         header.sectionClicked.connect(self._on_header_clicked)
         
         group_layout.addWidget(self._table)
@@ -206,12 +207,12 @@ class FileListTableWidget(QWidget):
         # 개별 시그널(file_added, files_added_batch, file_updated, files_cleared, files_removed)로 충분히 처리 가능
     
     def _on_header_clicked(self, logical_index: int) -> None:
-        """헤더 클릭 핸들러. 컬럼 6, 7은 정렬 비활성화.
+        """헤더 클릭 핸들러. 중복 그룹, 대표 파일 컬럼은 정렬 비활성화.
         
         Args:
             logical_index: 클릭된 컬럼 인덱스.
         """
-        if logical_index in (6, 7):
+        if logical_index in FileListColumns.NO_SORT_COLUMNS:
             return  # 정렬 금지
         # 다른 컬럼은 기본 정렬 동작 수행
         self._table.sortItems(logical_index, self._table.horizontalHeader().sortIndicatorOrder())
@@ -277,7 +278,7 @@ class FileListTableWidget(QWidget):
             file_ids: 업데이트된 파일 ID 리스트.
         """
         # 데이터는 이미 FileDataStore에서 갱신됨
-        # 컬럼 6, 7은 Delegate가 paint에서 FileData를 직접 읽어 표시
+        # 중복 그룹, 대표 파일 컬럼은 Delegate가 paint에서 FileData를 직접 읽어 표시
         was_sorting = self._table.isSortingEnabled()
         if was_sorting:
             self._table.setSortingEnabled(False)
@@ -345,9 +346,9 @@ class FileListTableWidget(QWidget):
         # 캐시에 없으면 선형 탐색 (fallback, 드물게 발생)
         if row == -1:
             for r in range(self._table.rowCount()):
-                item = self._table.item(r, 0)
+                item = self._table.item(r, FileListColumns.FILE_NAME)
                 if item:
-                    data = item.data(Qt.UserRole)
+                    data = item.data(FileListRoles.FILE_DATA)
                     if isinstance(data, FileData) and data.file_id == file_id:
                         # 캐시 업데이트
                         self._row_by_file_id[file_id] = r
@@ -356,9 +357,9 @@ class FileListTableWidget(QWidget):
         
         # 캐시에 있지만 행이 유효한지 확인 (정렬 등으로 인한 변경 대응)
         if 0 <= row < self._table.rowCount():
-            item = self._table.item(row, 0)
+            item = self._table.item(row, FileListColumns.FILE_NAME)
             if item:
-                data = item.data(Qt.UserRole)
+                data = item.data(FileListRoles.FILE_DATA)
                 if isinstance(data, FileData) and data.file_id == file_id:
                     return row
         
@@ -398,8 +399,8 @@ class FileListTableWidget(QWidget):
         
         # 파일명
         name_item = QTableWidgetItem(file_data.path.name)
-        name_item.setData(Qt.UserRole, file_data)  # 원본 데이터 저장
-        self._table.setItem(row, 0, name_item)
+        name_item.setData(FileListRoles.FILE_DATA, file_data)  # 원본 데이터 저장
+        self._table.setItem(row, FileListColumns.FILE_NAME, name_item)
         
         # 경로 (상대 경로로 표시)
         if scan_folder:
@@ -411,22 +412,22 @@ class FileListTableWidget(QWidget):
         else:
             path_str = str(file_data.path)
         path_item = QTableWidgetItem(path_str)
-        self._table.setItem(row, 1, path_item)
+        self._table.setItem(row, FileListColumns.FILE_PATH, path_item)
         
         # 크기
         size_item = QTableWidgetItem(self._format_file_size(file_data.size))
-        size_item.setData(Qt.UserRole, file_data.size)  # 정렬을 위한 원본 값
-        self._table.setItem(row, 2, size_item)
+        size_item.setData(FileListRoles.SORT_VALUE, file_data.size)  # 정렬을 위한 원본 값
+        self._table.setItem(row, FileListColumns.FILE_SIZE, size_item)
         
         # 수정일
         mtime_item = QTableWidgetItem(self._format_datetime(file_data.mtime))
         mtime_timestamp = file_data.mtime.timestamp()
-        mtime_item.setData(Qt.UserRole, mtime_timestamp)
-        self._table.setItem(row, 3, mtime_item)
+        mtime_item.setData(FileListRoles.SORT_VALUE, mtime_timestamp)
+        self._table.setItem(row, FileListColumns.MODIFIED_AT, mtime_item)
         
         # 확장자
         ext_item = QTableWidgetItem(file_data.extension if file_data.extension else "-")
-        self._table.setItem(row, 4, ext_item)
+        self._table.setItem(row, FileListColumns.EXTENSION, ext_item)
         
         # 인코딩
         encoding_text = "-"
@@ -436,17 +437,17 @@ class FileListTableWidget(QWidget):
             else:
                 encoding_text = file_data.encoding
         encoding_item = QTableWidgetItem(encoding_text)
-        self._table.setItem(row, 5, encoding_item)
+        self._table.setItem(row, FileListColumns.ENCODING, encoding_item)
         
-        # 중복 그룹 (컬럼 6) - 빈 아이템만 생성 (delegate가 paint에서 표시)
-        if not self._table.item(row, 6):
+        # 중복 그룹 - 빈 아이템만 생성 (delegate가 paint에서 표시)
+        if not self._table.item(row, FileListColumns.DUPLICATE_GROUP):
             group_item = QTableWidgetItem("")
-            self._table.setItem(row, 6, group_item)
+            self._table.setItem(row, FileListColumns.DUPLICATE_GROUP, group_item)
         
-        # 대표 파일 (컬럼 7) - 빈 아이템만 생성 (delegate가 paint에서 표시)
-        if not self._table.item(row, 7):
+        # 대표 파일 - 빈 아이템만 생성 (delegate가 paint에서 표시)
+        if not self._table.item(row, FileListColumns.CANONICAL):
             canonical_item = QTableWidgetItem("")
-            self._table.setItem(row, 7, canonical_item)
+            self._table.setItem(row, FileListColumns.CANONICAL, canonical_item)
         
         # 무결성
         integrity_text = "-"
@@ -460,7 +461,7 @@ class FileListTableWidget(QWidget):
             if issue_count > 0:
                 integrity_text = f"{severity_icon} {issue_count}개"
         integrity_item = QTableWidgetItem(integrity_text)
-        self._table.setItem(row, 8, integrity_item)
+        self._table.setItem(row, FileListColumns.INTEGRITY, integrity_item)
         
         # 속성
         attrs = []
@@ -470,7 +471,7 @@ class FileListTableWidget(QWidget):
             attrs.append("숨김")
         attr_text = ", ".join(attrs) if attrs else "-"
         attr_item = QTableWidgetItem(attr_text)
-        self._table.setItem(row, 9, attr_item)
+        self._table.setItem(row, FileListColumns.ATTRIBUTES, attr_item)
     
     def _format_file_size(self, size_bytes: int) -> str:
         """파일 크기를 사람이 읽기 쉬운 형식으로 변환.
@@ -488,8 +489,9 @@ class FileListTableWidget(QWidget):
         unit_index = 0
         size = float(size_bytes)
         
-        while size >= 1024 and unit_index < len(units) - 1:
-            size /= 1024
+        from app.settings.constants import Constants
+        while size >= Constants.BYTES_PER_KB and unit_index < len(units) - 1:
+            size /= Constants.BYTES_PER_KB
             unit_index += 1
         
         if unit_index == 0:

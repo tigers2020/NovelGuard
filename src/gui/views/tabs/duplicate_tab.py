@@ -1,4 +1,5 @@
 """중복 파일 정리 탭."""
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -18,11 +19,14 @@ from application.ports.job_runner import IJobRunner
 from application.ports.log_sink import ILogSink
 from application.use_cases.move_duplicate_files import MoveDuplicateFilesUseCase
 from application.utils.debug_logger import debug_step
+from application.utils.duplicate_json import generate_duplicate_json_filename, save_duplicate_result_to_json
 from gui.models.app_state import AppState
 from gui.view_models.duplicate_view_model import DuplicateViewModel
 from gui.views.components.dry_run_preview_dialog import DryRunPreviewDialog
 from gui.views.tabs.base_tab import BaseTab
 from gui.workers.file_move_worker import FileMoveWorker
+
+logger = logging.getLogger(__name__)
 
 
 class DuplicateTab(BaseTab):
@@ -199,7 +203,10 @@ class DuplicateTab(BaseTab):
             file_data_store = self._app_state.file_data_store
             
             # 배치 업데이트를 위한 업데이트 리스트 생성
-            batch_updates = []
+            # file_id 중복 제거를 위해 dict 사용 (마지막 처리된 그룹 정보만 유지)
+            # 정규화로 이미 중복이 제거되어 있지만, 이중 안전장치
+            batch_updates_dict: dict[int, tuple[int, Optional[int], bool, Optional[float]]] = {}
+            
             for result in results:
                 # evidence에서 similarity 추출 (near duplicate의 경우)
                 evidence = result.evidence or {}
@@ -213,16 +220,75 @@ class DuplicateTab(BaseTab):
                 
                 for file_id in result.file_ids:
                     is_canonical = (file_id == result.recommended_keeper_id) if result.recommended_keeper_id else False
-                    batch_updates.append((
+                    # file_id를 키로 사용하여 중복 제거 (마지막 그룹 정보가 우선)
+                    batch_updates_dict[file_id] = (
                         file_id,
                         result.group_id,
                         is_canonical,
                         similarity_score  # confidence가 아닌 실제 similarity 값 사용
-                    ))
+                    )
+            
+            # dict에서 리스트로 변환
+            batch_updates = list(batch_updates_dict.values())
             
             # 배치 업데이트 (시그널을 한 번만 emit하여 UI 프리징 방지)
             if batch_updates:
                 file_data_store.set_duplicate_groups_batch(batch_updates)
+            
+            # 중복 탐지 결과를 JSON 파일로 저장
+            self._save_duplicate_result_to_json(results, file_data_store)
+    
+    def _save_duplicate_result_to_json(self, results: list, file_data_store) -> None:
+        """중복 탐지 결과를 JSON 파일로 저장.
+        
+        Args:
+            results: 중복 그룹 결과 리스트.
+            file_data_store: 파일 데이터 저장소.
+        
+        저장 실패 시에도 중복 탐지 완료 처리는 계속 진행됩니다 (로깅만 기록).
+        """
+        debug_step(
+            self._log_sink,
+            "duplicate_tab_save_result_start",
+            {"results_count": len(results)}
+        )
+        
+        try:
+            # 프로젝트 루트의 SAVE 폴더에 절대 경로로 저장
+            # duplicate_tab.py: src/gui/views/tabs/duplicate_tab.py
+            # 프로젝트 루트: parent 5단계 위
+            project_root = Path(__file__).resolve().parent.parent.parent.parent.parent
+            save_dir = project_root / "SAVE"
+            
+            # 파일명 생성
+            filename = generate_duplicate_json_filename()
+            output_path = save_dir.resolve() / filename
+            
+            # 스캔 폴더 가져오기
+            scan_folder = file_data_store.scan_folder if file_data_store else None
+            
+            # JSON 파일로 저장
+            save_duplicate_result_to_json(results, output_path, file_data_store, scan_folder)
+            
+            debug_step(
+                self._log_sink,
+                "duplicate_tab_save_result_success",
+                {"output_path": str(output_path)}
+            )
+            
+            logger.info(f"중복 탐지 결과 JSON 저장 완료: {output_path}")
+        
+        except Exception as e:
+            # JSON 저장 실패는 중복 탐지 완료 처리에 영향을 주지 않음
+            debug_step(
+                self._log_sink,
+                "duplicate_tab_save_result_error",
+                {
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                }
+            )
+            logger.warning(f"중복 탐지 결과 JSON 저장 실패 (중복 탐지 완료는 정상 처리됨): {e}", exc_info=True)
     
     def _on_duplicate_error(self, error_message: str) -> None:
         """중복 탐지 오류 핸들러."""

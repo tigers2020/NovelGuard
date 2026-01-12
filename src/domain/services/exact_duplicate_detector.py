@@ -2,6 +2,7 @@
 from pathlib import Path
 from typing import Optional, Protocol
 
+from app.settings.constants import Constants
 from domain.entities.file_entry import FileEntry
 from domain.value_objects.blocking_group import BlockingGroup
 from domain.value_objects.duplicate_relation import ExactDuplicateRelation
@@ -24,7 +25,7 @@ class IHashService(Protocol):
         """
         ...
     
-    def calculate_prefix_hash(self, file_path: Path, size: int = 65536) -> str:
+    def calculate_prefix_hash(self, file_path: Path, size: int = Constants.SAMPLE_SIZE) -> str:
         """파일 앞부분 해시 계산.
         
         Args:
@@ -36,7 +37,7 @@ class IHashService(Protocol):
         """
         ...
     
-    def calculate_suffix_hash(self, file_path: Path, size: int = 65536) -> str:
+    def calculate_suffix_hash(self, file_path: Path, size: int = Constants.SAMPLE_SIZE) -> str:
         """파일 뒷부분 해시 계산.
         
         Args:

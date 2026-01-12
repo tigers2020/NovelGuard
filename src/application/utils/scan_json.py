@@ -77,7 +77,8 @@ def save_scan_result_to_json(
         data = serialize_scan_result_to_json(result, folder_path)
         
         # JSON 파일로 저장
-        with open(output_path, 'w', encoding='utf-8') as f:
+        from app.settings.constants import Constants
+        with open(output_path, 'w', encoding=Constants.DEFAULT_ENCODING) as f:
             json.dump(data, f, indent=2, ensure_ascii=False, sort_keys=True)
         
         logger.info(f"스캔 결과를 JSON 파일로 저장했습니다: {output_path}")

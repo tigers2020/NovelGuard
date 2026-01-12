@@ -213,14 +213,16 @@ class DuplicateGroupFilesTableModel(QAbstractTableModel):
     
     def _format_size(self, size_bytes: int) -> str:
         """파일 크기 포맷팅."""
-        if size_bytes < 1024:
+        from app.settings.constants import Constants
+        
+        if size_bytes < Constants.BYTES_PER_KB:
             return f"{size_bytes} B"
-        elif size_bytes < 1024 * 1024:
-            return f"{size_bytes / 1024:.1f} KB"
-        elif size_bytes < 1024 * 1024 * 1024:
-            return f"{size_bytes / (1024 * 1024):.1f} MB"
+        elif size_bytes < Constants.BYTES_PER_MB:
+            return f"{size_bytes / Constants.BYTES_PER_KB:.1f} KB"
+        elif size_bytes < Constants.BYTES_PER_GB:
+            return f"{size_bytes / Constants.BYTES_PER_MB:.1f} MB"
         else:
-            return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
+            return f"{size_bytes / Constants.BYTES_PER_GB:.1f} GB"
     
     def _format_datetime(self, dt: datetime) -> str:
         """날짜/시간 포맷팅."""

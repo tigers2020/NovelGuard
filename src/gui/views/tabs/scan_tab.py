@@ -339,7 +339,30 @@ class ScanTab(BaseTab):
         self._progress_bar.setValue(0)
         self._progress_percent.setText("")
         self._progress_info.setText(f"오류: {error_message}")
-        # TODO: 오류 메시지 표시 (로그 탭 등)
+        
+        # 에러 메시지 다이얼로그 표시
+        from PySide6.QtWidgets import QMessageBox
+        
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Icon.Warning)
+        msg_box.setWindowTitle("스캔 오류")
+        msg_box.setText("파일 스캔 중 오류가 발생했습니다.\n\n로그 탭에서 자세한 내용을 확인할 수 있습니다.")
+        msg_box.setDetailedText(error_message)
+        
+        # MainWindow에 접근 가능한 경우 로그 탭 열기 버튼 추가
+        main_window = self._get_main_window()
+        if main_window:
+            msg_box.setStandardButtons(
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            msg_box.button(QMessageBox.StandardButton.Yes).setText("로그 탭 열기")
+            msg_box.button(QMessageBox.StandardButton.No).setText("닫기")
+            result = msg_box.exec()
+            
+            if result == QMessageBox.StandardButton.Yes:
+                main_window._switch_tab("logs")  # type: ignore
+        else:
+            msg_box.exec()
     
     def _on_error_occurred(self, error_message: str) -> None:
         """일반 오류 핸들러."""
@@ -357,7 +380,13 @@ class ScanTab(BaseTab):
         )
         
         if not self._scan_folder:
-            # TODO: 에러 메시지 표시
+            # 에러 메시지 표시
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self,
+                "스캔 폴더 미선택",
+                "스캔할 폴더를 선택해주세요."
+            )
             return
         
         # ViewModel 호출

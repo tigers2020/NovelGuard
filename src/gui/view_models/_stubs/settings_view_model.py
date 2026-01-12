@@ -16,7 +16,8 @@ class SettingsViewModel(BaseViewModel):
         
         # 설정
         self._worker_threads: str = "8"
-        self._cache_size_mb: int = 512
+        from app.settings.constants import Constants
+        self._cache_size_mb: int = Constants.DEFAULT_CACHE_SIZE_MB
     
     def load_data(self) -> None:
         """데이터 로드."""
@@ -33,5 +34,6 @@ class SettingsViewModel(BaseViewModel):
     def reset_to_defaults(self) -> None:
         """기본값으로 복원."""
         self._worker_threads = "8"
-        self._cache_size_mb = 512
+        from app.settings.constants import Constants
+        self._cache_size_mb = Constants.DEFAULT_CACHE_SIZE_MB
         self.data_changed.emit()

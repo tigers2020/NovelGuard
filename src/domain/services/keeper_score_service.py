@@ -2,6 +2,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
+from app.settings.constants import Constants
 from domain.entities.file_entry import FileEntry
 from domain.value_objects.filename_parse_result import FilenameParseResult
 
@@ -14,23 +15,9 @@ class KeeperScoreService:
     
     중복 그룹에서 keeper(유지할 파일)를 추천하기 위한 점수 계산 서비스.
     단일 규칙 기반 추천보다 점수화 방식이 오탐 위험이 낮음.
+    
+    점수 체계 상수는 Constants 클래스에서 관리합니다.
     """
-    
-    # 점수 체계
-    SCORE_COMPLETE_TAG = 100
-    """완결 태그 포함 점수."""
-    
-    SCORE_COVERAGE = 50
-    """커버리지 점수 계수 (coverage * SCORE_COVERAGE / 100)."""
-    
-    SCORE_MTIME = 20
-    """수정 시간 최신 점수."""
-    
-    SCORE_SIZE = 10
-    """파일 크기 큰 점수."""
-    
-    PENALTY_LOW_CONFIDENCE = -1000
-    """파싱 신뢰도 낮음 페널티 (confidence < 0.5)."""
     
     def __init__(self, log_sink: Optional["ILogSink"] = None) -> None:
         """KeeperScoreService 초기화.
@@ -60,15 +47,15 @@ class KeeperScoreService:
         
         # +100: 완결 태그 포함
         if parse_result.is_complete:
-            score += self.SCORE_COMPLETE_TAG
+            score += Constants.SCORE_COMPLETE_TAG
         
         # +50: coverage 큰 쪽 (segments 기준 또는 primary range_end)
         if parse_result.has_segments:
             coverage = parse_result.total_coverage
-            score += int(coverage * self.SCORE_COVERAGE / 100)
+            score += int(coverage * Constants.SCORE_COVERAGE / 100)
         elif parse_result.has_range:
             coverage = parse_result.range_end - parse_result.range_start + 1
-            score += int(coverage * self.SCORE_COVERAGE / 100)
+            score += int(coverage * Constants.SCORE_COVERAGE / 100)
         
         # +20: mtime 최신 (reference_mtime 기준)
         if reference_mtime is None:
@@ -81,8 +68,8 @@ class KeeperScoreService:
         # 여기서는 절대 점수만 계산하므로 size 점수는 select_keeper에서 처리
         
         # -1000: 파싱 신뢰도 낮음
-        if parse_result.confidence < 0.5:
-            score += self.PENALTY_LOW_CONFIDENCE
+        if parse_result.confidence < Constants.CONFIDENCE_THRESHOLD:
+            score += Constants.PENALTY_LOW_CONFIDENCE
         
         return score
     
@@ -118,11 +105,11 @@ class KeeperScoreService:
             # 상대적 점수 추가
             # +20: mtime 최신 (가장 최신 파일에만)
             if file_entry.mtime == max_mtime:
-                base_score += self.SCORE_MTIME
+                base_score += Constants.SCORE_MTIME
             
             # +10: size 큰 쪽 (가장 큰 파일에만)
             if file_entry.size == max_size:
-                base_score += self.SCORE_SIZE
+                base_score += Constants.SCORE_SIZE
             
             scored_files.append((file_entry, base_score))
         

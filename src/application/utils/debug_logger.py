@@ -57,7 +57,8 @@ def debug_log(
             start_time = time()
             try:
                 result = func(*args, **kwargs)
-                duration_ms = int((time() - start_time) * 1000)
+                from app.settings.constants import Constants
+                duration_ms = int((time() - start_time) * Constants.MILLISECONDS_PER_SECOND)
                 
                 # EXIT 로그
                 result_summary = _summarize_result(result, max_param_length) if include_result else "..."
@@ -70,7 +71,8 @@ def debug_log(
                 
                 return result
             except Exception as e:
-                duration_ms = int((time() - start_time) * 1000)
+                from app.settings.constants import Constants
+                duration_ms = int((time() - start_time) * Constants.MILLISECONDS_PER_SECOND)
                 log_sink.write(LogEntry(
                     timestamp=datetime.now(),
                     level="ERROR",

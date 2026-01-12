@@ -2,6 +2,7 @@
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, Protocol
 
+from app.settings.constants import Constants
 from domain.entities.file_entry import FileEntry
 from domain.value_objects.blocking_group import BlockingGroup
 from domain.value_objects.duplicate_relation import NearDuplicateRelation
@@ -31,7 +32,7 @@ class ISimHashService(Protocol):
     def calculate_simhash_from_samples(
         self,
         file_path: Path,
-        sample_size: int = 65536
+        sample_size: int = Constants.SAMPLE_SIZE
     ) -> int:
         """SimHash 계산 (샘플링 기반).
         
@@ -67,7 +68,7 @@ class NearDuplicateDetector:
     def __init__(
         self,
         simhash_service: Optional[ISimHashService] = None,
-        similarity_threshold: float = 0.85,
+        similarity_threshold: float = Constants.DEFAULT_SIMILARITY_THRESHOLD,
         log_sink: Optional["ILogSink"] = None
     ) -> None:
         """NearDuplicateDetector 초기화.
@@ -144,11 +145,11 @@ class NearDuplicateDetector:
             try:
                 simhash_a = self._simhash_service.calculate_simhash_from_samples(
                     file_entry_a.path,
-                    sample_size=65536  # 64KB
+                    sample_size=Constants.SAMPLE_SIZE
                 )
                 simhash_b = self._simhash_service.calculate_simhash_from_samples(
                     file_entry_b.path,
-                    sample_size=65536  # 64KB
+                    sample_size=Constants.SAMPLE_SIZE
                 )
             except Exception:
                 # 파일 읽기 실패 시 건너뜀

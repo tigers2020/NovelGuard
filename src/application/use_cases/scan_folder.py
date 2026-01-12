@@ -115,7 +115,8 @@ class ScanFolderUseCase:
         # 결과 계산
         debug_step(self._log_sink, "result_calculation_begin")
         total_bytes = sum(entry.size for entry in entries)
-        elapsed_ms = int((time.time() - start_time) * 1000)
+        from app.settings.constants import Constants
+        elapsed_ms = int((time.time() - start_time) * Constants.MILLISECONDS_PER_SECOND)
         
         result = ScanResult(
             total_files=len(entries),

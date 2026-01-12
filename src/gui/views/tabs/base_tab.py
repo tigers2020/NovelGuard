@@ -1,5 +1,5 @@
 """기본 탭 클래스."""
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
@@ -8,6 +8,9 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+if TYPE_CHECKING:
+    from gui.views.main_window import MainWindow
 
 
 class BaseTab(QWidget):
@@ -64,3 +67,17 @@ class BaseTab(QWidget):
     def get_title(self) -> str:
         """페이지 제목 반환 (서브클래스에서 구현)."""
         raise NotImplementedError("Subclass must implement get_title")
+    
+    def _get_main_window(self) -> Optional["MainWindow"]:
+        """부모 위젯을 통해 MainWindow 찾기.
+        
+        Returns:
+            MainWindow 인스턴스 또는 None (찾을 수 없는 경우).
+        """
+        parent = self.parent()
+        while parent:
+            # MainWindow 타입 체크 (순환 참조 방지를 위해 문자열 비교)
+            if parent.__class__.__name__ == "MainWindow":
+                return parent  # type: ignore
+            parent = parent.parent()
+        return None

@@ -43,7 +43,8 @@ class LogsViewModel(BaseViewModel):
     def export_logs(self, file_path: str) -> None:
         """로그 내보내기."""
         # TODO: 실제 로그 내보내기 로직
-        with open(file_path, "w", encoding="utf-8") as f:
+        from app.settings.constants import Constants
+        with open(file_path, "w", encoding=Constants.DEFAULT_ENCODING) as f:
             f.write("\n".join(self._logs))
         
         self.data_changed.emit()

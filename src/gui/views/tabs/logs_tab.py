@@ -1,17 +1,21 @@
 """작업 로그 탭."""
+from datetime import datetime
 from typing import Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
+    QFileDialog,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QVBoxLayout,
 )
 
+from app.settings.constants import Constants
 from application.dto.log_entry import LogEntry
 from application.ports.log_sink import ILogSink
 from application.utils.debug_logger import debug_step
@@ -240,5 +244,75 @@ class LogsTab(BaseTab):
     
     def _on_export_logs(self) -> None:
         """로그 내보내기 핸들러."""
-        # TODO: 실제 로그 내보내기 구현 (파일 다이얼로그)
-        print("로그 내보내기")
+        if not self._log_sink or not hasattr(self._log_sink, 'get_logs'):
+            QMessageBox.warning(
+                self,
+                "로그 내보내기 오류",
+                "로그 싱크가 연결되지 않았습니다."
+            )
+            return
+        
+        # 파일 다이얼로그 열기
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_filename = f"novelguard_logs_{timestamp}.txt"
+        
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "로그 내보내기",
+            default_filename,
+            "텍스트 파일 (*.txt);;모든 파일 (*.*)"
+        )
+        
+        if not file_path:
+            # 사용자가 취소한 경우
+            return
+        
+        try:
+            # 필터 확인
+            if hasattr(self, '_level_filter') and self._level_filter:
+                level_filter = self._level_filter.currentText()
+                level = None if level_filter == "모두" else level_filter
+            else:
+                level = None
+            
+            # 로그 가져오기
+            logs = self._log_sink.get_logs(level=level)
+            
+            if not logs:
+                QMessageBox.information(
+                    self,
+                    "로그 내보내기",
+                    "내보낼 로그가 없습니다."
+                )
+                return
+            
+            # 로그를 텍스트 형식으로 포맷팅
+            log_lines = []
+            for entry in logs:
+                log_line = self._format_log_entry(entry)
+                log_lines.append(log_line)
+            
+            # 파일로 저장
+            with open(file_path, "w", encoding=Constants.DEFAULT_ENCODING) as f:
+                f.write(f"NovelGuard 로그 내보내기\n")
+                f.write(f"생성 일시: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"총 로그 수: {len(logs)}개\n")
+                if level:
+                    f.write(f"필터: {level}\n")
+                f.write("=" * 80 + "\n\n")
+                f.write("\n".join(log_lines))
+            
+            # 성공 메시지 표시
+            QMessageBox.information(
+                self,
+                "로그 내보내기 완료",
+                f"로그가 성공적으로 내보내졌습니다.\n\n파일: {file_path}\n로그 수: {len(logs)}개"
+            )
+        
+        except Exception as e:
+            # 오류 메시지 표시
+            QMessageBox.critical(
+                self,
+                "로그 내보내기 오류",
+                f"로그 내보내기 중 오류가 발생했습니다:\n{str(e)}"
+            )

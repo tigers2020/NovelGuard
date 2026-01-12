@@ -27,9 +27,9 @@ class DuplicateGroupResult:
     
     def __post_init__(self) -> None:
         """유효성 검증."""
-        if self.duplicate_type not in ["exact", "version", "containment", "near"]:
+        if self.duplicate_type not in ["exact", "version", "containment", "near", "merged"]:
             raise ValueError(
-                f"duplicate_type must be one of ['exact', 'version', 'containment', 'near']: "
+                f"duplicate_type must be one of ['exact', 'version', 'containment', 'near', 'merged']: "
                 f"{self.duplicate_type}"
             )
         

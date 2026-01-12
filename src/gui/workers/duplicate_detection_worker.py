@@ -500,19 +500,38 @@ class DuplicateDetectionWorker(QThread):
             )
             self._emit_progress(0, None, "중복 그룹 생성 완료...")
             
+            # 6. 그룹 정규화 (겹침 제거)
+            normalized_results = group_results
+            if group_results and self._file_data_store:
+                from application.utils.duplicate_group_normalizer import normalize_duplicate_groups
+                raw_groups_count = len(group_results)
+                normalized_results = normalize_duplicate_groups(group_results, self._file_data_store)
+                normalized_groups_count = len(normalized_results)
+                
+                debug_step(
+                    self._log_sink,
+                    "duplicate_detection_groups_normalized",
+                    {
+                        "raw_groups_count": raw_groups_count,
+                        "normalized_groups_count": normalized_groups_count,
+                        "reduction": raw_groups_count - normalized_groups_count
+                    }
+                )
+            
             if not self._cancelled:
                 debug_step(
                     self._log_sink,
                     "duplicate_detection_worker_completed",
                     {
-                        "results_count": len(group_results),
+                        "results_count": len(normalized_results),
+                        "raw_groups_count": len(group_results),
                         "blocking_groups_count": len(blocking_groups),
                         "fetched_files_count": fetched_files_count,
                         "mapped_files_count": mapped_count,
                         "file_parse_pairs_count": len(file_parse_pairs)
                     }
                 )
-                self.duplicate_completed.emit(group_results)
+                self.duplicate_completed.emit(normalized_results)
         except Exception as e:
             if not self._cancelled:
                 # 로그 기록

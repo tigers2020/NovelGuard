@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from app.settings.constants import Constants
 from application.ports.index_repository import IIndexRepository
 from application.ports.log_sink import ILogSink
 from gui.view_models.stats_view_model import StatsViewModel
@@ -170,9 +171,9 @@ class StatsTab(BaseTab):
             포맷팅된 크기 문자열.
         """
         for unit in ['bytes', 'KB', 'MB', 'GB']:
-            if size_bytes < 1024.0:
+            if size_bytes < float(Constants.BYTES_PER_KB):
                 return f"{size_bytes:.1f} {unit}"
-            size_bytes /= 1024.0
+            size_bytes /= float(Constants.BYTES_PER_KB)
         return f"{size_bytes:.1f} TB"
     
     def _on_data_changed(self) -> None:
@@ -193,7 +194,7 @@ class StatsTab(BaseTab):
             self._update_stat_card(self._total_bytes_card, size_str, "")
             
             # 경과 시간
-            elapsed_sec = summary.elapsed_ms / 1000.0
+            elapsed_sec = summary.elapsed_ms / float(Constants.MILLISECONDS_PER_SECOND)
             if elapsed_sec < 1:
                 time_str = f"{summary.elapsed_ms}ms"
             else:

@@ -6,12 +6,13 @@ from PySide6.QtCore import QSettings, Qt, QTimer
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QMainWindow,
+    QMessageBox,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
-from app.settings.constants import SETTINGS_KEY_SCAN_FOLDER
+from app.settings.constants import Constants, SETTINGS_KEY_SCAN_FOLDER
 from application.utils.extensions import parse_extensions
 from application.utils.debug_logger import debug_step
 from gui.models.app_state import AppState
@@ -326,8 +327,25 @@ class MainWindow(QMainWindow):
         Args:
             error_message: 오류 메시지.
         """
-        # TODO: 오류 메시지를 사용자에게 표시 (로그 탭 등)
-        print(f"Preview 스캔 오류: {error_message}")
+        # 에러 메시지 다이얼로그 표시
+        msg_box = QMessageBox(self)
+        msg_box.setIcon(QMessageBox.Icon.Warning)
+        msg_box.setWindowTitle("Preview 스캔 오류")
+        msg_box.setText("Preview 스캔 중 오류가 발생했습니다.\n\n로그 탭에서 자세한 내용을 확인할 수 있습니다.")
+        msg_box.setDetailedText(error_message)
+        
+        # Yes/No 버튼 사용 (Yes = 로그 탭 열기, No = 닫기)
+        msg_box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        msg_box.button(QMessageBox.StandardButton.Yes).setText("로그 탭 열기")
+        msg_box.button(QMessageBox.StandardButton.No).setText("닫기")
+        
+        result = msg_box.exec()
+        
+        # "로그 탭 열기" 버튼이 클릭된 경우
+        if result == QMessageBox.StandardButton.Yes:
+            self._switch_tab("logs")
     
     def _switch_tab(self, tab_name: str) -> None:
         """탭 전환."""
@@ -362,7 +380,7 @@ class MainWindow(QMainWindow):
             f.size for f in all_files 
             if f.duplicate_group_id is not None and not f.is_canonical
         )
-        saved_gb = saved_bytes / (1024 ** 3)  # GB 변환
+        saved_gb = saved_bytes / Constants.BYTES_PER_GB  # GB 변환
         
         # 중복 그룹 수 (고유한 duplicate_group_id의 개수)
         duplicate_group_ids = {f.duplicate_group_id for f in all_files if f.duplicate_group_id is not None}
@@ -370,7 +388,7 @@ class MainWindow(QMainWindow):
         
         # 총 용량 (모든 파일의 총 크기)
         total_bytes = sum(f.size for f in all_files)
-        total_size_gb = total_bytes / (1024 ** 3)  # GB 변환
+        total_size_gb = total_bytes / Constants.BYTES_PER_GB  # GB 변환
         
         # 무결성 이슈 파일 수 (ERROR 또는 WARN 심각도)
         integrity_issues = sum(
@@ -385,8 +403,7 @@ class MainWindow(QMainWindow):
         )
         
         # 작은 파일 수 (1KB 미만, 기본 임계값)
-        SMALL_FILE_THRESHOLD = 1024  # 1 KB
-        small_files = sum(1 for f in all_files if f.size < SMALL_FILE_THRESHOLD)
+        small_files = sum(1 for f in all_files if f.size < Constants.SMALL_FILE_THRESHOLD)
         
         return (total_files, processed_files, saved_gb, duplicate_groups, 
                 total_size_gb, integrity_issues, duplicate_files, small_files)

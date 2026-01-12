@@ -140,8 +140,9 @@ class DryRunPreviewDialog(QDialog):
         unit_index = 0
         size = float(size_bytes)
         
-        while size >= 1024 and unit_index < len(units) - 1:
-            size /= 1024
+        from app.settings.constants import Constants
+        while size >= Constants.BYTES_PER_KB and unit_index < len(units) - 1:
+            size /= Constants.BYTES_PER_KB
             unit_index += 1
         
         if unit_index == 0:
