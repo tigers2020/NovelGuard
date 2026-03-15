@@ -23,6 +23,9 @@ from application.use_cases.duplicate_detection.stages.filename_parsing_stage imp
 from application.use_cases.duplicate_detection.stages.group_creation_stage import (
     GroupCreationStage
 )
+from application.use_cases.duplicate_detection.stages.near_duplicate_stage import (
+    NearDuplicateStage
+)
 from application.use_cases.duplicate_detection.stages.relation_detection_stage import (
     RelationDetectionStage
 )
@@ -30,6 +33,7 @@ from domain.services.blocking_service import BlockingService
 from domain.services.containment_detector import ContainmentDetector
 from domain.services.exact_duplicate_detector import ExactDuplicateDetector
 from domain.services.filename_parser import FilenameParser
+from domain.services.near_duplicate_detector import NearDuplicateDetector
 
 if TYPE_CHECKING:
     from gui.models.file_data_store import FileDataStore
@@ -50,7 +54,8 @@ class DuplicateDetectionPipeline:
         index_repository: IIndexRepository,
         file_data_store: Optional["FileDataStore"] = None,
         log_sink: Optional[ILogSink] = None,
-        exact_detector: Optional[ExactDuplicateDetector] = None
+        exact_detector: Optional[ExactDuplicateDetector] = None,
+        near_detector: Optional[NearDuplicateDetector] = None
     ) -> None:
         """파이프라인 초기화.
 
@@ -62,6 +67,7 @@ class DuplicateDetectionPipeline:
             file_data_store: 파일 데이터 저장소 (선택적).
             log_sink: 로그 싱크 (선택적).
             exact_detector: Exact 중복 탐지기 (선택적, enable_exact 시 사용).
+            near_detector: Near 중복 탐지기 (선택적, enable_near 시 사용, SimHash 필요).
         """
         self._filename_parser = filename_parser
         self._blocking_service = blocking_service
@@ -70,6 +76,7 @@ class DuplicateDetectionPipeline:
         self._file_data_store = file_data_store
         self._log_sink = log_sink
         self._exact_detector = exact_detector
+        self._near_detector = near_detector
 
         # 단계 초기화
         stages: list[PipelineStage] = [
@@ -95,6 +102,13 @@ class DuplicateDetectionPipeline:
             stages.append(
                 ExactDuplicateStage(
                     exact_detector=exact_detector,
+                    log_sink=log_sink
+                )
+            )
+        if near_detector is not None:
+            stages.append(
+                NearDuplicateStage(
+                    near_detector=near_detector,
                     log_sink=log_sink
                 )
             )
