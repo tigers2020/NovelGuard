@@ -26,7 +26,7 @@ class _UnionFind:
             elements: 초기 요소 집합.
         """
         self._parent: dict[int, int] = {x: x for x in elements}
-        self._rank: dict[int, int] = {x: 0 for x in elements}
+        self._rank: dict[int, int] = dict.fromkeys(elements, 0)
     
     def find(self, x: int) -> int:
         """요소 x의 루트를 찾습니다 (경로 압축).
@@ -76,6 +76,41 @@ class _UnionFind:
         return dict(components)
 
 
+def _all_file_ids_from_groups(groups: list[DuplicateGroupResult]) -> set[int]:
+    """그룹 목록에서 모든 file_id 집합을 반환합니다."""
+    result: set[int] = set()
+    for group in groups:
+        result.update(group.file_ids)
+    return result
+
+
+def _build_file_id_to_original_groups(
+    groups: list[DuplicateGroupResult],
+) -> dict[int, list[DuplicateGroupResult]]:
+    """file_id별 원본 그룹 목록을 구합니다 (keeper 선택용)."""
+    mapping: dict[int, list[DuplicateGroupResult]] = defaultdict(list)
+    for group in groups:
+        for file_id in group.file_ids:
+            mapping[file_id].append(group)
+    return mapping
+
+
+def _collect_component_original_groups(
+    component_file_ids: list[int],
+    file_id_to_original_groups: dict[int, list[DuplicateGroupResult]],
+) -> list[DuplicateGroupResult]:
+    """컴포넌트에 포함된 원본 그룹들을 중복 없이 수집합니다."""
+    seen_group_ids: set[int] = set()
+    component_original_groups: list[DuplicateGroupResult] = []
+    for fid in component_file_ids:
+        for g in file_id_to_original_groups[fid]:
+            gid = id(g)
+            if gid not in seen_group_ids:
+                seen_group_ids.add(gid)
+                component_original_groups.append(g)
+    return component_original_groups
+
+
 def normalize_duplicate_groups(
     groups: list[DuplicateGroupResult],
     file_data_store: Optional["FileDataStore"] = None
@@ -97,66 +132,38 @@ def normalize_duplicate_groups(
     """
     if not groups:
         return []
-    
-    # 1. Union-Find 초기화: 모든 file_id를 독립적인 집합으로 시작
-    all_file_ids: set[int] = set()
-    for group in groups:
-        all_file_ids.update(group.file_ids)
-    
+    all_file_ids = _all_file_ids_from_groups(groups)
     if not all_file_ids:
         return []
-    
+
     uf = _UnionFind(all_file_ids)
-    
-    # 2. 각 그룹 처리: 첫 file_id를 기준으로 나머지 file_id들과 union
     for group in groups:
         if len(group.file_ids) < 2:
             continue
-        
-        # 첫 file_id를 기준으로 나머지와 union
         first_id = group.file_ids[0]
         for file_id in group.file_ids[1:]:
             uf.union(first_id, file_id)
-    
-    # 3. Connected Components 추출
+
     components = uf.get_components()
-    
-    # 4. 각 컴포넌트를 하나의 그룹으로 병합
+    file_id_to_original_groups = _build_file_id_to_original_groups(groups)
     merged_groups: list[DuplicateGroupResult] = []
     next_group_id = max((g.group_id for g in groups), default=0) + 1
-    
-    # 원본 그룹에서 file_id별로 어떤 그룹에 속했는지 추적 (keeper 선택용)
-    file_id_to_original_groups: dict[int, list[DuplicateGroupResult]] = defaultdict(list)
-    for group in groups:
-        for file_id in group.file_ids:
-            file_id_to_original_groups[file_id].append(group)
-    
+
     for root_id, component_file_ids in components.items():
         if len(component_file_ids) < 2:
-            # 단일 파일은 그룹으로 만들지 않음 (정규화 대상 아님)
             continue
-        
-        # 이 컴포넌트에 포함된 원본 그룹들 수집 (file_id 인덱스 사용 O(컴포넌트 크기), 전체 그룹 순회 회피)
-        component_original_groups: list[DuplicateGroupResult] = []
-        seen_group_ids: set[int] = set()
-        for fid in component_file_ids:
-            for g in file_id_to_original_groups[fid]:
-                gid = id(g)
-                if gid not in seen_group_ids:
-                    seen_group_ids.add(gid)
-                    component_original_groups.append(g)
-        
-        # Merged group 생성
+        component_original_groups = _collect_component_original_groups(
+            component_file_ids, file_id_to_original_groups
+        )
         merged_group = _merge_group_components(
             component_file_ids,
             component_original_groups,
             next_group_id,
             file_data_store,
-            file_id_to_original_groups
         )
         merged_groups.append(merged_group)
         next_group_id += 1
-    
+
     return merged_groups
 
 
@@ -165,7 +172,6 @@ def _merge_group_components(
     original_groups: list[DuplicateGroupResult],
     new_group_id: int,
     file_data_store: Optional["FileDataStore"],
-    file_id_to_original_groups: dict[int, list[DuplicateGroupResult]]
 ) -> DuplicateGroupResult:
     """컴포넌트를 하나의 그룹으로 병합합니다.
     
@@ -174,13 +180,12 @@ def _merge_group_components(
         original_groups: 이 컴포넌트와 겹치는 원본 그룹들.
         new_group_id: 새로운 그룹 ID.
         file_data_store: 파일 데이터 저장소.
-        file_id_to_original_groups: file_id별 원본 그룹 매핑.
     
     Returns:
         병합된 DuplicateGroupResult.
     """
     # 1. duplicate_types 수집
-    duplicate_types = list(set(g.duplicate_type for g in original_groups))
+    duplicate_types = list({g.duplicate_type for g in original_groups})
     
     # 2. confidence의 max 값
     max_confidence = max((g.confidence for g in original_groups), default=0.0)
@@ -197,7 +202,6 @@ def _merge_group_components(
         component_file_ids,
         original_groups,
         file_data_store,
-        file_id_to_original_groups
     )
     
     # 5. DuplicateGroupResult 생성
@@ -213,11 +217,70 @@ def _merge_group_components(
     return merged_result
 
 
+def _narrow_by_canonical(
+    component_file_ids: list[int],
+    original_groups: list[DuplicateGroupResult],
+) -> tuple[list[int], Optional[int]]:
+    """원본 그룹의 recommended_keeper_id 투표로 후보를 좁힙니다. 단일 후보면 (_, keeper_id)."""
+    canonical_counts: dict[int, int] = defaultdict(int)
+    for group in original_groups:
+        if group.recommended_keeper_id and group.recommended_keeper_id in component_file_ids:
+            canonical_counts[group.recommended_keeper_id] += 1
+    if not canonical_counts:
+        return component_file_ids, None
+    max_count = max(canonical_counts.values())
+    candidates = [fid for fid, count in canonical_counts.items() if count == max_count]
+    if len(candidates) == 1:
+        return candidates, candidates[0]
+    return candidates, None
+
+
+def _narrow_by_size(
+    component_file_ids: list[int],
+    file_data_by_id: dict[int, Any],
+) -> tuple[list[int], Optional[int]]:
+    """가장 큰 size 기준으로 후보를 좁힙니다."""
+    size_map = {fid: data.size for fid, data in file_data_by_id.items()}
+    if not size_map:
+        return component_file_ids, None
+    max_size = max(size_map.values())
+    candidates = [fid for fid in component_file_ids if size_map.get(fid, 0) == max_size]
+    if len(candidates) == 1:
+        return candidates, candidates[0]
+    return candidates, None
+
+
+def _narrow_by_mtime(
+    component_file_ids: list[int],
+    file_data_by_id: dict[int, Any],
+) -> tuple[list[int], Optional[int]]:
+    """가장 최신 mtime 기준으로 후보를 좁힙니다."""
+    mtime_map = {fid: file_data_by_id[fid].mtime for fid in component_file_ids if fid in file_data_by_id}
+    if not mtime_map:
+        return component_file_ids, None
+    max_mtime = max(mtime_map.values())
+    candidates = [fid for fid in component_file_ids if mtime_map.get(fid) == max_mtime]
+    if len(candidates) == 1:
+        return candidates, candidates[0]
+    return candidates, None
+
+
+def _pick_by_path(
+    component_file_ids: list[int],
+    file_data_by_id: dict[int, Any],
+) -> Optional[int]:
+    """path 사전순으로 첫 번째 file_id를 반환합니다."""
+    path_map = {fid: str(file_data_by_id[fid].path) for fid in component_file_ids if fid in file_data_by_id}
+    if not path_map:
+        return None
+    sorted_paths = sorted(path_map.items(), key=lambda x: x[1])
+    return sorted_paths[0][0]
+
+
 def _select_keeper(
     component_file_ids: list[int],
     original_groups: list[DuplicateGroupResult],
     file_data_store: Optional["FileDataStore"],
-    file_id_to_original_groups: dict[int, list[DuplicateGroupResult]]
 ) -> Optional[int]:
     """컴포넌트에서 keeper (대표 파일)를 선택합니다.
     
@@ -231,64 +294,87 @@ def _select_keeper(
         component_file_ids: 컴포넌트에 포함된 file_id 리스트.
         original_groups: 원본 그룹들 (컴포넌트와 겹치는 그룹들).
         file_data_store: 파일 데이터 저장소.
-        file_id_to_original_groups: file_id별 원본 그룹 매핑 (사용하지 않음, original_groups 사용).
     
     Returns:
         선택된 keeper file_id. 선택 불가능하면 None.
     """
+    if not component_file_ids:
+        return None
     if not file_data_store:
-        # file_data_store가 없으면 첫 번째 file_id 반환
-        return component_file_ids[0] if component_file_ids else None
-    
-    # 1순위: 원본 그룹에서 is_canonical로 가장 많이 선택된 파일
-    canonical_counts: dict[int, int] = defaultdict(int)
-    for group in original_groups:
-        if group.recommended_keeper_id and group.recommended_keeper_id in component_file_ids:
-            canonical_counts[group.recommended_keeper_id] += 1
-    
-    if canonical_counts:
-        max_count = max(canonical_counts.values())
-        candidates = [fid for fid, count in canonical_counts.items() if count == max_count]
-        if len(candidates) == 1:
-            return candidates[0]
-        # 여러 후보가 있으면 다음 단계로
-        component_file_ids = candidates
-    
-    # 2~4순위용: file_id별 FileData를 한 번에 조회 (get_file 호출 O(n) → 1회 배치)
-    file_data_by_id: dict[int, Any] = {}
-    for fid in component_file_ids:
-        data = file_data_store.get_file(fid)
-        if data:
-            file_data_by_id[fid] = data
-    
-    # 2순위: 가장 큰 size
-    size_map: dict[int, int] = {
-        fid: data.size for fid, data in file_data_by_id.items()
-    }
-    if size_map:
-        max_size = max(size_map.values())
-        candidates = [fid for fid in component_file_ids if size_map.get(fid, 0) == max_size]
-        if len(candidates) == 1:
-            return candidates[0]
-        component_file_ids = candidates
-    
-    # 3순위: 가장 최신 mtime
-    mtime_map = {fid: file_data_by_id[fid].mtime for fid in component_file_ids if fid in file_data_by_id}
-    if mtime_map:
-        max_mtime = max(mtime_map.values())
-        candidates = [fid for fid in component_file_ids if mtime_map.get(fid) == max_mtime]
-        if len(candidates) == 1:
-            return candidates[0]
-        component_file_ids = candidates
-    
-    # 4순위: path 사전순 (완전 결정성 보장)
-    path_map = {fid: str(file_data_by_id[fid].path) for fid in component_file_ids if fid in file_data_by_id}
-    if path_map:
-        sorted_paths = sorted(path_map.items(), key=lambda x: x[1])
-        return sorted_paths[0][0]
-    
-    # 모든 방법이 실패하면 첫 번째 file_id 반환
-    return component_file_ids[0] if component_file_ids else None
+        return component_file_ids[0]
+
+    candidates, single = _narrow_by_canonical(component_file_ids, original_groups)
+    if single is not None:
+        return single
+
+    file_data_by_id = {fid: data for fid in candidates if (data := file_data_store.get_file(fid))}
+    candidates, single = _narrow_by_size(candidates, file_data_by_id)
+    if single is not None:
+        return single
+    candidates, single = _narrow_by_mtime(candidates, file_data_by_id)
+    if single is not None:
+        return single
+    picked = _pick_by_path(candidates, file_data_by_id)
+    return picked if picked is not None else candidates[0]
+
+
+def _errors_duplicate_file_ids_in_group(group: DuplicateGroupResult) -> list[str]:
+    """그룹 내 중복 file_id 검증 오류를 반환합니다."""
+    if len({*group.file_ids}) == len(group.file_ids):
+        return []
+    return [f"Group {group.group_id}: duplicate file_ids found in file_ids list"]
+
+
+def _errors_file_id_in_multiple_groups(
+    group: DuplicateGroupResult,
+    file_id_to_group_id: dict[int, int],
+) -> list[str]:
+    """file_id가 여러 그룹에 속하는지 검사하고, file_id_to_group_id를 갱신합니다. 오류 목록 반환."""
+    errors: list[str] = []
+    group_id = group.group_id
+    for file_id in group.file_ids:
+        if file_id in file_id_to_group_id:
+            errors.append(
+                f"File {file_id} appears in multiple groups: "
+                f"{file_id_to_group_id[file_id]} and {group_id}"
+            )
+        else:
+            file_id_to_group_id[file_id] = group_id
+    return errors
+
+
+def _errors_keeper_not_in_group(group: DuplicateGroupResult) -> list[str]:
+    """recommended_keeper_id가 그룹 file_ids에 있는지 검증 오류를 반환합니다."""
+    if group.recommended_keeper_id is None:
+        return []
+    if group.recommended_keeper_id in group.file_ids:
+        return []
+    return [
+        f"Group {group.group_id}: recommended_keeper_id ({group.recommended_keeper_id}) "
+        "not in file_ids"
+    ]
+
+
+def _errors_duplicate_paths_in_group(
+    group: DuplicateGroupResult,
+    file_data_store: "FileDataStore",
+) -> list[str]:
+    """그룹 내 동일 path 중복 검증 오류를 반환합니다."""
+    if len(group.file_ids) < 2:
+        return []
+    paths_seen: set[str] = set()
+    errors: list[str] = []
+    for file_id in group.file_ids:
+        file_data = file_data_store.get_file(file_id)
+        if not file_data:
+            continue
+        path_str = str(file_data.path)
+        if path_str in paths_seen:
+            errors.append(
+                f"Group {group.group_id}: duplicate path found for file_id {file_id}: {path_str}"
+            )
+        paths_seen.add(path_str)
+    return errors
 
 
 def validate_normalized_groups(
@@ -305,52 +391,13 @@ def validate_normalized_groups(
         검증 오류 메시지 리스트. 오류가 없으면 빈 리스트.
     """
     errors: list[str] = []
-    
-    # file_id -> group_id 매핑
     file_id_to_group_id: dict[int, int] = {}
-    
+
     for group in groups:
-        group_id = group.group_id
-        
-        # 검증 1: file_count는 DuplicateGroupResult에 직접 필드가 없으므로 생략
-        # (JSON 직렬화 시 len(file_ids)로 계산됨)
-        
-        # 검증 2: files는 file_id 기준 unique (중복 file_id 없음)
-        file_ids_set = set(group.file_ids)
-        if len(file_ids_set) != len(group.file_ids):
-            errors.append(
-                f"Group {group_id}: duplicate file_ids found in file_ids list"
-            )
-        
-        # 검증 3: 각 file_id가 최대 1개 group_id만 가짐
-        for file_id in group.file_ids:
-            if file_id in file_id_to_group_id:
-                errors.append(
-                    f"File {file_id} appears in multiple groups: "
-                    f"{file_id_to_group_id[file_id]} and {group_id}"
-                )
-            else:
-                file_id_to_group_id[file_id] = group_id
-        
-        # 검증 4: recommended_keeper_id가 해당 그룹의 files 목록에 존재
-        if group.recommended_keeper_id is not None:
-            if group.recommended_keeper_id not in group.file_ids:
-                errors.append(
-                    f"Group {group_id}: recommended_keeper_id ({group.recommended_keeper_id}) "
-                    f"not in file_ids"
-                )
-        
-        # 검증 5: 컴포넌트 내 file_id의 path는 모두 서로 달라야 함 (file_data_store가 있는 경우)
-        if file_data_store and len(group.file_ids) > 1:
-            paths_seen: set[str] = set()
-            for file_id in group.file_ids:
-                file_data = file_data_store.get_file(file_id)
-                if file_data:
-                    path_str = str(file_data.path)
-                    if path_str in paths_seen:
-                        errors.append(
-                            f"Group {group_id}: duplicate path found for file_id {file_id}: {path_str}"
-                        )
-                    paths_seen.add(path_str)
-    
+        errors.extend(_errors_duplicate_file_ids_in_group(group))
+        errors.extend(_errors_file_id_in_multiple_groups(group, file_id_to_group_id))
+        errors.extend(_errors_keeper_not_in_group(group))
+        if file_data_store:
+            errors.extend(_errors_duplicate_paths_in_group(group, file_data_store))
+
     return errors
