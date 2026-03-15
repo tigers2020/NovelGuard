@@ -187,26 +187,30 @@ class OrganizeByChosungUseCase:
             return 0
         return sum(1 for p in target_base.rglob("*") if p.is_file())
 
+    def _is_dir_candidate_for_removal(self, root_path: Path, path: Path) -> bool:
+        """경로가 빈 폴더 삭제 후보인지 여부. 출력 폴더(정리) 및 그 직하위 초성 폴더는 제외."""
+        if not path.is_dir():
+            return False
+        try:
+            rel = path.relative_to(root_path)
+        except ValueError:
+            return False
+        if not rel.parts:
+            return False
+        if rel.parts[0] != OUTPUT_SUBFOLDER:
+            return True
+        if len(rel.parts) == 1:
+            return False
+        if len(rel.parts) == 2 and rel.parts[1] in FOLDER_NAMES:
+            return False
+        return True
+
     def _remove_empty_dirs(self, root_path: Path) -> None:
         """루트 아래 빈 폴더 삭제. 출력 폴더(정리) 및 그 직하위 초성 폴더는 유지, 나머지 빈 폴더 제거."""
-        dirs_to_check: list[Path] = []
-        for path in root_path.rglob("*"):
-            if not path.is_dir():
-                continue
-            try:
-                rel = path.relative_to(root_path)
-            except ValueError:
-                continue
-            if not rel.parts:
-                continue
-            if rel.parts[0] != OUTPUT_SUBFOLDER:
-                dirs_to_check.append(path)
-                continue
-            if len(rel.parts) == 1:
-                continue
-            if len(rel.parts) == 2 and rel.parts[1] in FOLDER_NAMES:
-                continue
-            dirs_to_check.append(path)
+        dirs_to_check = [
+            p for p in root_path.rglob("*")
+            if self._is_dir_candidate_for_removal(root_path, p)
+        ]
         dirs_to_check.sort(key=lambda p: len(p.relative_to(root_path).parts), reverse=True)
         for dir_path in dirs_to_check:
             if dir_path.exists() and not any(dir_path.iterdir()):
@@ -214,6 +218,24 @@ class OrganizeByChosungUseCase:
                     dir_path.rmdir()
                 except OSError:
                     pass
+
+    def _init_result_counts(self, result: OrganizeByChosungResult) -> None:
+        """결과 객체에 초성 폴더별 카운트 초기화."""
+        for name in FOLDER_NAMES:
+            result.counts_by_folder[name] = 0
+
+    def _log_completion(self, result: OrganizeByChosungResult) -> None:
+        """정리 완료 디버그 로그 출력."""
+        debug_step(
+            self._log_sink,
+            "organize_by_chosung_completed",
+            {
+                "total_processed": result.total_processed,
+                "moved_or_copied": result.moved_or_copied,
+                "skipped": result.skipped,
+                "counts_by_folder": result.counts_by_folder,
+            },
+        )
 
     def execute(
         self,
@@ -237,15 +259,14 @@ class OrganizeByChosungUseCase:
             {"root_path": str(root_path), "move": move, "dry_run": dry_run},
         )
         result = OrganizeByChosungResult()
-        for name in FOLDER_NAMES:
-            result.counts_by_folder[name] = 0
+        self._init_result_counts(result)
 
         if not root_path.is_dir():
             return result
 
         files = self._collect_all_files_recursive(root_path)
         target_base = root_path / OUTPUT_SUBFOLDER
-        if len(files) == 0:
+        if not files:
             result.files_already_in_chosung = self._count_files_in_output(target_base)
         if dry_run:
             return self._apply_dry_run(files, result)
@@ -253,14 +274,5 @@ class OrganizeByChosungUseCase:
         self._apply_move_or_copy(target_base, files, move, result)
         if move:
             self._remove_empty_dirs(root_path)
-        debug_step(
-            self._log_sink,
-            "organize_by_chosung_completed",
-            {
-                "total_processed": result.total_processed,
-                "moved_or_copied": result.moved_or_copied,
-                "skipped": result.skipped,
-                "counts_by_folder": result.counts_by_folder,
-            },
-        )
+        self._log_completion(result)
         return result
