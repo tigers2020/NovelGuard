@@ -48,13 +48,13 @@ class FilenameParseResult:
     하위 호환성을 위해 유지. primary segment의 unit과 동일.
     """
     
-    segments: list[RangeSegment] = None
+    segments: Optional[list[RangeSegment]] = None
     """범위 세그먼트 리스트 (예: [("본편", 1, 1213, None), ("외전", 1, 71, None)]).
-    
+
     복합 케이스 지원 (본편/외전 등). 비어있으면 segments 파싱 실패.
     """
-    
-    tags: list[str] = None
+
+    tags: Optional[list[str]] = None
     """태그 리스트 (예: ["완", "완결", "후기", "@경우"])."""
     
     # 파싱 메타데이터
@@ -64,50 +64,59 @@ class FilenameParseResult:
     parse_method: str = "fallback"
     """파싱 방법 ("pattern_match", "heuristic", "fallback")."""
     
-    def __post_init__(self) -> None:
-        """유효성 검증."""
+    def _validate_confidence(self) -> None:
         if not (0.0 <= self.confidence <= 1.0):
             raise ValueError(f"confidence must be between 0.0 and 1.0: {self.confidence}")
-        
+
+    def _validate_range_bounds(self) -> None:
         if self.range_start is not None and self.range_start < 0:
             raise ValueError(f"range_start must be >= 0: {self.range_start}")
-        
         if self.range_end is not None and self.range_end < 0:
             raise ValueError(f"range_end must be >= 0: {self.range_end}")
-        
-        if self.range_start is not None and self.range_end is not None:
-            if self.range_start > self.range_end:
-                raise ValueError(
-                    f"range_start ({self.range_start}) must be <= range_end ({self.range_end})"
-                )
-        
+        if self.range_start is not None and self.range_end is not None and self.range_start > self.range_end:
+            raise ValueError(
+                f"range_start ({self.range_start}) must be <= range_end ({self.range_end})"
+            )
+
+    def _normalize_and_validate_segments(self) -> None:
         if self.segments is None:
-            object.__setattr__(self, 'segments', [])
+            object.__setattr__(self, "segments", [])
         elif not isinstance(self.segments, list):
             raise ValueError(f"segments must be a list: {type(self.segments)}")
-        
-        # segments와 range_start/end/unit 일관성 확인
-        if self.segments:
-            primary_segments = [s for s in self.segments if s.is_primary]
-            if primary_segments:
-                primary = primary_segments[0]
-                if self.range_start is not None and self.range_start != primary.start:
-                    raise ValueError(
-                        f"range_start ({self.range_start}) must match primary segment start ({primary.start})"
-                    )
-                if self.range_end is not None and self.range_end != primary.end:
-                    raise ValueError(
-                        f"range_end ({self.range_end}) must match primary segment end ({primary.end})"
-                    )
-                if self.range_unit is not None and self.range_unit != primary.unit:
-                    raise ValueError(
-                        f"range_unit ({self.range_unit}) must match primary segment unit ({primary.unit})"
-                    )
-        
+
+    def _validate_primary_segment_consistency(self) -> None:
+        if not self.segments:
+            return
+        primary_segments = [s for s in self.segments if s.is_primary]
+        if not primary_segments:
+            return
+        primary = primary_segments[0]
+        if self.range_start is not None and self.range_start != primary.start:
+            raise ValueError(
+                f"range_start ({self.range_start}) must match primary segment start ({primary.start})"
+            )
+        if self.range_end is not None and self.range_end != primary.end:
+            raise ValueError(
+                f"range_end ({self.range_end}) must match primary segment end ({primary.end})"
+            )
+        if self.range_unit is not None and self.range_unit != primary.unit:
+            raise ValueError(
+                f"range_unit ({self.range_unit}) must match primary segment unit ({primary.unit})"
+            )
+
+    def _normalize_and_validate_tags(self) -> None:
         if self.tags is None:
-            object.__setattr__(self, 'tags', [])
+            object.__setattr__(self, "tags", [])
         elif not isinstance(self.tags, list):
             raise ValueError(f"tags must be a list: {type(self.tags)}")
+
+    def __post_init__(self) -> None:
+        """유효성 검증."""
+        self._validate_confidence()
+        self._validate_range_bounds()
+        self._normalize_and_validate_segments()
+        self._validate_primary_segment_consistency()
+        self._normalize_and_validate_tags()
     
     @property
     def has_range(self) -> bool:
@@ -158,39 +167,36 @@ class FilenameParseResult:
         epilogue_tags = {"후기", "에필", "에필로그", "epilogue", "afterword"}
         return any(epilogue_tag in tag.lower() for tag in self.tags for epilogue_tag in epilogue_tags)
     
+    def _range_contains_via_segments(self, other: "FilenameParseResult") -> bool:
+        """segments 기반으로 other 범위가 이 범위에 포함되는지 판정. 호출 전 has_segments 양쪽 True 가정."""
+        other_by_type: dict[str, list[RangeSegment]] = defaultdict(list)
+        for s in other.segments:
+            other_by_type[s.segment_type].append(s)
+        for self_segment in self.segments:
+            for other_segment in other_by_type.get(self_segment.segment_type, []):
+                if self_segment.contains(other_segment):
+                    return True
+        return False
+
     def range_contains(self, other: "FilenameParseResult") -> bool:
         """다른 파싱 결과의 범위가 이 범위에 포함되는지 확인.
-        
+
         Args:
             other: 비교할 다른 파싱 결과.
-        
+
         Returns:
             other의 범위가 이 범위에 완전히 포함되면 True.
             범위 정보가 없으면 False.
-        
+
         Note:
             segments가 있으면 segments 기반으로 판정.
             없으면 기존 range_start/range_end 기반으로 판정 (하위 호환성).
         """
-        # segments 기반 판정 (우선). 타입별 그룹화로 비교 횟수 감소 O(S×T) → O(S_type + T_type) per type
         if self.has_segments and other.has_segments:
-            other_by_type: dict[str, list[RangeSegment]] = defaultdict(list)
-            for s in other.segments:
-                other_by_type[s.segment_type].append(s)
-            for self_segment in self.segments:
-                for other_segment in other_by_type.get(self_segment.segment_type, []):
-                    if self_segment.contains(other_segment):
-                        return True
-            return False
-        
-        # 기존 방식 (하위 호환성)
+            return self._range_contains_via_segments(other)
         if not self.has_range or not other.has_range:
             return False
-        
-        return (
-            self.range_start <= other.range_start
-            and self.range_end >= other.range_end
-        )
+        return self.range_start <= other.range_start and self.range_end >= other.range_end
     
     def is_same_series(self, other: "FilenameParseResult") -> bool:
         """같은 작품인지 확인.
