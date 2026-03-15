@@ -344,6 +344,28 @@ class FileListTableWidget(QWidget):
                 if isinstance(data, FileData):
                     self._row_by_file_id[data.file_id] = r
     
+    def _find_row_linear(self, file_id: int) -> int:
+        """캐시 미스 시 선형 탐색으로 행 찾기. 찾으면 캐시에 저장 후 인덱스 반환."""
+        for r in range(self._table.rowCount()):
+            item = self._table.item(r, FileListColumns.FILE_NAME)
+            if not item:
+                continue
+            data = item.data(FileListRoles.FILE_DATA)
+            if isinstance(data, FileData) and data.file_id == file_id:
+                self._row_by_file_id[file_id] = r
+                return r
+        return -1
+
+    def _is_cached_row_valid(self, row: int, file_id: int) -> bool:
+        """캐시된 행 인덱스가 현재 테이블에서 해당 file_id와 일치하는지 확인."""
+        if row < 0 or row >= self._table.rowCount():
+            return False
+        item = self._table.item(row, FileListColumns.FILE_NAME)
+        if not item:
+            return False
+        data = item.data(FileListRoles.FILE_DATA)
+        return isinstance(data, FileData) and data.file_id == file_id
+
     def _find_row_by_file_id(self, file_id: int) -> int:
         """파일 ID로 행 찾기 (인덱스 캐시 사용).
         
@@ -353,30 +375,11 @@ class FileListTableWidget(QWidget):
         Returns:
             행 인덱스. 없으면 -1.
         """
-        # 인덱스 캐시 사용 (O(1))
         row = self._row_by_file_id.get(file_id, -1)
-        
-        # 캐시에 없으면 선형 탐색 (fallback, 드물게 발생)
         if row == -1:
-            for r in range(self._table.rowCount()):
-                item = self._table.item(r, FileListColumns.FILE_NAME)
-                if item:
-                    data = item.data(FileListRoles.FILE_DATA)
-                    if isinstance(data, FileData) and data.file_id == file_id:
-                        # 캐시 업데이트
-                        self._row_by_file_id[file_id] = r
-                        return r
-            return -1
-        
-        # 캐시에 있지만 행이 유효한지 확인 (정렬 등으로 인한 변경 대응)
-        if 0 <= row < self._table.rowCount():
-            item = self._table.item(row, FileListColumns.FILE_NAME)
-            if item:
-                data = item.data(FileListRoles.FILE_DATA)
-                if isinstance(data, FileData) and data.file_id == file_id:
-                    return row
-        
-        # 캐시 무효화 (행이 변경됨)
+            return self._find_row_linear(file_id)
+        if self._is_cached_row_valid(row, file_id):
+            return row
         self._row_by_file_id.pop(file_id, None)
         return -1
     
@@ -401,6 +404,43 @@ class FileListTableWidget(QWidget):
         """
         self._set_file_row_data(row, file_data)
     
+    def _path_display_string(self, file_data: FileData) -> str:
+        """파일 경로 표시 문자열 (상대 경로 우선)."""
+        scan_folder = self._data_store.scan_folder
+        if not scan_folder:
+            return str(file_data.path)
+        try:
+            return str(file_data.path.relative_to(scan_folder))
+        except ValueError:
+            return str(file_data.path)
+
+    def _encoding_display_text(self, file_data: FileData) -> str:
+        """인코딩 컬럼 표시 텍스트."""
+        if not file_data.encoding:
+            return "-"
+        if file_data.encoding_confidence:
+            return f"{file_data.encoding} ({file_data.encoding_confidence:.0%})"
+        return file_data.encoding
+
+    def _integrity_display_text(self, file_data: FileData) -> str:
+        """무결성 컬럼 표시 텍스트."""
+        if not file_data.integrity_severity:
+            return "-"
+        severity_icon = {"ERROR": "🔴", "WARN": "🟡", "INFO": "🔵"}.get(
+            file_data.integrity_severity, ""
+        )
+        issue_count = len(file_data.integrity_issues)
+        return f"{severity_icon} {issue_count}개" if issue_count > 0 else "-"
+
+    def _attributes_display_text(self, file_data: FileData) -> str:
+        """속성 컬럼 표시 텍스트."""
+        attrs = []
+        if file_data.entry.is_symlink:
+            attrs.append("링크")
+        if file_data.entry.is_hidden:
+            attrs.append("숨김")
+        return ", ".join(attrs) if attrs else "-"
+
     def _set_file_row_data(self, row: int, file_data: FileData) -> None:
         """파일 행 데이터 설정.
         
@@ -408,34 +448,22 @@ class FileListTableWidget(QWidget):
             row: 행 인덱스.
             file_data: 파일 데이터.
         """
-        scan_folder = self._data_store.scan_folder
-        
         # 파일명
         name_item = QTableWidgetItem(file_data.path.name)
-        name_item.setData(FileListRoles.FILE_DATA, file_data)  # 원본 데이터 저장
+        name_item.setData(FileListRoles.FILE_DATA, file_data)
         self._table.setItem(row, FileListColumns.FILE_NAME, name_item)
         
-        # 경로 (상대 경로로 표시)
-        if scan_folder:
-            try:
-                rel_path = file_data.path.relative_to(scan_folder)
-                path_str = str(rel_path)
-            except ValueError:
-                path_str = str(file_data.path)
-        else:
-            path_str = str(file_data.path)
-        path_item = QTableWidgetItem(path_str)
-        self._table.setItem(row, FileListColumns.FILE_PATH, path_item)
+        # 경로
+        self._table.setItem(row, FileListColumns.FILE_PATH, QTableWidgetItem(self._path_display_string(file_data)))
         
         # 크기
         size_item = QTableWidgetItem(self._format_file_size(file_data.size))
-        size_item.setData(FileListRoles.SORT_VALUE, file_data.size)  # 정렬을 위한 원본 값
+        size_item.setData(FileListRoles.SORT_VALUE, file_data.size)
         self._table.setItem(row, FileListColumns.FILE_SIZE, size_item)
         
         # 수정일
         mtime_item = QTableWidgetItem(self._format_datetime(file_data.mtime))
-        mtime_timestamp = file_data.mtime.timestamp()
-        mtime_item.setData(FileListRoles.SORT_VALUE, mtime_timestamp)
+        mtime_item.setData(FileListRoles.SORT_VALUE, file_data.mtime.timestamp())
         self._table.setItem(row, FileListColumns.MODIFIED_AT, mtime_item)
         
         # 확장자
@@ -443,48 +471,19 @@ class FileListTableWidget(QWidget):
         self._table.setItem(row, FileListColumns.EXTENSION, ext_item)
         
         # 인코딩
-        encoding_text = "-"
-        if file_data.encoding:
-            if file_data.encoding_confidence:
-                encoding_text = f"{file_data.encoding} ({file_data.encoding_confidence:.0%})"
-            else:
-                encoding_text = file_data.encoding
-        encoding_item = QTableWidgetItem(encoding_text)
-        self._table.setItem(row, FileListColumns.ENCODING, encoding_item)
+        self._table.setItem(row, FileListColumns.ENCODING, QTableWidgetItem(self._encoding_display_text(file_data)))
         
-        # 중복 그룹 - 빈 아이템만 생성 (delegate가 paint에서 표시)
+        # 중복 그룹 / 대표 파일 - 빈 아이템만 생성 (delegate가 paint에서 표시)
         if not self._table.item(row, FileListColumns.DUPLICATE_GROUP):
-            group_item = QTableWidgetItem("")
-            self._table.setItem(row, FileListColumns.DUPLICATE_GROUP, group_item)
-        
-        # 대표 파일 - 빈 아이템만 생성 (delegate가 paint에서 표시)
+            self._table.setItem(row, FileListColumns.DUPLICATE_GROUP, QTableWidgetItem(""))
         if not self._table.item(row, FileListColumns.CANONICAL):
-            canonical_item = QTableWidgetItem("")
-            self._table.setItem(row, FileListColumns.CANONICAL, canonical_item)
+            self._table.setItem(row, FileListColumns.CANONICAL, QTableWidgetItem(""))
         
         # 무결성
-        integrity_text = "-"
-        if file_data.integrity_severity:
-            severity_icon = {
-                "ERROR": "🔴",
-                "WARN": "🟡",
-                "INFO": "🔵"
-            }.get(file_data.integrity_severity, "")
-            issue_count = len(file_data.integrity_issues)
-            if issue_count > 0:
-                integrity_text = f"{severity_icon} {issue_count}개"
-        integrity_item = QTableWidgetItem(integrity_text)
-        self._table.setItem(row, FileListColumns.INTEGRITY, integrity_item)
+        self._table.setItem(row, FileListColumns.INTEGRITY, QTableWidgetItem(self._integrity_display_text(file_data)))
         
         # 속성
-        attrs = []
-        if file_data.entry.is_symlink:
-            attrs.append("링크")
-        if file_data.entry.is_hidden:
-            attrs.append("숨김")
-        attr_text = ", ".join(attrs) if attrs else "-"
-        attr_item = QTableWidgetItem(attr_text)
-        self._table.setItem(row, FileListColumns.ATTRIBUTES, attr_item)
+        self._table.setItem(row, FileListColumns.ATTRIBUTES, QTableWidgetItem(self._attributes_display_text(file_data)))
     
     def _format_file_size(self, size_bytes: int) -> str:
         """파일 크기를 사람이 읽기 쉬운 형식으로 변환.
