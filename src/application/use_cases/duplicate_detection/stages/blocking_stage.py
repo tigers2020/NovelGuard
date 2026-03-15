@@ -54,7 +54,10 @@ class BlockingStage(PipelineStage):
             context.blocking_groups = []
             return context
         
-        blocking_groups = self._blocking_service.create_blocking_groups(context.file_parse_pairs)
+        blocking_groups = self._blocking_service.create_blocking_groups(
+            context.file_parse_pairs,
+            min_confidence=context.request.blocking_confidence_min,
+        )
         
         context.blocking_groups = blocking_groups
         

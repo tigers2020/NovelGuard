@@ -172,4 +172,8 @@ class DuplicateDetectionPipeline:
 
             # Blocking 그룹이 없어도 Exact 단계는 실행 (크기 기반으로 완전 동일 탐지).
         
-        return context.results
+        results = context.results
+        if context.request.min_confidence is not None:
+            threshold = context.request.min_confidence
+            results = [r for r in results if r.confidence >= threshold]
+        return results

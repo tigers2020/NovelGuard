@@ -35,12 +35,14 @@ class BlockingService:
     
     def create_blocking_groups(
         self,
-        files: list[tuple[FileEntry, FilenameParseResult]]
+        files: list[tuple[FileEntry, FilenameParseResult]],
+        min_confidence: float = 0.7,
     ) -> list[BlockingGroup]:
         """Blocking Group 생성 (2-3단계 Blocking).
         
         Args:
             files: (FileEntry, FilenameParseResult) 튜플 리스트.
+            min_confidence: 이 값 미만의 파싱 confidence는 blocking에서 제외. 기본 0.7.
         
         Returns:
             BlockingGroup 리스트. 각 그룹은 같은 작품명과 확장자를 가진 파일들.
@@ -52,12 +54,11 @@ class BlockingService:
         """
         # 1차 그룹화: (extension, series_title_norm)
         # confidence가 낮은 파싱 결과는 blocking에서 제외 (폭증 방지)
-        MIN_CONFIDENCE_FOR_BLOCKING = 0.7
         primary_groups: dict[tuple[str, str], list[tuple[FileEntry, FilenameParseResult]]] = defaultdict(list)
         
         for file_entry, parse_result in files:
             # confidence가 너무 낮으면 blocking에서 제외
-            if parse_result.confidence < MIN_CONFIDENCE_FOR_BLOCKING:
+            if parse_result.confidence < min_confidence:
                 continue
             group_key = (file_entry.extension, parse_result.series_title_norm)
             primary_groups[group_key].append((file_entry, parse_result))
