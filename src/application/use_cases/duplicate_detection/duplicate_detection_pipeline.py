@@ -11,7 +11,12 @@ from application.use_cases.duplicate_detection.stages.base_stage import (
     PipelineStage
 )
 from application.use_cases.duplicate_detection.stages.blocking_stage import BlockingStage
-from application.use_cases.duplicate_detection.stages.file_mapping_stage import FileMappingStage
+from application.use_cases.duplicate_detection.stages.exact_duplicate_stage import (
+    ExactDuplicateStage
+)
+from application.use_cases.duplicate_detection.stages.file_mapping_stage import (
+    FileMappingStage
+)
 from application.use_cases.duplicate_detection.stages.filename_parsing_stage import (
     FilenameParsingStage
 )
@@ -23,6 +28,7 @@ from application.use_cases.duplicate_detection.stages.relation_detection_stage i
 )
 from domain.services.blocking_service import BlockingService
 from domain.services.containment_detector import ContainmentDetector
+from domain.services.exact_duplicate_detector import ExactDuplicateDetector
 from domain.services.filename_parser import FilenameParser
 
 if TYPE_CHECKING:
@@ -43,10 +49,11 @@ class DuplicateDetectionPipeline:
         containment_detector: ContainmentDetector,
         index_repository: IIndexRepository,
         file_data_store: Optional["FileDataStore"] = None,
-        log_sink: Optional[ILogSink] = None
+        log_sink: Optional[ILogSink] = None,
+        exact_detector: Optional[ExactDuplicateDetector] = None
     ) -> None:
         """파이프라인 초기화.
-        
+
         Args:
             filename_parser: 파일명 파서.
             blocking_service: Blocking 서비스.
@@ -54,6 +61,7 @@ class DuplicateDetectionPipeline:
             index_repository: 인덱스 저장소.
             file_data_store: 파일 데이터 저장소 (선택적).
             log_sink: 로그 싱크 (선택적).
+            exact_detector: Exact 중복 탐지기 (선택적, enable_exact 시 사용).
         """
         self._filename_parser = filename_parser
         self._blocking_service = blocking_service
@@ -61,9 +69,10 @@ class DuplicateDetectionPipeline:
         self._index_repository = index_repository
         self._file_data_store = file_data_store
         self._log_sink = log_sink
-        
+        self._exact_detector = exact_detector
+
         # 단계 초기화
-        self._stages: list[PipelineStage] = [
+        stages: list[PipelineStage] = [
             FilenameParsingStage(
                 filename_parser=filename_parser,
                 index_repository=index_repository,
@@ -81,11 +90,21 @@ class DuplicateDetectionPipeline:
                 containment_detector=containment_detector,
                 log_sink=log_sink
             ),
+        ]
+        if exact_detector is not None:
+            stages.append(
+                ExactDuplicateStage(
+                    exact_detector=exact_detector,
+                    log_sink=log_sink
+                )
+            )
+        stages.append(
             GroupCreationStage(
                 file_data_store=file_data_store,
                 log_sink=log_sink
             )
-        ]
+        )
+        self._stages = stages
     
     def execute(
         self,
@@ -136,9 +155,7 @@ class DuplicateDetectionPipeline:
             # 2. 매핑된 파일이 없으면 빈 결과 반환
             if stage_idx == 1 and len(context.file_parse_pairs) == 0:  # FileMappingStage 후
                 return []
-            
-            # 3. Blocking 그룹이 없으면 빈 결과 반환
-            if stage_idx == 2 and len(context.blocking_groups) == 0:  # BlockingStage 후
-                return []
+
+            # Blocking 그룹이 없어도 Exact 단계는 실행 (크기 기반으로 완전 동일 탐지).
         
         return context.results

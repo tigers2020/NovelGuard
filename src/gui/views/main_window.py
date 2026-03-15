@@ -140,6 +140,7 @@ class MainWindow(QMainWindow):
         # Placeholder 탭들 (나중에 실제 구현으로 교체)
         from gui.views.tabs.scan_tab import ScanTab
         from gui.views.tabs.duplicate_tab import DuplicateTab
+        from gui.views.tabs.move_organize_tab import MoveOrganizeTab
         from gui.views.tabs.small_file_tab import SmallFileTab
         from gui.views.tabs.integrity_tab import IntegrityTab
         from gui.views.tabs.encoding_tab import EncodingTab
@@ -152,6 +153,7 @@ class MainWindow(QMainWindow):
         tabs = {
             "scan": ScanTab(self, job_manager=self._job_manager, log_sink=self._log_sink),
             "duplicate": DuplicateTab(self, job_manager=self._job_manager, index_repository=self._index_repo, log_sink=self._log_sink),
+            "move_organize": MoveOrganizeTab(self, job_manager=self._job_manager, index_repository=self._index_repo, log_sink=self._log_sink),
             "small": SmallFileTab(self),
             "integrity": IntegrityTab(self),
             "encoding": EncodingTab(self),

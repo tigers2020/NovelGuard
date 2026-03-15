@@ -73,7 +73,9 @@ class MoveDuplicateFilesUseCase:
         # 모든 파일 조회
         all_files = self._file_data_store.get_all_files()
         
-        # 이동 대상 파일 필터링
+        # 이동 대상 파일 필터링. 서브폴더 무시하고 root/duplicate 안에만 평평하게 넣음.
+        duplicate_dir = scan_folder / "duplicate"
+        used_target_paths: set[Path] = set()
         move_operations: list[MoveOperation] = []
         
         for file_data in all_files:
@@ -86,15 +88,21 @@ class MoveDuplicateFilesUseCase:
             if file_data.is_canonical:
                 continue  # 대표 파일은 유지
             
-            # 중복 파일은 이동 대상
+            # 중복 파일은 이동 대상 → duplicate/ 아래에 파일명만 사용 (평평하게)
             source_path = file_data.path
-            try:
-                relative_path = source_path.relative_to(scan_folder)
-            except ValueError:
-                # scan_folder와 관계없는 경로인 경우 (드물게 발생)
-                # 절대 경로 사용
-                relative_path = Path(source_path.name)
-            target_path = scan_folder / "duplicate" / relative_path
+            name = source_path.name
+            stem, suffix = (source_path.stem, source_path.suffix)
+            if suffix:
+                suffix = "." + suffix
+            target_path = duplicate_dir / name
+            if target_path in used_target_paths:
+                n = 1
+                candidate = duplicate_dir / f"{stem} ({n}){suffix}"
+                while candidate in used_target_paths:
+                    n += 1
+                    candidate = duplicate_dir / f"{stem} ({n}){suffix}"
+                target_path = candidate
+            used_target_paths.add(target_path)
             
             move_operations.append(MoveOperation(
                 source_path=source_path,

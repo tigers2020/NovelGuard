@@ -40,6 +40,7 @@ class SidebarWidget(QWidget):
             [
                 ("scan", "📁", "파일 스캔"),
                 ("duplicate", "🔍", "중복 파일 정리"),
+                ("move_organize", "📂", "이동 정리"),
                 ("small", "📏", "작은 파일 정리"),
                 ("integrity", "✓", "무결성 확인"),
                 ("encoding", "🔤", "인코딩 통일"),

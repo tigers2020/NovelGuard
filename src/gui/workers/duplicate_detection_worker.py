@@ -17,7 +17,9 @@ from application.use_cases.duplicate_detection.stages.base_stage import Pipeline
 from application.utils.debug_logger import debug_step
 from domain.services.blocking_service import BlockingService
 from domain.services.containment_detector import ContainmentDetector
+from domain.services.exact_duplicate_detector import ExactDuplicateDetector
 from domain.services.filename_parser import FilenameParser
+from infrastructure.hashing.hash_service_adapter import HashServiceAdapter
 
 if TYPE_CHECKING:
     from gui.models.file_data_store import FileDataStore
@@ -67,7 +69,10 @@ class DuplicateDetectionWorker(QThread):
         self._filename_parser = FilenameParser(log_sink=log_sink)
         self._blocking_service = BlockingService(filename_parser=self._filename_parser, log_sink=log_sink)
         self._containment_detector = ContainmentDetector(log_sink=log_sink)
-        
+        # Exact 중복 탐지 (해시 기반)
+        hash_service = HashServiceAdapter()
+        self._exact_detector = ExactDuplicateDetector(hash_service=hash_service, log_sink=log_sink)
+
         # Pipeline 초기화
         self._pipeline: Optional[DuplicateDetectionPipeline] = None
         if index_repository:
@@ -77,7 +82,8 @@ class DuplicateDetectionWorker(QThread):
                 containment_detector=self._containment_detector,
                 index_repository=index_repository,
                 file_data_store=file_data_store,
-                log_sink=log_sink
+                log_sink=log_sink,
+                exact_detector=self._exact_detector
             )
     
     def cancel(self) -> None:
