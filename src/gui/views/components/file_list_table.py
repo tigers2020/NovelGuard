@@ -216,6 +216,8 @@ class FileListTableWidget(QWidget):
             return  # 정렬 금지
         # 다른 컬럼은 기본 정렬 동작 수행
         self._table.sortItems(logical_index, self._table.horizontalHeader().sortIndicatorOrder())
+        # 정렬 후 행 인덱스가 바뀌므로 캐시 재구성 (이후 lookup O(1) 유지)
+        self._rebuild_row_cache()
     
     def _on_file_added(self, file_data: FileData) -> None:
         """파일 추가 핸들러 (단일 파일)."""
@@ -302,13 +304,14 @@ class FileListTableWidget(QWidget):
         """
         # 제거할 행들을 역순으로 정렬 (뒤에서부터 제거하여 인덱스 문제 방지)
         rows_to_remove: list[int] = []
+        rows_to_remove_set: set[int] = set()
         file_ids_to_remove = set(file_ids)
         
         for file_id in file_ids:
             row = self._row_by_file_id.get(file_id)
             if row is not None and 0 <= row < self._table.rowCount():
-                # 중복 체크
-                if row not in rows_to_remove:
+                if row not in rows_to_remove_set:
+                    rows_to_remove_set.add(row)
                     rows_to_remove.append(row)
         
         # 역순으로 정렬하여 뒤에서부터 제거
@@ -322,14 +325,24 @@ class FileListTableWidget(QWidget):
         for file_id in file_ids_to_remove:
             self._row_by_file_id.pop(file_id, None)
         
-        # 나머지 캐시는 행 제거로 인해 변경되었을 수 있지만,
-        # 실제 사용 시 _find_row_by_file_id에서 재검증되므로 문제 없음
+        # 남은 행의 인덱스가 밀렸으므로 캐시 한 번에 재구성 (이후 lookup O(1) 유지)
+        self._rebuild_row_cache()
     
     def _refresh_table(self) -> None:
         """테이블 새로고침."""
         self._table.setRowCount(0)
         for file_data in self._data_store.get_all_files():
             self._add_file_row(file_data)
+    
+    def _rebuild_row_cache(self) -> None:
+        """테이블 행 순서 변경 후 file_id -> row 캐시를 한 번에 재구성 (정렬/행 제거 후 O(n) fallback 방지)."""
+        self._row_by_file_id.clear()
+        for r in range(self._table.rowCount()):
+            item = self._table.item(r, FileListColumns.FILE_NAME)
+            if item:
+                data = item.data(FileListRoles.FILE_DATA)
+                if isinstance(data, FileData):
+                    self._row_by_file_id[data.file_id] = r
     
     def _find_row_by_file_id(self, file_id: int) -> int:
         """파일 ID로 행 찾기 (인덱스 캐시 사용).
