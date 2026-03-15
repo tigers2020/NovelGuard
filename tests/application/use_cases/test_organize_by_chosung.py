@@ -1,15 +1,12 @@
 """OrganizeByChosungUseCase 및 초성 폴더명 유틸 테스트."""
 from pathlib import Path
 
-import pytest
-
 from application.use_cases.organize_by_chosung import (
     FOLDER_NAMES,
     OUTPUT_SUBFOLDER,
     effective_stem_for_sort,
     get_chosung_folder_name,
     normalize_target_filename,
-    OrganizeByChosungResult,
     OrganizeByChosungUseCase,
 )
 
@@ -17,29 +14,29 @@ from application.use_cases.organize_by_chosung import (
 class TestGetChosungFolderName:
     """get_chosung_folder_name 유틸 테스트."""
 
-    def test_empty_string_returns_기타(self):
+    def test_empty_string_returns_others(self):
         assert get_chosung_folder_name("") == "기타"
 
-    def test_hangul_ga_returns_ㄱ(self):
+    def test_hangul_ga_returns_g(self):
         assert get_chosung_folder_name("가") == "ㄱ"
 
-    def test_hangul_na_returns_ㄴ(self):
+    def test_hangul_na_returns_n(self):
         assert get_chosung_folder_name("나") == "ㄴ"
 
-    def test_hangul_da_returns_ㄷ(self):
+    def test_hangul_da_returns_d(self):
         assert get_chosung_folder_name("다") == "ㄷ"
 
-    def test_hangul_ra_returns_ㄹ(self):
+    def test_hangul_ra_returns_r(self):
         assert get_chosung_folder_name("라") == "ㄹ"
 
-    def test_double_consonant_gga_maps_to_ㄱ(self):
+    def test_double_consonant_gga_maps_to_g(self):
         # ㄲ -> ㄱ 폴더
         assert get_chosung_folder_name("까") == "ㄱ"
 
-    def test_double_consonant_dda_maps_to_ㄷ(self):
+    def test_double_consonant_dda_maps_to_d(self):
         assert get_chosung_folder_name("따") == "ㄷ"
 
-    def test_double_consonant_bba_maps_to_ㅂ(self):
+    def test_double_consonant_bba_maps_to_b(self):
         assert get_chosung_folder_name("빠") == "ㅂ"
 
     def test_digit_returns_09_folder(self):
@@ -50,7 +47,7 @@ class TestGetChosungFolderName:
         assert get_chosung_folder_name("A") == "A-Z"
         assert get_chosung_folder_name("z") == "A-Z"
 
-    def test_folder_names_constant_has_chosung_az_09_기타(self):
+    def test_folder_names_constant_has_chosung_az_09_others(self):
         assert len(FOLDER_NAMES) == 17
         assert FOLDER_NAMES[:14] == (
             "ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ", "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ"

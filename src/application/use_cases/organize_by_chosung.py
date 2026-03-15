@@ -28,25 +28,14 @@ FOLDER_NAMES = (
 )
 
 
+# 앞쪽 [...] / (...) 블록을 한 번에 제거하는 정규식 (반복 매칭)
+_STRIP_LEADING_BRACKETS = re.compile(r"^(\s*(\[[^\]]*\]|\([^)]*\))\s*)+")
+
+
 def effective_stem_for_sort(stem: str) -> str:
     """파일명(확장자 제외)에서 앞의 [...] (...) 를 제거한 제목 부분 반환."""
     s = stem.strip()
-    while s:
-        if s.startswith("["):
-            end = s.find("]", 1)
-            if end >= 0:
-                s = s[end + 1 :].strip()
-            else:
-                s = s[1:].strip()
-        elif s.startswith("("):
-            end = s.find(")", 1)
-            if end >= 0:
-                s = s[end + 1 :].strip()
-            else:
-                s = s[1:].strip()
-        else:
-            break
-    return s
+    return _STRIP_LEADING_BRACKETS.sub("", s).strip()
 
 
 def get_chosung_folder_name(first_char: str) -> str:
@@ -193,13 +182,10 @@ class OrganizeByChosungUseCase:
             result.total_processed += 1
 
     def _count_files_in_output(self, target_base: Path) -> int:
-        """출력 폴더(정리) 아래 초성 폴더들에 있는 파일 수."""
-        total = 0
-        for name in FOLDER_NAMES:
-            chosung_dir = target_base / name
-            if chosung_dir.is_dir():
-                total += sum(1 for _ in chosung_dir.rglob("*") if _.is_file())
-        return total
+        """출력 폴더(정리) 아래 초성 폴더들에 있는 파일 수. 한 번의 트리 순회로 계산."""
+        if not target_base.is_dir():
+            return 0
+        return sum(1 for p in target_base.rglob("*") if p.is_file())
 
     def _remove_empty_dirs(self, root_path: Path) -> None:
         """루트 아래 빈 폴더 삭제. 출력 폴더(정리) 및 그 직하위 초성 폴더는 유지, 나머지 빈 폴더 제거."""
