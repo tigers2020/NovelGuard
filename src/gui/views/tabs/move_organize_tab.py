@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 class MoveOrganizeTab(BaseTab):
-    """이동 정리 탭. 대상 폴더 직하위 파일을 ㄱ~ㅎ·기타 폴더로 초성별 정리."""
+    """이동 정리 탭. 대상 폴더 직하위 파일을 ㄱ-ㄷ·ㄹ-ㅂ·…·기타 구간 폴더로 초성별 정리."""
 
     def __init__(
         self,
@@ -225,7 +225,7 @@ class MoveOrganizeTab(BaseTab):
                 self._progress_info.setText("정리할 파일이 없습니다.")
                 if result.files_already_in_chosung > 0:
                     self._result_label.setText(
-                        f"이미 ㄱ~ㅎ·기타 폴더 안에 있는 파일이 {result.files_already_in_chosung}개 있어서 제외되었습니다. "
+                        f"이미 초성 구간(ㄱ-ㄷ 등) 폴더 안에 있는 파일이 {result.files_already_in_chosung}개 있어서 제외되었습니다. "
                         "한 번 실행한 뒤에는 같은 폴더를 다시 정리할 대상이 없습니다."
                     )
                 else:
@@ -266,7 +266,7 @@ class MoveOrganizeTab(BaseTab):
                 self._progress_info.setText("정리할 파일이 없습니다.")
                 if result.files_already_in_chosung > 0:
                     self._result_label.setText(
-                        f"이미 ㄱ~ㅎ·기타 폴더 안에 있는 파일이 {result.files_already_in_chosung}개 있어서 제외되었습니다."
+                        f"이미 초성 구간(ㄱ-ㄷ 등) 폴더 안에 있는 파일이 {result.files_already_in_chosung}개 있어서 제외되었습니다."
                     )
                 else:
                     self._result_label.setText("대상 폴더에 파일이 없습니다.")

@@ -1,7 +1,7 @@
 """초성별 폴더 정리 UseCase.
 
 대상 폴더 및 하위 폴더의 모든 파일을 제목 첫 글자(초성/A-Z/0-9)에 따라
-ㄱ~ㅎ, A~Z, 0~9, 기타 폴더로 분류해 이동/복사합니다.
+ㄱ-ㄷ, ㄹ-ㅂ, ㅅ-ㅈ, ㅊ-ㅎ, A-Z, 0-9, 기타 폴더로 분류해 이동/복사합니다.
 파일명 앞의 [...] (...) 는 제거한 뒤의 제목으로 분류합니다.
 """
 from dataclasses import dataclass, field
@@ -19,11 +19,13 @@ from application.utils.debug_logger import debug_step
 
 # 19개 초성 (유니코드 한글 초성 순서)
 _CHOSUNG_19 = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"
-# 폴더명: 14개 기본 자음 (ㄲ→ㄱ, ㄸ→ㄷ, ㅃ→ㅂ, ㅆ→ㅅ, ㅉ→ㅈ 매핑)
-_CHOSUNG_TO_FOLDER_INDEX = (0, 0, 1, 2, 2, 3, 4, 5, 5, 6, 6, 7, 8, 8, 9, 10, 11, 12, 13)
-# ㄱ~ㅎ(14) + A-Z(1) + 0-9(1) + 기타(1) = 17
+# 19개 초성 → 14개 기본 자음 인덱스 (ㄲ→ㄱ, ㄸ→ㄷ, ㅃ→ㅂ, ㅆ→ㅅ, ㅉ→ㅈ)
+_CHOSUNG_TO_BASIC_INDEX = (0, 0, 1, 2, 2, 3, 4, 5, 5, 6, 6, 7, 8, 8, 9, 10, 11, 12, 13)
+# 14개 기본 자음 → 구간 인덱스 (ㄱㄴㄷ→0, ㄹㅁㅂ→1, ㅅㅇㅈ→2, ㅊㅋㅌㅍㅎ→3)
+_BASIC_INDEX_TO_GROUP = (0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3)
+# 구간 폴더명: ㄱ-ㄷ, ㄹ-ㅂ, ㅅ-ㅈ, ㅊ-ㅎ + A-Z, 0-9, 기타 = 7개
 FOLDER_NAMES = (
-    ("ㄱ", "ㄴ", "ㄷ", "ㄹ", "ㅁ", "ㅂ", "ㅅ", "ㅇ", "ㅈ", "ㅊ", "ㅋ", "ㅌ", "ㅍ", "ㅎ")
+    ("ㄱ-ㄷ", "ㄹ-ㅂ", "ㅅ-ㅈ", "ㅊ-ㅎ")
     + ("A-Z", "0-9", "기타")
 )
 
@@ -39,7 +41,7 @@ def effective_stem_for_sort(stem: str) -> str:
 
 
 def get_chosung_folder_name(first_char: str) -> str:
-    """문자 하나에서 분류 폴더명 반환: 한글→ㄱ~ㅎ, 영문→A-Z, 숫자→0-9, 그 외 기타."""
+    """문자 하나에서 분류 폴더명 반환: 한글→ㄱ-ㄷ/ㄹ-ㅂ/ㅅ-ㅈ/ㅊ-ㅎ, 영문→A-Z, 숫자→0-9, 그 외 기타."""
     if not first_char:
         return "기타"
     c = first_char
@@ -47,8 +49,9 @@ def get_chosung_folder_name(first_char: str) -> str:
     if 0xAC00 <= code <= 0xD7A3:
         syllable_index = code - 0xAC00
         chosung_index = syllable_index // 588
-        folder_index = _CHOSUNG_TO_FOLDER_INDEX[chosung_index]
-        return FOLDER_NAMES[folder_index]
+        basic_index = _CHOSUNG_TO_BASIC_INDEX[chosung_index]
+        group_index = _BASIC_INDEX_TO_GROUP[basic_index]
+        return FOLDER_NAMES[group_index]
     if "A" <= c <= "Z" or "a" <= c <= "z":
         return "A-Z"
     if "0" <= c <= "9":
@@ -83,14 +86,14 @@ class OrganizeByChosungResult:
     counts_by_folder: dict[str, int] = field(default_factory=dict)
     """폴더별 이동/복사된 파일 수."""
     files_already_in_chosung: int = 0
-    """이미 ㄱ~ㅎ·기타 폴더 안에 있어서 제외된 파일 수 (정리할 파일이 0일 때 참고용)."""
+    """이미 초성 구간(ㄱ-ㄷ 등)·기타 폴더 안에 있어서 제외된 파일 수 (정리할 파일이 0일 때 참고용)."""
 
 
 class OrganizeByChosungUseCase:
     """초성별 폴더 정리 UseCase.
 
     대상 폴더 및 하위 폴더의 모든 파일을 파일명 첫 글자 초성에 따라
-    ㄱ~ㅎ, 기타 폴더 바로 아래로 이동/복사합니다 (하위 폴더 없음).
+    ㄱ-ㄷ, ㄹ-ㅂ, ㅅ-ㅈ, ㅊ-ㅎ, A-Z, 0-9, 기타 폴더 바로 아래로 이동/복사합니다 (하위 폴더 없음).
     """
 
     def __init__(self, log_sink: Optional[ILogSink] = None) -> None:
