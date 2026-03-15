@@ -2,7 +2,7 @@
 import os
 from collections import deque
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 from PySide6.QtCore import QObject, QThread, Signal
 
@@ -99,6 +99,64 @@ class PreviewWorker(QThread):
                 )
                 self.preview_error.emit(str(e))
     
+    def _should_skip_hidden(self, entry: os.DirEntry) -> bool:
+        """숨김 파일/폴더 여부로 스킵할지 판단."""
+        return not self._include_hidden and entry.name.startswith(".")
+
+    def _should_skip_symlink(self, entry: os.DirEntry) -> bool:
+        """심볼릭 링크 제외 설정이면 스킵할지 판단."""
+        return not self._include_symlinks and entry.is_symlink()
+
+    def _normalized_extension(self, entry: os.DirEntry) -> Optional[str]:
+        """엔트리가 확장자 필터를 통과하면 확장자 문자열, 아니면 None."""
+        path = Path(entry.path)
+        ext = path.suffix.lower() or "(확장자 없음)"
+        if len(self._extensions) != 0 and ext not in self._extensions:
+            return None
+        return ext
+
+    def _process_entry(
+        self, entry: os.DirEntry
+    ) -> Tuple[int, Optional[str], Optional[Path]]:
+        """단일 scandir 엔트리 처리.
+        
+        Returns:
+            (추가할 파일 수, 확장자 또는 None, 하위 디렉토리 Path 또는 None)
+        """
+        if self._should_skip_hidden(entry):
+            return (0, None, None)
+        if entry.is_file(follow_symlinks=False):
+            if self._should_skip_symlink(entry):
+                return (0, None, None)
+            ext = self._normalized_extension(entry)
+            if ext is None:
+                return (0, None, None)
+            return (1, ext, None)
+        if entry.is_dir(follow_symlinks=False) and self._include_subdirs:
+            if self._should_skip_symlink(entry):
+                return (0, None, None)
+            return (0, None, Path(entry.path))
+        return (0, None, None)
+
+    def _scan_one_dir(
+        self, current_dir: Path
+    ) -> Tuple[list[Path], int, dict[str, int]]:
+        """한 디렉토리만 스캔. (subdirs, 파일 증가분, 확장자 증가분)."""
+        subdirs: list[Path] = []
+        added_files = 0
+        ext_delta: dict[str, int] = {}
+        with os.scandir(current_dir) as entries:
+            for entry in entries:
+                if self._cancelled:
+                    break
+                add_count, ext, subdir_path = self._process_entry(entry)
+                if add_count and ext:
+                    added_files += add_count
+                    ext_delta[ext] = ext_delta.get(ext, 0) + 1
+                if subdir_path is not None:
+                    subdirs.append(subdir_path)
+        return subdirs, added_files, ext_delta
+
     def _scan_folder(self, folder: Path) -> PreviewStats:
         """폴더 스캔하여 PreviewStats 생성.
         
@@ -115,70 +173,29 @@ class PreviewWorker(QThread):
             FileNotFoundError: 폴더가 존재하지 않을 때.
             PermissionError: 폴더 접근 권한이 없을 때.
         """
-        total_files = 0
-        extension_counts: dict[str, int] = {}
-        
         if not folder.exists():
             raise FileNotFoundError(f"폴더가 존재하지 않습니다: {folder}")
-        
         if not folder.is_dir():
             raise ValueError(f"폴더가 아닙니다: {folder}")
-        
-        # 재귀적으로 스캔할 디렉토리 큐 (deque로 O(1) dequeue)
+
+        total_files = 0
+        extension_counts: dict[str, int] = {}
         dirs_to_scan: deque[Path] = deque([folder])
-        
+
         while dirs_to_scan and not self._cancelled:
             current_dir = dirs_to_scan.popleft()
-            
             try:
-                # os.scandir()로 빠른 순회 (stat 호출 없음)
-                with os.scandir(current_dir) as entries:
-                    subdirs = []
-                    
-                    for entry in entries:
-                        if self._cancelled:
-                            break
-                        
-                        # 숨김 파일/폴더 필터링
-                        if not self._include_hidden and entry.name.startswith('.'):
-                            continue
-                        
-                        # 파일인지 확인 (follow_symlinks=False로 최소 stat)
-                        if entry.is_file(follow_symlinks=False):
-                            # 심볼릭 링크 확인
-                            if not self._include_symlinks and entry.is_symlink():
-                                continue
-                            
-                            # 확장자 추출 및 필터링
-                            file_path = Path(entry.path)
-                            ext = file_path.suffix.lower()
-                            if not ext:
-                                ext = "(확장자 없음)"
-                            
-                            # 확장자 필터링: 리스트가 비어있거나 확장자가 리스트에 있으면 포함
-                            if len(self._extensions) == 0 or ext in self._extensions:
-                                total_files += 1
-                                extension_counts[ext] = extension_counts.get(ext, 0) + 1
-                        
-                        # 디렉토리인지 확인 (하위 폴더 포함 시에만)
-                        elif entry.is_dir(follow_symlinks=False) and self._include_subdirs:
-                            # 심볼릭 링크 확인
-                            if not self._include_symlinks and entry.is_symlink():
-                                continue
-                            
-                            subdirs.append(Path(entry.path))
-                    
-                    # 하위 디렉토리를 스택에 추가
-                    dirs_to_scan.extend(subdirs)
-            
+                subdirs, added_files, ext_delta = self._scan_one_dir(current_dir)
+                total_files += added_files
+                for ext, count in ext_delta.items():
+                    extension_counts[ext] = extension_counts.get(ext, 0) + count
+                dirs_to_scan.extend(subdirs)
             except PermissionError:
-                # 권한이 없는 디렉토리는 건너뛰기
                 continue
             except Exception as e:
-                # 기타 오류는 로깅만 하고 계속 진행
                 print(f"디렉토리 스캔 오류 ({current_dir}): {e}")
                 continue
-        
+
         return PreviewStats(
             estimated_total_files=total_files,
             top_extensions=extension_counts
