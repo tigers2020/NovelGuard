@@ -1,4 +1,5 @@
 """포함/버전 관계 탐지 서비스."""
+from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
@@ -60,54 +61,47 @@ class ContainmentDetector:
         file_id_a = file_a.file_id
         file_id_b = file_b.file_id
         
-        # segments 기반 포함 관계 판정 (우선)
+        # segments 기반 포함 관계 판정 (우선). 타입별 그룹화로 같은 타입끼리만 비교 O(S×T) → O(S_type×T_type) per type
         if parse_a.has_segments and parse_b.has_segments:
-            # 같은 타입의 세그먼트끼리 비교
+            segs_b_by_type: dict[str, list[RangeSegment]] = defaultdict(list)
+            for s in parse_b.segments:
+                segs_b_by_type[s.segment_type].append(s)
             for seg_a in parse_a.segments:
-                for seg_b in parse_b.segments:
-                    if seg_a.segment_type == seg_b.segment_type:
-                        # A가 B를 포함하는지 확인
-                        if seg_a.contains(seg_b):
-                            evidence = {
-                                "segments_a": [(s.segment_type, s.start, s.end, s.unit) for s in parse_a.segments],
-                                "segments_b": [(s.segment_type, s.start, s.end, s.unit) for s in parse_b.segments],
-                                "tags_a": parse_a.tags,
-                                "tags_b": parse_b.tags
-                            }
-                            
-                            confidence = 0.9
-                            
-                            # 완결 태그가 있으면 신뢰도 증가
-                            if parse_a.is_complete and not parse_b.is_complete:
-                                confidence = 0.95
-                            
-                            return ContainmentRelation(
-                                container_file_id=file_id_a,
-                                contained_file_id=file_id_b,
-                                evidence=evidence,
-                                confidence=confidence
-                            )
-                        
-                        # B가 A를 포함하는지 확인
-                        if seg_b.contains(seg_a):
-                            evidence = {
-                                "segments_a": [(s.segment_type, s.start, s.end, s.unit) for s in parse_a.segments],
-                                "segments_b": [(s.segment_type, s.start, s.end, s.unit) for s in parse_b.segments],
-                                "tags_a": parse_a.tags,
-                                "tags_b": parse_b.tags
-                            }
-                            
-                            confidence = 0.9
-                            
-                            if parse_b.is_complete and not parse_a.is_complete:
-                                confidence = 0.95
-                            
-                            return ContainmentRelation(
-                                container_file_id=file_id_b,
-                                contained_file_id=file_id_a,
-                                evidence=evidence,
-                                confidence=confidence
-                            )
+                for seg_b in segs_b_by_type.get(seg_a.segment_type, []):
+                    # A가 B를 포함하는지 확인
+                    if seg_a.contains(seg_b):
+                        evidence = {
+                            "segments_a": [(s.segment_type, s.start, s.end, s.unit) for s in parse_a.segments],
+                            "segments_b": [(s.segment_type, s.start, s.end, s.unit) for s in parse_b.segments],
+                            "tags_a": parse_a.tags,
+                            "tags_b": parse_b.tags
+                        }
+                        confidence = 0.9
+                        if parse_a.is_complete and not parse_b.is_complete:
+                            confidence = 0.95
+                        return ContainmentRelation(
+                            container_file_id=file_id_a,
+                            contained_file_id=file_id_b,
+                            evidence=evidence,
+                            confidence=confidence
+                        )
+                    # B가 A를 포함하는지 확인
+                    if seg_b.contains(seg_a):
+                        evidence = {
+                            "segments_a": [(s.segment_type, s.start, s.end, s.unit) for s in parse_a.segments],
+                            "segments_b": [(s.segment_type, s.start, s.end, s.unit) for s in parse_b.segments],
+                            "tags_a": parse_a.tags,
+                            "tags_b": parse_b.tags
+                        }
+                        confidence = 0.9
+                        if parse_b.is_complete and not parse_a.is_complete:
+                            confidence = 0.95
+                        return ContainmentRelation(
+                            container_file_id=file_id_b,
+                            contained_file_id=file_id_a,
+                            evidence=evidence,
+                            confidence=confidence
+                        )
         
         # 기존 방식 (하위 호환성): range_start/range_end 기반
         # A가 B를 포함하는지 확인

@@ -89,8 +89,8 @@ class RelationDetectionStage(PipelineStage):
             # 이후 로직은 store_file_ids 사용
             file_ids_list = store_file_ids
             
-            # Containment 관계 추적용 (version 탐지 시 중복 방지)
-            containment_relations: dict[int, list[int]] = defaultdict(list)  # container_id -> [contained_ids]
+            # Containment 관계 추적용 (version 탐지 시 중복 방지). set 사용으로 "in" 조회 O(1)
+            containment_relations: dict[int, set[int]] = defaultdict(set)  # container_id -> {contained_ids}
             
             # Containment 관계 탐지
             if context.request.enable_containment:
@@ -121,7 +121,7 @@ class RelationDetectionStage(PipelineStage):
                             if container_store_id is None or contained_store_id is None:
                                 continue
                             
-                            containment_relations[container_store_id].append(contained_store_id)
+                            containment_relations[container_store_id].add(contained_store_id)
             
             # Containment 그룹 생성 (container 기준으로 묶기)
             # 동일 container에 대해 여러 contained를 하나의 그룹으로 묶어 결과 폭증 방지
@@ -132,7 +132,7 @@ class RelationDetectionStage(PipelineStage):
                     
                     # container와 모든 contained를 하나의 그룹으로 묶기
                     group_id += 1
-                    containment_group = [container_store_id] + contained_store_ids
+                    containment_group = [container_store_id] + list(contained_store_ids)
                     group_result = DuplicateGroupResult(
                         group_id=group_id,
                         duplicate_type="containment",
@@ -153,10 +153,12 @@ class RelationDetectionStage(PipelineStage):
                         if i >= j or file_id_b not in group_file_entries or file_id_b not in group_parse_results:
                             continue
                         
-                        # 이미 containment 관계가 있으면 스킵
-                        if file_id_a in containment_relations.get(file_id_b, []):
+                        # 이미 containment 관계가 있으면 스킵 (set 조회 O(1))
+                        contained_by_b = containment_relations.get(file_id_b)
+                        if contained_by_b and file_id_a in contained_by_b:
                             continue
-                        if file_id_b in containment_relations.get(file_id_a, []):
+                        contained_by_a = containment_relations.get(file_id_a)
+                        if contained_by_a and file_id_b in contained_by_a:
                             continue
                         
                         file_a = group_file_entries[file_id_a]

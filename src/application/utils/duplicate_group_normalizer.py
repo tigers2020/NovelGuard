@@ -136,13 +136,15 @@ def normalize_duplicate_groups(
             # 단일 파일은 그룹으로 만들지 않음 (정규화 대상 아님)
             continue
         
-        # 이 컴포넌트에 포함된 원본 그룹들 수집
+        # 이 컴포넌트에 포함된 원본 그룹들 수집 (file_id 인덱스 사용 O(컴포넌트 크기), 전체 그룹 순회 회피)
         component_original_groups: list[DuplicateGroupResult] = []
-        component_file_ids_set = set(component_file_ids)
-        for group in groups:
-            # 그룹의 file_id들이 이 컴포넌트와 겹치면 포함
-            if component_file_ids_set.intersection(set(group.file_ids)):
-                component_original_groups.append(group)
+        seen_group_ids: set[int] = set()
+        for fid in component_file_ids:
+            for g in file_id_to_original_groups[fid]:
+                gid = id(g)
+                if gid not in seen_group_ids:
+                    seen_group_ids.add(gid)
+                    component_original_groups.append(g)
         
         # Merged group 생성
         merged_group = _merge_group_components(
@@ -252,45 +254,36 @@ def _select_keeper(
         # 여러 후보가 있으면 다음 단계로
         component_file_ids = candidates
     
-    # 2순위: 가장 큰 size
-    size_map: dict[int, int] = {}
-    for file_id in component_file_ids:
-        file_data = file_data_store.get_file(file_id)
-        if file_data:
-            size_map[file_id] = file_data.size
+    # 2~4순위용: file_id별 FileData를 한 번에 조회 (get_file 호출 O(n) → 1회 배치)
+    file_data_by_id: dict[int, Any] = {}
+    for fid in component_file_ids:
+        data = file_data_store.get_file(fid)
+        if data:
+            file_data_by_id[fid] = data
     
+    # 2순위: 가장 큰 size
+    size_map: dict[int, int] = {
+        fid: data.size for fid, data in file_data_by_id.items()
+    }
     if size_map:
         max_size = max(size_map.values())
         candidates = [fid for fid in component_file_ids if size_map.get(fid, 0) == max_size]
         if len(candidates) == 1:
             return candidates[0]
-        # 여러 후보가 있으면 다음 단계로
         component_file_ids = candidates
     
     # 3순위: 가장 최신 mtime
-    mtime_map: dict[int, Any] = {}
-    for file_id in component_file_ids:
-        file_data = file_data_store.get_file(file_id)
-        if file_data:
-            mtime_map[file_id] = file_data.mtime
-    
+    mtime_map = {fid: file_data_by_id[fid].mtime for fid in component_file_ids if fid in file_data_by_id}
     if mtime_map:
         max_mtime = max(mtime_map.values())
         candidates = [fid for fid in component_file_ids if mtime_map.get(fid) == max_mtime]
         if len(candidates) == 1:
             return candidates[0]
-        # 여러 후보가 있으면 다음 단계로
         component_file_ids = candidates
     
     # 4순위: path 사전순 (완전 결정성 보장)
-    path_map: dict[int, str] = {}
-    for file_id in component_file_ids:
-        file_data = file_data_store.get_file(file_id)
-        if file_data:
-            path_map[file_id] = str(file_data.path)
-    
+    path_map = {fid: str(file_data_by_id[fid].path) for fid in component_file_ids if fid in file_data_by_id}
     if path_map:
-        # path를 정렬하여 가장 작은 것 선택
         sorted_paths = sorted(path_map.items(), key=lambda x: x[1])
         return sorted_paths[0][0]
     
@@ -349,15 +342,15 @@ def validate_normalized_groups(
         
         # 검증 5: 컴포넌트 내 file_id의 path는 모두 서로 달라야 함 (file_data_store가 있는 경우)
         if file_data_store and len(group.file_ids) > 1:
-            paths: list[str] = []
+            paths_seen: set[str] = set()
             for file_id in group.file_ids:
                 file_data = file_data_store.get_file(file_id)
                 if file_data:
                     path_str = str(file_data.path)
-                    if path_str in paths:
+                    if path_str in paths_seen:
                         errors.append(
                             f"Group {group_id}: duplicate path found for file_id {file_id}: {path_str}"
                         )
-                    paths.append(path_str)
+                    paths_seen.add(path_str)
     
     return errors

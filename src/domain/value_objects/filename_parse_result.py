@@ -1,4 +1,5 @@
 """파일명 파싱 결과 ValueObject."""
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -171,14 +172,15 @@ class FilenameParseResult:
             segments가 있으면 segments 기반으로 판정.
             없으면 기존 range_start/range_end 기반으로 판정 (하위 호환성).
         """
-        # segments 기반 판정 (우선)
+        # segments 기반 판정 (우선). 타입별 그룹화로 비교 횟수 감소 O(S×T) → O(S_type + T_type) per type
         if self.has_segments and other.has_segments:
-            # 같은 타입의 세그먼트만 비교
+            other_by_type: dict[str, list[RangeSegment]] = defaultdict(list)
+            for s in other.segments:
+                other_by_type[s.segment_type].append(s)
             for self_segment in self.segments:
-                for other_segment in other.segments:
-                    if self_segment.segment_type == other_segment.segment_type:
-                        if self_segment.contains(other_segment):
-                            return True
+                for other_segment in other_by_type.get(self_segment.segment_type, []):
+                    if self_segment.contains(other_segment):
+                        return True
             return False
         
         # 기존 방식 (하위 호환성)
