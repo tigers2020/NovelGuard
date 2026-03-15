@@ -64,16 +64,21 @@ def test_relation_detection_stage_execute_containment():
         file_id=2
     )
     
+    # 범위가 있어야 containment 후보 쌍으로 비교됨 (1-10이 1-5를 포함)
     parse_result1 = FilenameParseResult(
         original_path=Path("test1.txt"),
         original_name="test1",
         series_title_norm="test",
+        range_start=1,
+        range_end=10,
         confidence=0.9
     )
     parse_result2 = FilenameParseResult(
         original_path=Path("test2.txt"),
         original_name="test2",
         series_title_norm="test",
+        range_start=1,
+        range_end=5,
         confidence=0.9
     )
     

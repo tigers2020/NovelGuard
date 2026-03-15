@@ -136,6 +136,32 @@ class ContainmentDetector:
             )
         return None
 
+    def _apply_containment_size_heuristic(
+        self,
+        result: ContainmentRelation,
+        file_a: FileEntry,
+        file_b: FileEntry,
+    ) -> ContainmentRelation:
+        """Container 크기가 contained보다 작으면 evidence에 플래그 추가하고 confidence를 0.75로 낮춤."""
+        container_size = (
+            file_a.size if result.container_file_id == file_a.file_id else file_b.size
+        )
+        contained_size = (
+            file_b.size if result.contained_file_id == file_b.file_id else file_a.size
+        )
+        if container_size >= contained_size:
+            return result
+        evidence = dict(result.evidence)
+        evidence["container_smaller_than_contained"] = True
+        evidence["container_size"] = container_size
+        evidence["contained_size"] = contained_size
+        return ContainmentRelation(
+            container_file_id=result.container_file_id,
+            contained_file_id=result.contained_file_id,
+            evidence=evidence,
+            confidence=0.75,
+        )
+
     def detect_containment(
         self,
         file_a: FileEntry,
@@ -159,16 +185,18 @@ class ContainmentDetector:
             return None
         file_id_a, file_id_b = ids
 
+        result = None
         if parse_a.has_segments and parse_b.has_segments:
             result = self._try_containment_via_segments(
                 file_id_a, file_id_b, parse_a, parse_b
             )
-            if result is not None:
-                return result
-
-        return self._try_containment_via_range(
-            file_id_a, file_id_b, parse_a, parse_b
-        )
+        if result is None:
+            result = self._try_containment_via_range(
+                file_id_a, file_id_b, parse_a, parse_b
+            )
+        if result is not None:
+            result = self._apply_containment_size_heuristic(result, file_a, file_b)
+        return result
     
     def _version_confidence_and_warning(
         self,

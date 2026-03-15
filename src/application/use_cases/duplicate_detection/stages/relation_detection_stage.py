@@ -14,6 +14,38 @@ from domain.services.containment_detector import ContainmentDetector
 from domain.value_objects.blocking_group import BlockingGroup
 from domain.value_objects.filename_parse_result import FilenameParseResult
 
+# 범위가 없는 항목 정렬 시 맨 뒤로 보내기 위한 sentinel
+_NO_RANGE_ORDER = (float("inf"), float("inf"))
+
+
+def _range_key_for_sort(
+    file_id: int,
+    group_parse_results: dict[int, FilenameParseResult],
+) -> tuple[float, float]:
+    """파일의 (range_start, range_end)를 정렬 키로 반환. 범위 없으면 _NO_RANGE_ORDER."""
+    parse = group_parse_results.get(file_id)
+    if not parse:
+        return _NO_RANGE_ORDER
+    if parse.has_segments and parse.primary_segment is not None:
+        seg = parse.primary_segment
+        return (float(seg.start), float(seg.end))
+    if parse.has_range and parse.range_start is not None and parse.range_end is not None:
+        return (float(parse.range_start), float(parse.range_end))
+    return _NO_RANGE_ORDER
+
+
+def _range_start_for_grouping(
+    file_id: int,
+    group_parse_results: dict[int, FilenameParseResult],
+) -> Optional[int]:
+    """Version 서브그룹용 range_start. 없으면 None."""
+    parse = group_parse_results.get(file_id)
+    if not parse:
+        return None
+    if parse.has_segments and parse.primary_segment is not None:
+        return parse.primary_segment.start
+    return parse.range_start
+
 
 def _resolve_group_store_data(
     blocking_group: BlockingGroup,
@@ -73,20 +105,42 @@ def _compute_containment_relations(
     context: PipelineContext,
     detector: ContainmentDetector,
 ) -> dict[int, set[int]]:
-    """쌍별 containment 관계를 탐지해 container_id -> {contained_ids} 맵으로 반환."""
+    """쌍별 containment 관계를 탐지해 container_id -> {contained_ids} 맵으로 반환.
+
+    범위 정렬 후, 한 구간이 다른 구간을 포함할 수 있는 후보 쌍만 비교하여 O(n²) 호출을 줄인다.
+    """
     containment_relations: dict[int, set[int]] = defaultdict(set)
-    for i, file_id_a in enumerate(file_ids_list):
-        for j, file_id_b in enumerate(file_ids_list):
-            if i >= j:
+    # (range_start, range_end) 기준 정렬; 범위 없는 항목은 뒤로
+    sorted_ids = sorted(
+        file_ids_list,
+        key=lambda fid: _range_key_for_sort(fid, group_parse_results),
+    )
+    n = len(sorted_ids)
+    for i in range(n):
+        file_id_a = sorted_ids[i]
+        key_a = _range_key_for_sort(file_id_a, group_parse_results)
+        if key_a == _NO_RANGE_ORDER:
+            continue
+        start_a, end_a = key_a
+        for j in range(i + 1, n):
+            file_id_b = sorted_ids[j]
+            key_b = _range_key_for_sort(file_id_b, group_parse_results)
+            if key_b == _NO_RANGE_ORDER:
                 continue
-            pair = _try_containment_pair(
-                file_id_a, file_id_b,
-                group_file_entries, group_parse_results,
-                context, detector,
-            )
-            if pair is not None:
-                container_store_id, contained_store_id = pair
-                containment_relations[container_store_id].add(contained_store_id)
+            start_b, end_b = key_b
+            if start_b > end_a:
+                break
+            if (start_a, end_a) == (start_b, end_b):
+                continue
+            if end_a >= end_b or end_b >= end_a:
+                pair = _try_containment_pair(
+                    file_id_a, file_id_b,
+                    group_file_entries, group_parse_results,
+                    context, detector,
+                )
+                if pair is not None:
+                    container_store_id, contained_store_id = pair
+                    containment_relations[container_store_id].add(contained_store_id)
     return containment_relations
 
 
@@ -177,20 +231,30 @@ def _compute_version_groups(
     group_id: int,
     detector: ContainmentDetector,
 ) -> tuple[list[DuplicateGroupResult], int]:
-    """Version 관계를 탐지해 DuplicateGroupResult 리스트와 다음 group_id 반환."""
+    """Version 관계를 탐지해 DuplicateGroupResult 리스트와 다음 group_id 반환.
+
+    range_start가 같은 파일끼리만 쌍 비교 (detect_version 조건과 일치, 비교 횟수 감소).
+    """
     results: list[DuplicateGroupResult] = []
-    for i, file_id_a in enumerate(file_ids_list):
-        for j, file_id_b in enumerate(file_ids_list):
-            if i >= j:
-                continue
-            one = _try_version_result(
-                file_id_a, file_id_b,
-                group_file_entries, group_parse_results,
-                containment_relations, context, group_id, detector,
-            )
-            if one is not None:
-                result, group_id = one
-                results.append(result)
+    by_range_start: dict[Optional[int], list[int]] = defaultdict(list)
+    for file_id in file_ids_list:
+        rs = _range_start_for_grouping(file_id, group_parse_results)
+        by_range_start[rs].append(file_id)
+    for _range_start, ids in by_range_start.items():
+        if len(ids) < 2:
+            continue
+        for i, file_id_a in enumerate(ids):
+            for j, file_id_b in enumerate(ids):
+                if i >= j:
+                    continue
+                one = _try_version_result(
+                    file_id_a, file_id_b,
+                    group_file_entries, group_parse_results,
+                    containment_relations, context, group_id, detector,
+                )
+                if one is not None:
+                    result, group_id = one
+                    results.append(result)
     return (results, group_id)
 
 
