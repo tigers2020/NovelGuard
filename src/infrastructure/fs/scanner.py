@@ -1,5 +1,6 @@
 """파일 시스템 스캐너."""
 import os
+from collections import deque
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
@@ -88,13 +89,14 @@ class FileSystemScanner:
         )
         
         entries: list[FileEntry] = []
-        dirs_to_scan = [root_folder]
+        dirs_to_scan: deque[Path] = deque([root_folder])
         processed_files = 0
+        total_bytes = 0
         
         debug_step(self._log_sink, "directory_scan_start", {"root_path": str(root_folder)})
         
         while dirs_to_scan and not self._cancelled:
-            current_dir = dirs_to_scan.pop(0)
+            current_dir = dirs_to_scan.popleft()
             
             try:
                 with os.scandir(current_dir) as it:
@@ -133,10 +135,10 @@ class FileSystemScanner:
                                 )
                                 entries.append(file_entry)
                                 processed_files += 1
+                                total_bytes += stat.st_size
                                 
                                 # 진행률 콜백 및 로그 (매 100개 파일마다)
                                 if processed_files % 100 == 0:
-                                    total_bytes = sum(e.size for e in entries)
                                     debug_step(
                                         self._log_sink,
                                         "file_processed",
@@ -171,7 +173,6 @@ class FileSystemScanner:
                 )
                 continue
         
-        total_bytes = sum(e.size for e in entries)
         debug_step(
             self._log_sink,
             "scan_complete",

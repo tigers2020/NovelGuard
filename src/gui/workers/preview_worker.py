@@ -1,5 +1,6 @@
 """Preview 스캔 워커 (빠른 파일 수 카운트)."""
 import os
+from collections import deque
 from pathlib import Path
 from typing import Optional
 
@@ -123,11 +124,11 @@ class PreviewWorker(QThread):
         if not folder.is_dir():
             raise ValueError(f"폴더가 아닙니다: {folder}")
         
-        # 재귀적으로 스캔할 디렉토리 스택
-        dirs_to_scan = [folder]
+        # 재귀적으로 스캔할 디렉토리 큐 (deque로 O(1) dequeue)
+        dirs_to_scan: deque[Path] = deque([folder])
         
         while dirs_to_scan and not self._cancelled:
-            current_dir = dirs_to_scan.pop(0)
+            current_dir = dirs_to_scan.popleft()
             
             try:
                 # os.scandir()로 빠른 순회 (stat 호출 없음)
