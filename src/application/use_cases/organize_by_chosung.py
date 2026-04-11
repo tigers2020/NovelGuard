@@ -4,18 +4,17 @@
 ㄱ-ㄷ, ㄹ-ㅂ, ㅅ-ㅈ, ㅊ-ㅎ, A-Z, 0-9, 기타 폴더로 분류해 이동/복사합니다.
 파일명 앞의 [...] (...) 는 제거한 뒤의 제목으로 분류합니다.
 """
-from dataclasses import dataclass, field
 import re
+import shutil
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-import shutil
+from application.ports.log_sink import ILogSink
+from application.utils.debug_logger import debug_step
 
 # 정리 결과를 넣을 한 단계 하위 폴더명 (같은 루트에 섞이지 않도록)
 OUTPUT_SUBFOLDER = "정리"
-
-from application.ports.log_sink import ILogSink
-from application.utils.debug_logger import debug_step
 
 # 19개 초성 (유니코드 한글 초성 순서)
 _CHOSUNG_19 = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"

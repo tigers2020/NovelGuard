@@ -5,12 +5,10 @@
 1 file_id → 1 group_id를 보장합니다.
 """
 from collections import defaultdict
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, Optional
 
 from application.dto.duplicate_group_result import DuplicateGroupResult
-
-if TYPE_CHECKING:
-    from gui.models.file_data_store import FileDataStore
+from application.ports.file_data_store import IFileDataStore
 
 
 class _UnionFind:
@@ -113,7 +111,7 @@ def _collect_component_original_groups(
 
 def normalize_duplicate_groups(
     groups: list[DuplicateGroupResult],
-    file_data_store: Optional["FileDataStore"] = None
+    file_data_store: Optional[IFileDataStore] = None
 ) -> list[DuplicateGroupResult]:
     """중복 그룹들을 정규화하여 겹침을 제거합니다.
     
@@ -171,7 +169,7 @@ def _merge_group_components(
     component_file_ids: list[int],
     original_groups: list[DuplicateGroupResult],
     new_group_id: int,
-    file_data_store: Optional["FileDataStore"],
+    file_data_store: Optional[IFileDataStore],
 ) -> DuplicateGroupResult:
     """컴포넌트를 하나의 그룹으로 병합합니다.
     
@@ -280,7 +278,7 @@ def _pick_by_path(
 def _select_keeper(
     component_file_ids: list[int],
     original_groups: list[DuplicateGroupResult],
-    file_data_store: Optional["FileDataStore"],
+    file_data_store: Optional[IFileDataStore],
 ) -> Optional[int]:
     """컴포넌트에서 keeper (대표 파일)를 선택합니다.
     
@@ -357,7 +355,7 @@ def _errors_keeper_not_in_group(group: DuplicateGroupResult) -> list[str]:
 
 def _errors_duplicate_paths_in_group(
     group: DuplicateGroupResult,
-    file_data_store: "FileDataStore",
+    file_data_store: IFileDataStore,
 ) -> list[str]:
     """그룹 내 동일 path 중복 검증 오류를 반환합니다."""
     if len(group.file_ids) < 2:
@@ -379,7 +377,7 @@ def _errors_duplicate_paths_in_group(
 
 def validate_normalized_groups(
     groups: list[DuplicateGroupResult],
-    file_data_store: Optional["FileDataStore"] = None
+    file_data_store: Optional[IFileDataStore] = None
 ) -> list[str]:
     """정규화된 그룹들을 검증합니다.
     

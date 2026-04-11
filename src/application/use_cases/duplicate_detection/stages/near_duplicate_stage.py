@@ -5,7 +5,7 @@ from application.dto.duplicate_group_result import DuplicateGroupResult
 from application.ports.log_sink import ILogSink
 from application.use_cases.duplicate_detection.stages.base_stage import (
     PipelineContext,
-    PipelineStage
+    PipelineStage,
 )
 from application.utils.debug_logger import debug_step
 from domain.entities.file_entry import FileEntry

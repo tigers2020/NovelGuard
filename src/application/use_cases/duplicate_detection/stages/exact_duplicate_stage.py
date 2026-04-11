@@ -1,4 +1,5 @@
 """Exact(완전 동일) 중복 탐지 단계."""
+
 from collections import defaultdict
 from typing import Optional
 
@@ -6,7 +7,7 @@ from application.dto.duplicate_group_result import DuplicateGroupResult
 from application.ports.log_sink import ILogSink
 from application.use_cases.duplicate_detection.stages.base_stage import (
     PipelineContext,
-    PipelineStage
+    PipelineStage,
 )
 from application.utils.debug_logger import debug_step
 from domain.entities.file_entry import FileEntry
@@ -24,7 +25,7 @@ class ExactDuplicateStage(PipelineStage):
     def __init__(
         self,
         exact_detector: Optional[ExactDuplicateDetector] = None,
-        log_sink: Optional[ILogSink] = None
+        log_sink: Optional[ILogSink] = None,
     ) -> None:
         """Exact 중복 단계 초기화.
 
@@ -41,11 +42,7 @@ class ExactDuplicateStage(PipelineStage):
 
     def execute(self, context: PipelineContext) -> PipelineContext:
         """Exact 중복 탐지 실행."""
-        debug_step(
-            self._log_sink,
-            "duplicate_detection_stage",
-            {"stage": self.name}
-        )
+        debug_step(self._log_sink, "duplicate_detection_stage", {"stage": self.name})
 
         if not context.request.enable_exact or self._exact_detector is None:
             return context
@@ -59,24 +56,15 @@ class ExactDuplicateStage(PipelineStage):
             size_to_ids[entry.size].append(file_id)
 
         exact_results: list[DuplicateGroupResult] = []
-        next_group_id = max(
-            (r.group_id for r in context.results),
-            default=0
-        ) + 1
+        next_group_id = max((r.group_id for r in context.results), default=0) + 1
 
         for size, file_ids in size_to_ids.items():
             if len(file_ids) < 2:
                 continue
             synthetic_group = BlockingGroup(
-                series_title_norm="",
-                extension="",
-                file_ids=file_ids,
-                range_start=None
+                series_title_norm="", extension="", file_ids=file_ids, range_start=None
             )
-            relations = self._exact_detector.detect_exact(
-                synthetic_group,
-                context.file_entries_map
-            )
+            relations = self._exact_detector.detect_exact(synthetic_group, context.file_entries_map)
             for rel in relations:
                 # 추천 keeper: 수정일이 가장 최신인 파일
                 keeper_id = self._pick_keeper(rel.file_ids, context.file_entries_map)
@@ -86,8 +74,8 @@ class ExactDuplicateStage(PipelineStage):
                         duplicate_type="exact",
                         file_ids=rel.file_ids,
                         recommended_keeper_id=keeper_id,
-                        evidence=dict(rel.evidence),
-                        confidence=rel.confidence
+                        evidence=dict(rel.evidence) if rel.evidence is not None else {},
+                        confidence=rel.confidence if rel.confidence is not None else 0.0,
                     )
                 )
                 next_group_id += 1
@@ -97,18 +85,15 @@ class ExactDuplicateStage(PipelineStage):
             "duplicate_detection_exact_complete",
             {
                 "exact_groups_count": len(exact_results),
-                "total_exact_files": sum(len(r.file_ids) for r in exact_results)
-            }
+                "total_exact_files": sum(len(r.file_ids) for r in exact_results),
+            },
         )
 
         context.results = list(context.results) + exact_results
         return context
 
     @staticmethod
-    def _pick_keeper(
-        file_ids: list[int],
-        file_entries_map: dict[int, FileEntry]
-    ) -> int:
+    def _pick_keeper(file_ids: list[int], file_entries_map: dict[int, FileEntry]) -> int:
         """수정일이 가장 최신인 파일 ID 반환."""
         best_id = file_ids[0]
         best_mtime = None
