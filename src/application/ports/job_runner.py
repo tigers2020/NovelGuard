@@ -2,6 +2,7 @@
 
 from typing import Callable, Optional, Protocol
 
+from application.dto.duplicate_detection_request import DuplicateDetectionRequest
 from application.dto.job_types import JobEvent, JobStatus
 from application.dto.scan_request import ScanRequest
 
@@ -11,7 +12,7 @@ class IJobRunner(Protocol):
 
     작업 실행을 표준화하는 인터페이스.
     Application 레이어는 Qt를 모르므로, 순수 callback/event dispatcher 형태.
-    GUI 레이어에서 Qt Signal로 변환.
+    GUI는 ``subscribe(JobEvent)``로 진행/완료 등을 구독한다.
     """
 
     def start_scan(self, request: ScanRequest) -> int:
@@ -19,6 +20,17 @@ class IJobRunner(Protocol):
 
         Args:
             request: 스캔 요청 DTO.
+
+        Returns:
+            Job ID.
+        """
+        ...
+
+    def start_duplicate_detection(self, request: DuplicateDetectionRequest) -> int:
+        """중복 탐지 작업 시작.
+
+        Args:
+            request: 중복 탐지 요청 DTO.
 
         Returns:
             Job ID.

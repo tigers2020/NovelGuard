@@ -1,162 +1,107 @@
 # NovelGuard 진입점 문서
 
+현행 구조의 정본 요약은 [current_architecture.md](current_architecture.md)를 본다.
+
 ## 단일 엔트리포인트 원칙
 
-NovelGuard는 **단일 엔트리포인트 원칙**을 준수합니다. 모든 실행은 정의된 진입점을 통해야 합니다.
+실행은 **`src/main.py`를 통하는 것을 표준**으로 한다. `sys.path`에 `src/`를 넣는 처리는 이 파일 한 곳에서만 한다.
 
 ---
 
-## 진입점
+## 주 진입점: `src/main.py` (권장)
 
-### 주 진입점: `src/main.py` (권장)
-
-**사용법**:
 ```bash
 python src/main.py
 ```
 
-**설명**:
-- NovelGuard 애플리케이션의 **유일한 공식 진입점**입니다.
-- `app.main`을 통해 Bootstrap을 호출하여 의존성을 주입합니다.
-- sys.path 설정은 이 파일에서만 수행됩니다.
+- 프로젝트 **루트**에서 실행한다.
+- 내부 동작: `src/`를 `sys.path`에 추가한 뒤 `from app.main import main` → `main()` 호출.
 
-**실행 스크립트**:
-- `run.bat` (Windows CMD)
-- `run.ps1` (Windows PowerShell)
-
-모두 `python src/main.py`를 실행합니다.
+**실행 스크립트**: `run.bat`, `run.ps1` — 모두 위와 동일하게 `python src/main.py`를 호출한다.
 
 ---
 
-### 보조 진입점: `src/app/main.py` (직접 실행 비권장)
+## Composition root: `src/app/main.py`
 
-**사용법** (권장하지 않음):
+별도의 `bootstrap.py`는 없다. [`src/app/main.py`](../src/app/main.py)의 `main()`이 다음을 수행한다.
+
+1. `QApplication` 생성, 다크 테마 적용  
+2. 프로젝트 루트 경로 계산 (`Path(__file__).parent.parent.parent`)  
+3. 의존성 생성 및 주입:
+   - `InMemoryLogSink(log_dir=project_root / "logs")`
+   - `SQLiteIndexRepository(log_sink=...)`
+   - `FileSystemScanner(log_sink=...)`
+   - `AppState` — `set_log_sink` 후 `file_data_store` 확보
+   - `QtJobManager(scanner, index_repository=index_repo, log_sink=..., file_data_store=app_state.file_data_store)`
+4. `MainWindow(index_repo=..., log_sink=..., job_manager=..., app_state=app_state)` 생성 후 표시  
+5. `app.exec()` 반환
+
+```
+src/main.py          ← sys.path 설정 후 app.main 호출
+       ↓
+src/app/main.py      ← composition root (위 객체들 생성)
+       ↓
+MainWindow + Qt 이벤트 루프
+```
+
+---
+
+## 보조 실행: 모듈 방식 (개발용)
+
+`src/`가 패키지 탐색 경로에 있어야 하므로, 루트에서 그대로 두고:
+
 ```bash
-# src 폴더로 이동
 cd src
 python -m app.main
 ```
 
-**설명**:
-- Bootstrap을 통해 애플리케이션을 초기화합니다.
-- **직접 실행하지 마세요** - `src/main.py`를 통해 실행해야 합니다.
-- 직접 실행 시 경고 메시지를 표시합니다.
+또는 루트에서 `PYTHONPATH=src` 환경을 두고 `python -m app.main`을 쓸 수 있다(플랫폼에 따라 설정 방식이 다름).
+
+**권장하지 않는 것**
+
+- `src/app/`로 들어가 `python main.py`로 직접 실행 — 패키지 상대 import가 깨질 수 있다.
 
 ---
 
-## Bootstrap 구조
+## 테스트 실행
 
-```
-src/main.py (단일 진입점)
-  ↓
-src/app/main.py (애플리케이션 메인)
-  ↓
-src/app/bootstrap.py (의존성 주입)
-  ↓
-MainWindow (GUI)
-```
+기본 스위트는 `pyproject.toml`의 `testpaths`를 따른다. 루트에서:
 
-**의존성 흐름**:
-1. `src/main.py`: sys.path 설정 (단일 진입점에서만)
-2. `src/app/main.py`: Bootstrap 호출
-3. `src/app/bootstrap.py`: 의존성 생성 및 주입
-   - FileRepository 생성
-   - ScanFilesUseCase 생성 (repository 주입)
-   - Logger 초기화
-   - MainWindow 생성 (scan_usecase, repository, logger 주입)
-
----
-
-## 개발자 실행 방법
-
-### 일반 실행
 ```bash
-# 프로젝트 루트에서
-python src/main.py
-
-# 또는 실행 스크립트 사용
-run.bat      # CMD
-run.ps1      # PowerShell
+python -m pytest
 ```
 
-### 모듈로 실행 (개발 중)
-```bash
-# 프로젝트 루트에서
-cd src
-python -m app.main
-```
-
-### 테스트 실행
-```bash
-# 전체 테스트
-python -m pytest tests/
-
-# 특정 테스트
-python -m pytest tests/app/ -v
-python -m pytest tests/integration/test_golden_scenarios.py -v
-```
+정책·아카이브 경계는 [tests/README.md](../tests/README.md)를 본다. 레거시 골든/퍼포먼스 러너는 기본 수집에서 제외될 수 있다.
 
 ---
 
-## 주의사항
+## 하지 말 것 / 해야 할 것
 
-### ❌ 하지 말아야 할 것
+**하지 말 것**
 
-1. **`src/app/main.py`를 직접 실행하지 마세요**
-   ```bash
-   # 잘못된 방법
-   cd src/app
-   python main.py  # ❌ import 오류 발생
-   ```
+1. `src/main.py` 없이 임의 모듈만 실행해 앱을 띄우기  
+2. `src/main.py` 밖에서 `sys.path`를 조작해 import 우회하기  
+3. `python src/gui/views/main_window.py` 같이 뷰 파일만 단독 실행  
 
-2. **다른 파일에서 sys.path를 수정하지 마세요**
-   - sys.path 설정은 `src/main.py`에서만 허용됩니다.
-   - 다른 파일에서 sys.path를 수정하면 의존성 관리가 복잡해집니다.
+**해야 할 것**
 
-3. **GUI 컴포넌트를 직접 실행하지 마세요**
-   ```bash
-   # 잘못된 방법
-   python src/gui/views/main_window.py  # ❌
-   ```
-
-### ✅ 해야 할 것
-
-1. **항상 `src/main.py`를 통해 실행하세요**
-2. **테스트는 pytest를 통해 실행하세요**
-3. **새로운 진입점이 필요한 경우 문서화하세요**
-
----
-
-## Phase 1.1.4 완료 내역
-
-### 변경사항
-- `src/main.py`: 단일 진입점으로 설정, `app.main`을 호출하도록 수정
-- `src/app/main.py`: sys.path hack 제거, Bootstrap 호출만 수행
-- 직접 실행 경고 추가: `src/app/main.py`를 직접 실행하면 경고 표시
-
-### 목적
-- 단일 엔트리포인트 원칙 적용
-- import 경로 혼란 방지
-- 의존성 관리 단순화
+1. 앱 실행은 `python src/main.py`(또는 동등한 스크립트)  
+2. 테스트는 `python -m pytest`  
+3. 진입점이 늘면 이 문서와 [current_architecture.md](current_architecture.md)를 갱신  
 
 ---
 
 ## 문제 해결
 
-### Q: "ModuleNotFoundError: No module named 'app'" 오류
-**A**: `src/main.py`를 통해 실행하세요. 직접 다른 파일을 실행하면 안 됩니다.
+**`ModuleNotFoundError: No module named 'app'`**  
+→ 루트에서 `python src/main.py`를 사용하거나, `cd src` 후 `python -m app.main`으로 `src`가 경로에 포함되게 한다.
 
-### Q: GUI가 시작되지 않아요
-**A**: 
-1. 의존성 설치 확인: `pip install -r requirements.txt`
-2. Python 버전 확인: Python 3.10 이상
-3. `src/main.py`를 통해 실행하는지 확인
+**GUI가 시작되지 않음**  
+→ 런타임 의존성 설치: `pip install -r requirements.txt` (또는 `pip install -e .`). Python 버전은 `>=3.12` ([`pyproject.toml`](../pyproject.toml)).
 
-### Q: 테스트가 실패해요
-**A**: 
-1. 프로젝트 루트에서 실행하세요: `python -m pytest tests/`
-2. sys.path 설정이 올바른지 확인하세요 (테스트 파일 참조)
+**테스트 수집 오류**  
+→ [tests/README.md](../tests/README.md)의 기본 경로·`_archive` 정책 확인.
 
 ---
 
-마지막 업데이트: 2026-01-09 (Phase 1.1.4)
+마지막 갱신: 2026-04-11 (문서 정본화 Phase 1)

@@ -31,6 +31,7 @@ class MainWindow(QMainWindow):
         index_repo=None,
         log_sink=None,
         job_manager=None,
+        app_state: Optional[AppState] = None,
         parent: Optional[QWidget] = None
     ) -> None:
         """메인 윈도우 초기화.
@@ -39,6 +40,7 @@ class MainWindow(QMainWindow):
             index_repo: 인덱스 저장소 (선택적).
             log_sink: 로그 싱크 (선택적).
             job_manager: Job 관리자 (선택적, 추후 구현).
+            app_state: 앱 전역 상태 (없으면 내부에서 생성).
             parent: 부모 위젯.
         """
         super().__init__(parent)
@@ -53,8 +55,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("텍스트 정리 프로그램")
         self.setMinimumSize(1400, 800)
         
-        # 애플리케이션 상태
-        self._app_state = AppState()
+        # 애플리케이션 상태 (composition root에서 주입 가능)
+        self._app_state = app_state if app_state is not None else AppState()
         self._app_state.set_log_sink(self._log_sink)
         
         # QSettings
@@ -70,10 +72,6 @@ class MainWindow(QMainWindow):
         # UI 설정
         self._setup_ui()
         debug_step(self._log_sink, "main_window_ui_setup_complete")
-        
-        # JobManager에 FileDataStore 설정
-        if self._job_manager and hasattr(self._job_manager, 'set_file_data_store'):
-            self._job_manager.set_file_data_store(self._app_state.file_data_store)
         
         # 이벤트 연결
         self._connect_signals()
@@ -213,7 +211,7 @@ class MainWindow(QMainWindow):
         # _setup_tabs() 후에 호출되므로 ScanTab이 이미 생성되어 있음
         last_folder = self._settings.value(SETTINGS_KEY_SCAN_FOLDER, None)
         if last_folder:
-            folder_path = Path(last_folder)
+            folder_path = Path(str(last_folder))
             if folder_path.exists() and folder_path.is_dir():
                 self._app_state.scan_folder = str(folder_path)
                 # ScanTab에도 전달
@@ -228,7 +226,7 @@ class MainWindow(QMainWindow):
         """
         last_folder = self._settings.value(SETTINGS_KEY_SCAN_FOLDER, None)
         if last_folder:
-            folder_path = Path(last_folder)
+            folder_path = Path(str(last_folder))
             if folder_path.exists() and folder_path.is_dir():
                 # UI가 완전히 로드된 후 실행
                 QTimer.singleShot(100, lambda: self._start_preview_scan(folder_path))

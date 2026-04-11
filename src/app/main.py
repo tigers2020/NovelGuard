@@ -7,6 +7,7 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication
 
 from application.dto.log_entry import LogEntry
+from gui.models.app_state import AppState
 from gui.services.qt_job_manager import QtJobManager
 from gui.styles.dark_theme import get_dark_theme_stylesheet
 from gui.views.main_window import MainWindow
@@ -44,10 +45,25 @@ def main() -> int:
 
     index_repo = SQLiteIndexRepository(log_sink=log_sink)
     scanner = FileSystemScanner(log_sink=log_sink)
-    job_manager = QtJobManager(scanner, index_repository=index_repo, log_sink=log_sink)
+
+    app_state = AppState()
+    app_state.set_log_sink(log_sink)
+    _ = app_state.file_data_store
+
+    job_manager = QtJobManager(
+        scanner,
+        index_repository=index_repo,
+        log_sink=log_sink,
+        file_data_store=app_state.file_data_store,
+    )
 
     # 메인 윈도우 생성 및 표시 (의존성 주입)
-    window = MainWindow(index_repo=index_repo, log_sink=log_sink, job_manager=job_manager)
+    window = MainWindow(
+        index_repo=index_repo,
+        log_sink=log_sink,
+        job_manager=job_manager,
+        app_state=app_state,
+    )
     window.show()
 
     log_sink.write(

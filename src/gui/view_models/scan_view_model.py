@@ -4,7 +4,7 @@ from typing import Optional
 
 from PySide6.QtCore import QObject, Signal
 
-from application.dto.job_types import JobProgress, JobType
+from application.dto.job_types import JobEvent, JobProgress, JobType
 from application.dto.scan_result import ScanResult
 from application.ports.job_runner import IJobRunner
 from application.ports.log_sink import ILogSink
@@ -55,13 +55,8 @@ class ScanViewModel(BaseViewModel):
         # Job ID
         self._current_job_id: Optional[int] = None
         
-        # JobManager 시그널 연결 (QtJobManager인 경우)
-        if job_manager and hasattr(job_manager, 'job_started'):
-            job_manager.job_started.connect(self._on_job_started)
-            job_manager.job_progress.connect(self._on_job_progress)
-            job_manager.job_completed.connect(self._on_job_completed)
-            job_manager.job_failed.connect(self._on_job_failed)
-            job_manager.job_cancelled.connect(self._on_job_cancelled)
+        if job_manager:
+            job_manager.subscribe(self._on_job_event)
     
     def load_data(self) -> None:
         """데이터 로드."""
@@ -141,6 +136,25 @@ class ScanViewModel(BaseViewModel):
             "scan_view_model_scan_started",
             {"job_id": self._current_job_id}
         )
+    
+    def _on_job_event(self, event: JobEvent) -> None:
+        """IJobRunner.subscribe 콜백: 스캔 작업 이벤트만 처리."""
+        if event.job_type != JobType.SCAN:
+            return
+        if event.event_type == "started":
+            self._on_job_started(event.job_id, event.job_type)
+        elif event.event_type == "progress":
+            progress = event.data.get("progress")
+            if isinstance(progress, JobProgress):
+                self._on_job_progress(event.job_id, progress)
+        elif event.event_type == "completed":
+            self._on_job_completed(event.job_id, event.data.get("result"))
+        elif event.event_type == "failed":
+            err = event.data.get("error", "")
+            if isinstance(err, str):
+                self._on_job_failed(event.job_id, err)
+        elif event.event_type == "cancelled":
+            self._on_job_cancelled(event.job_id)
     
     def _on_job_started(self, job_id: int, job_type: JobType) -> None:
         """Job 시작 핸들러.

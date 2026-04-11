@@ -5,7 +5,7 @@ from PySide6.QtCore import QObject, Signal
 
 from application.dto.duplicate_detection_request import DuplicateDetectionRequest
 from application.dto.duplicate_group_result import DuplicateGroupResult
-from application.dto.job_types import JobProgress, JobType
+from application.dto.job_types import JobEvent, JobProgress, JobType
 from application.ports.index_repository import IIndexRepository
 from application.ports.job_runner import IJobRunner
 from application.ports.log_sink import ILogSink
@@ -56,13 +56,8 @@ class DuplicateViewModel(BaseViewModel):
         # Job ID
         self._current_job_id: Optional[int] = None
         
-        # JobManager 시그널 연결 (QtJobManager인 경우)
-        if job_manager and hasattr(job_manager, 'job_started'):
-            job_manager.job_started.connect(self._on_job_started)
-            job_manager.job_progress.connect(self._on_job_progress)
-            job_manager.job_completed.connect(self._on_job_completed)
-            job_manager.job_failed.connect(self._on_job_failed)
-            job_manager.job_cancelled.connect(self._on_job_cancelled)
+        if job_manager:
+            job_manager.subscribe(self._on_job_event)
     
     def load_data(self) -> None:
         """데이터 로드."""
@@ -121,6 +116,25 @@ class DuplicateViewModel(BaseViewModel):
                 return result
         return None
     
+    def _on_job_event(self, event: JobEvent) -> None:
+        """IJobRunner.subscribe 콜백: 중복 탐지 작업 이벤트만 처리."""
+        if event.job_type != JobType.DUPLICATE:
+            return
+        if event.event_type == "started":
+            self._on_job_started(event.job_id, event.job_type)
+        elif event.event_type == "progress":
+            progress = event.data.get("progress")
+            if isinstance(progress, JobProgress):
+                self._on_job_progress(event.job_id, progress)
+        elif event.event_type == "completed":
+            self._on_job_completed(event.job_id, event.data.get("result"))
+        elif event.event_type == "failed":
+            err = event.data.get("error", "")
+            if isinstance(err, str):
+                self._on_job_failed(event.job_id, err)
+        elif event.event_type == "cancelled":
+            self._on_job_cancelled(event.job_id)
+    
     def _on_job_started(self, job_id: int, job_type: JobType) -> None:
         """Job 시작 핸들러.
         
@@ -133,9 +147,6 @@ class DuplicateViewModel(BaseViewModel):
             "duplicate_view_model_job_started",
             {"job_id": job_id, "job_type": job_type.value}
         )
-        
-        if job_type != JobType.DUPLICATE:
-            return
         
         self._current_job_id = job_id
         self._is_detecting = True
@@ -287,17 +298,12 @@ class DuplicateViewModel(BaseViewModel):
                 enable_near=False  # Phase A에서는 near는 비활성화
             )
             
-            # JobManager에 전달 (start_duplicate_detection 메서드 필요)
-            if hasattr(self._job_manager, 'start_duplicate_detection'):
-                job_id = self._job_manager.start_duplicate_detection(request)
-                debug_step(
-                    self._log_sink,
-                    "duplicate_view_model_detection_started",
-                    {"job_id": job_id}
-                )
-                # job_id는 _on_job_started에서 처리됨
-            else:
-                self.duplicate_error.emit("Job Manager가 중복 탐지를 지원하지 않습니다")
+            job_id = self._job_manager.start_duplicate_detection(request)
+            debug_step(
+                self._log_sink,
+                "duplicate_view_model_detection_started",
+                {"job_id": job_id},
+            )
         except Exception as e:
             debug_step(
                 self._log_sink,
