@@ -42,7 +42,7 @@ def main() -> None:
     
     # 1. Golden Tests 실행
     golden_tests_passed = run_command(
-        [sys.executable, str(project_root / "tests" / "integration" / "run_golden_tests.py")],
+        [sys.executable, str(project_root / "tests" / "_archive" / "integration" / "run_golden_tests.py")],
         "1. Golden Tests 실행"
     )
     
@@ -52,7 +52,7 @@ def main() -> None:
     print(f"{'='*60}\n")
     
     benchmark_result = subprocess.run(
-        [sys.executable, str(project_root / "tests" / "performance" / "benchmark_baseline.py")],
+        [sys.executable, str(project_root / "tests" / "_archive" / "performance" / "benchmark_baseline.py")],
         capture_output=True,
         text=True
     )
@@ -68,8 +68,8 @@ def main() -> None:
         gate_passed = run_command(
             [
                 sys.executable,
-                str(project_root / "tests" / "performance" / "benchmark_gate.py"),
-                str(project_root / "tests" / "performance" / "benchmark_baseline.json"),
+                str(project_root / "tests" / "_archive" / "performance" / "benchmark_gate.py"),
+                str(project_root / "tests" / "_archive" / "performance" / "benchmark_baseline.json"),
                 "local"
             ],
             "3. 성능 게이트 체크"

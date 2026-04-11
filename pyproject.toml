@@ -19,8 +19,29 @@ dev = [
 ]
 
 # ---------- pytest ----------
+# Default suite: current-layout tests only. Legacy trees live under tests/_archive/
+# (see tests/README.md). Run archived tests explicitly if ported.
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = [
+    "tests/app/settings",
+    "tests/application",
+    "tests/gui",
+    "tests/infrastructure",
+    "tests/integration",
+    "tests/unit",
+]
+norecursedirs = [
+    ".git",
+    ".hg",
+    ".tox",
+    "dist",
+    "build",
+    "node_modules",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "_archive",
+]
 pythonpath = ["src"]
 addopts = "-v --tb=short"
 

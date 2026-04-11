@@ -1,6 +1,6 @@
 # 테스트 픽스처 데이터
 
-이 디렉토리는 NovelGuard의 리팩토링 전 동작을 검증하기 위한 고정된 테스트 데이터셋을 포함합니다.
+이 디렉터리는 스캔·중복 탐지·스냅샷 검증에 쓰이는 **고정 테스트 데이터셋**을 둔다. 바이너리/대량 파일은 Git에 그대로 포함된다.
 
 ## 디렉토리 구조
 
@@ -94,31 +94,22 @@ python tests/fixtures/generate_fixtures.py
 
 필요한 경우 직접 파일을 생성할 수 있습니다. 단, **파일 내용과 이름은 일관성을 유지**해야 합니다.
 
-## 사용 예시
+## 누가 쓰는가 (현행 기준선)
 
-### Golden Tests에서 사용
+- **통합·애플리케이션 테스트**: `tests/integration/test_scan_with_index_repository.py`, `tests/integration/test_snapshot_normalizer.py`, `tests/application/` 일부가 `FIXTURES_DIR` 또는 스냅샷과 함께 이 데이터를 참조할 수 있다.
+- **골든/벤치마크 하네스**: 예전에는 `tests/_archive/integration/`, `tests/_archive/performance/`가 `medium/` 등을 가정했으나, 해당 하네스는 레거시 import로 **기본 스위트에서 제외**되어 있다. 포팅 후 다시 연결할 때 이 README를 맞춘다.
 
 ```python
 from pathlib import Path
 from tests.fixtures import FIXTURES_DIR
 
 fixture_path = FIXTURES_DIR / "small"
-result = execute_scan(fixture_path)
-```
-
-### 성능 벤치마크에서 사용
-
-```python
-from pathlib import Path
-from tests.fixtures import FIXTURES_DIR
-
-medium_fixture = FIXTURES_DIR / "medium"
-# 성능 측정 수행
+# 현행 테스트에서 경로만 전달하는 패턴이 일반적이다.
 ```
 
 ## 주의사항
 
-1. **고정성**: 이 데이터셋은 **리팩토링 전 기준선**을 나타냅니다. 내용을 변경하지 마세요.
+1. **고정성**: 회귀 비교에 쓰이는 파일은 **임의 변경하지 않는다**. 새 케이스는 새 파일·새 서브디렉터리로 추가한다.
 
 2. **Git 관리**: 
    - 이 디렉토리의 모든 파일은 Git에 커밋됩니다
@@ -134,12 +125,9 @@ medium_fixture = FIXTURES_DIR / "medium"
 
 ## 업데이트 규칙
 
-리팩토링 후에도 이 데이터셋은 **변경하지 않습니다**. 새로운 테스트 케이스가 필요하면:
-- 새로운 파일을 추가 (기존 파일 수정 금지)
-- 또는 새로운 서브디렉토리 생성
+새 시나리오가 필요하면 **기존 파일을 바꾸지 말고** 파일 추가 또는 새 서브디렉터리로 확장한다.
 
 ## 참고
 
-- Phase 0.5.1에서 생성됨
-- Golden Tests (Phase 0.5.2)에서 사용됨
-- 성능 벤치마크 (Phase 0.5.3)에서 사용됨
+- 전체 테스트 정책·레거시 경계: [tests/README.md](../README.md)
+- 아카이브된 골든/벤치: [tests/_archive/README.md](../_archive/README.md)
