@@ -4,8 +4,8 @@ from typing import Optional, TYPE_CHECKING
 
 from PySide6.QtCore import QObject, QThread, Signal
 
+from app.factories import create_duplicate_detection_pipeline
 from application.dto.duplicate_detection_request import DuplicateDetectionRequest
-from application.dto.duplicate_group_result import DuplicateGroupResult
 from application.dto.job_types import JobProgress
 from application.dto.log_entry import LogEntry
 from application.ports.index_repository import IIndexRepository
@@ -15,11 +15,6 @@ from application.use_cases.duplicate_detection.duplicate_detection_pipeline impo
 )
 from application.use_cases.duplicate_detection.stages.base_stage import PipelineError
 from application.utils.debug_logger import debug_step
-from domain.services.blocking_service import BlockingService
-from domain.services.containment_detector import ContainmentDetector
-from domain.services.exact_duplicate_detector import ExactDuplicateDetector
-from domain.services.filename_parser import FilenameParser
-from infrastructure.hashing.hash_service_adapter import HashServiceAdapter
 
 if TYPE_CHECKING:
     from gui.models.file_data_store import FileDataStore
@@ -64,26 +59,13 @@ class DuplicateDetectionWorker(QThread):
         self._log_sink = log_sink
         self._file_data_store = file_data_store
         self._cancelled = False
-        
-        # 도메인 서비스 초기화
-        self._filename_parser = FilenameParser(log_sink=log_sink)
-        self._blocking_service = BlockingService(filename_parser=self._filename_parser, log_sink=log_sink)
-        self._containment_detector = ContainmentDetector(log_sink=log_sink)
-        # Exact 중복 탐지 (해시 기반)
-        hash_service = HashServiceAdapter()
-        self._exact_detector = ExactDuplicateDetector(hash_service=hash_service, log_sink=log_sink)
 
-        # Pipeline 초기화
         self._pipeline: Optional[DuplicateDetectionPipeline] = None
         if index_repository:
-            self._pipeline = DuplicateDetectionPipeline(
-                filename_parser=self._filename_parser,
-                blocking_service=self._blocking_service,
-                containment_detector=self._containment_detector,
+            self._pipeline = create_duplicate_detection_pipeline(
                 index_repository=index_repository,
                 file_data_store=file_data_store,
                 log_sink=log_sink,
-                exact_detector=self._exact_detector
             )
     
     def cancel(self) -> None:
