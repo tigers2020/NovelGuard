@@ -63,7 +63,7 @@
 ## 4. 알려진 한계·후속
 
 - **`tests/unit/` Git 추적**: `testpaths`에 포함되므로 **저장소에 추적**되어야 클론·CI에서 문서상 건수(예: 144 passed)가 재현된다. 미추적이었던 경우 보고서와 불일치가 나므로, 정책은 “항상 `git ls-files tests/unit`로 비어 있지 않게 유지”한다.
-- **기타 산출물**: `persona/` 역할 카드·`scripts/run_duplicate_check_cli.py` 등은 편의용이다. 추적 여부는 팀 선택이나, **미추적만 두면** 로컬 워크트리와 “저장소 기준 완료”가 어긋날 수 있으므로, 필요하면 함께 커밋하거나 README/본 문서에 “선택·미추적 가능”을 명시한다.
+- **기타 산출물**: `persona/` 역할 카드(ada·dominic·…·yuri)·`scripts/run_duplicate_check_cli.py`는 편의·역할 톤용으로 **저장소에 포함**해 워크트리와 Git을 맞춤(2026-04-11 후속). 앞으로 비슷한 파일을 로컬만에 둘 경우, 본 절과 같이 문서에 “미추적 가능”을 적어 기준선과의 차이를 드러낸다.
 - **`tests/_archive/`**: 포팅 없음; pytest/ruff/black에서 제외. 수동 실행 시 실패 가능 — [tests/_archive/README.md](../../tests/_archive/README.md).
 - **기본 브랜치 이름**: 워크플로는 `main`/`master`만 트리거. 저장소 기본 브랜치가 다르면 `ci.yml`의 `branches` 목록을 맞출 것.
 - **레거시 트리**: ruff에서 제외된 `tests/domain` 등은 여전히 저장소에 있으며, black은 이번 작업에서 포맷됨; 향후 해당 트리를 삭제·포팅하면 exclude를 축소할 수 있음.
