@@ -1,0 +1,54 @@
+[project]
+name = "novelguard"
+version = "0.1.0"
+description = "텍스트 소설 파일 중복 탐지·정리 도구"
+requires-python = ">=3.12"
+dependencies = [
+    "PySide6>=6.6.0",
+    "charset-normalizer>=3.0.0",
+    "pydantic>=2.0.0",
+    "xxhash>=3.4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+    "black>=24.0.0",
+]
+
+# ---------- pytest ----------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-v --tb=short"
+
+# ---------- ruff ----------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+# ---------- mypy ----------
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+namespace_packages = true
+explicit_package_bases = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = ["PySide6.*"]
+ignore_missing_imports = true
+
+# ---------- black ----------
+[tool.black]
+line-length = 100
+target-version = ["py312"]
