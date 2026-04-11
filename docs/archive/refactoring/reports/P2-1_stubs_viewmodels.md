@@ -1,3 +1,5 @@
+> **역사 기록 (2026-04-11 이후)**: `src/gui/view_models/_stubs/` 디렉터리는 Remediation Phase 4에서 제거되었습니다. 아래 본문은 당시 상태를 보존합니다.
+
 # 리팩토링 보고서: _stubs ViewModels
 
 > **우선순위**: P2-1 (중간)  

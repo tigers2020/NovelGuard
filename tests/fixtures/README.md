@@ -94,17 +94,16 @@ python tests/fixtures/generate_fixtures.py
 
 필요한 경우 직접 파일을 생성할 수 있습니다. 단, **파일 내용과 이름은 일관성을 유지**해야 합니다.
 
-## 누가 쓰는가 (현행 기준선)
+## 누가 쓰는가 (현행 기준선, 2026-04-11 Phase 4)
 
-- **통합·애플리케이션 테스트**: `tests/integration/test_scan_with_index_repository.py`, `tests/integration/test_snapshot_normalizer.py`, `tests/application/` 일부가 `FIXTURES_DIR` 또는 스냅샷과 함께 이 데이터를 참조할 수 있다.
-- **골든/벤치마크 하네스**: 예전에는 `tests/_archive/integration/`, `tests/_archive/performance/`가 `medium/` 등을 가정했으나, 해당 하네스는 레거시 import로 **기본 스위트에서 제외**되어 있다. 포팅 후 다시 연결할 때 이 README를 맞춘다.
+- **기본 `pytest` 스위트**: 저장소 전체를 기준으로 `FIXTURES_DIR` 또는 `from tests.fixtures import …`를 사용하는 테스트 **파일은 없다**. 이 트리는 **수동 시나리오·향후 통합 테스트·문서화된 데이터셋**으로 남긴다.
+- **아카이브 하네스**: `tests/_archive/performance/benchmark_baseline.py` 등은 과거에 `FIXTURES_DIR`를 가정했으나, 스크립트 자체가 레거시 패키지 import로 **실행 불가** 상태다. 포팅 후 소비 경로를 다시 명시한다.
 
 ```python
-from pathlib import Path
 from tests.fixtures import FIXTURES_DIR
 
 fixture_path = FIXTURES_DIR / "small"
-# 현행 테스트에서 경로만 전달하는 패턴이 일반적이다.
+# 새 통합 테스트를 추가할 때만 위 패턴을 도입하면 된다.
 ```
 
 ## 주의사항

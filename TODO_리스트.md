@@ -8,17 +8,8 @@
 
 ## ⚠️ 레거시/만료 항목 (제거됨)
 
-다음 항목들은 코드베이스 분석 결과 **실제로 사용되지 않는 Stub ViewModels**에 포함되어 있어 제거되었습니다:
-
-- `src/gui/view_models/_stubs/logs_view_model.py` - **레거시** (LogsTab은 InMemoryLogSink를 직접 사용)
-- `src/gui/view_models/_stubs/settings_view_model.py` - **레거시** (SettingsTab은 ViewModel 없이 직접 구현)
-- `src/gui/view_models/_stubs/small_file_view_model.py` - **레거시** (SmallFileTab에서 미사용)
-- `src/gui/view_models/_stubs/undo_view_model.py` - **레거시** (UndoTab에서 미사용)
-- `src/gui/view_models/_stubs/integrity_view_model.py` - **레거시** (IntegrityTab에서 미사용)
-- `src/gui/view_models/_stubs/encoding_view_model.py` - **레거시** (EncodingTab에서 미사용)
+- **`src/gui/view_models/_stubs/`** — 2026-04-11 Remediation **Phase 4**에서 미사용 스텁 전체 삭제. 당시 보고는 [`docs/archive/refactoring/reports/P2-1_stubs_viewmodels.md`](docs/archive/refactoring/reports/P2-1_stubs_viewmodels.md)에 보존.
 - `src/gui/view_models/scan_view_model.py` Line 68 - **불필요** (load_data() 메서드는 실제로 사용되지 않음)
-
-**참고**: `_stubs` 폴더의 ViewModel들은 현재 어떤 View에서도 사용되지 않습니다. 이들은 향후 리팩토링 시 참고용으로 남아있지만, 실제 구현 우선순위에서는 제외됩니다.
 
 ---
 
@@ -121,11 +112,9 @@
 
 ## 참고 사항
 
-1. **Stub ViewModels**: `_stubs` 폴더의 ViewModel들은 현재 어떤 View에서도 사용되지 않습니다. 레거시 코드로 간주되며, 향후 필요 시 참고용으로만 활용됩니다.
+1. **Phase 2 기능**: 개발 프로토콜에 따르면 v1.5 이후에 구현 예정입니다.
 
-2. **Phase 2 기능**: 개발 프로토콜에 따르면 v1.5 이후에 구현 예정입니다.
-
-3. **v2 기능**: SimHash 기반 유사본 탐지 등 고급 기능은 v2에서 구현 예정입니다.
+2. **v2 기능**: SimHash 기반 유사본 탐지 등 고급 기능은 v2에서 구현 예정입니다.
 
 ---
 
