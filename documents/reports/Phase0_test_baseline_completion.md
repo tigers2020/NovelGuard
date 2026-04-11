@@ -86,7 +86,7 @@
 
 ## 6. 운영 참고
 
-- `.gitignore`에 `tests/`, `scripts/` 패턴이 있어, 해당 트리의 **신규** 파일은 필요 시 `git add -f`로 추적해야 할 수 있음 (감사 P3 항목과 연계).
+- Phase 1에서 `.gitignore`의 `tests/` 등 소스 트리 무시 블록이 정리됨. 다만 **`testpaths`에 넣은 디렉터리(특히 `tests/unit/`)는 Git에 추적**되어야 클론 후 `pytest` 건수가 설계와 일치한다. 미추적이면 “로컬에서만 144 passed”와 “저장소 기준”이 어긋난다. 미추적이었던 `tests/unit/`은 저장소에 포함하는 것으로 재현성을 맞춘다 — [tests/README.md](../../tests/README.md) “Git 추적” 절.
 
 ---
 

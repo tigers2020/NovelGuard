@@ -41,6 +41,7 @@
 
 - **정본**: [`pyproject.toml`](../pyproject.toml)의 `[tool.pytest.ini_options] testpaths` 및 [`tests/README.md`](../tests/README.md).
 - 기본 `pytest`는 현행 레이아웃 테스트만 수집하고, 레거시는 `tests/_archive/` 등으로 분리된다.
+- **재현성**: `testpaths`에 나열된 디렉터리(예: `tests/unit/`)는 Git에 추적된 파일이어야 한다. 클론만 한 트리에서의 `pytest` 건수가 문서 기술과 맞는지가 “저장소 기준 완료”의 판단에 쓰인다.
 
 ## 검증 명령 (로컬)
 

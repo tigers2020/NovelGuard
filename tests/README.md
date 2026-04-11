@@ -4,6 +4,8 @@
 
 `pyproject.toml`의 `testpaths`가 아래만 수집한다. 이 묶음이 CI·로컬의 **현행 기준선**이다.
 
+**Git 추적**: 위 경로에 해당하는 테스트 파일은 **저장소에 추적된 상태**여야 한다. `git clone` 직후에만 `python -m pytest`를 돌렸을 때 건수가 문서(예: 약 144 passed)와 크게 어긋나면, 로컬 전용 **미추적** 복사본만 있는지 확인한다. 특히 `tests/unit/`은 `testpaths`에 포함되므로 비어 있으면 안 된다.
+
 - `tests/app/settings/`
 - `tests/application/`
 - `tests/gui/`

@@ -40,55 +40,97 @@ class ExactDuplicateDetector:
         Returns:
             ExactDuplicateRelation 리스트.
         """
-        # 같은 크기의 파일들끼리만 비교
+        size_groups = self._build_size_groups(blocking_group, file_entries)
+        exact_relations: list[ExactDuplicateRelation] = []
+        for size, file_ids in size_groups.items():
+            exact_relations.extend(self._relations_for_size_group(size, file_ids, file_entries))
+        return exact_relations
+
+    def _build_size_groups(
+        self, blocking_group: BlockingGroup, file_entries: dict[int, FileEntry]
+    ) -> dict[int, list[int]]:
+        """같은 크기끼리 파일 ID를 묶는다."""
         size_groups: dict[int, list[int]] = {}
         for file_id in blocking_group.file_ids:
-            if file_id in file_entries:
-                file_entry = file_entries[file_id]
-                if file_entry.size not in size_groups:
-                    size_groups[file_entry.size] = []
-                size_groups[file_entry.size].append(file_id)
+            if file_id not in file_entries:
+                continue
+            file_entry = file_entries[file_id]
+            size_groups.setdefault(file_entry.size, []).append(file_id)
+        return size_groups
 
-        exact_relations = []
+    def _relations_for_size_group(
+        self, size: int, file_ids: list[int], file_entries: dict[int, FileEntry]
+    ) -> list[ExactDuplicateRelation]:
+        if len(file_ids) < 2:
+            return []
+        out: list[ExactDuplicateRelation] = []
+        prefix_hash_groups = self._group_by_prefix_hash(file_ids, file_entries)
+        for prefix_hash, prefix_file_ids in prefix_hash_groups.items():
+            if len(prefix_file_ids) < 2:
+                continue
+            out.extend(
+                self._relations_for_prefix_group(size, prefix_hash, prefix_file_ids, file_entries)
+            )
+        return out
 
-        # 각 크기 그룹 내에서 해시 비교
-        for size, file_ids in size_groups.items():
-            if len(file_ids) < 2:
-                continue  # 중복 가능성이 없음
+    def _relations_for_prefix_group(
+        self,
+        size: int,
+        prefix_hash: str,
+        prefix_file_ids: list[int],
+        file_entries: dict[int, FileEntry],
+    ) -> list[ExactDuplicateRelation]:
+        out: list[ExactDuplicateRelation] = []
+        suffix_hash_groups = self._group_by_suffix_hash(prefix_file_ids, file_entries)
+        for suffix_hash, suffix_file_ids in suffix_hash_groups.items():
+            if len(suffix_file_ids) < 2:
+                continue
+            out.extend(
+                self._relations_for_suffix_group(
+                    size, prefix_hash, suffix_hash, suffix_file_ids, file_entries
+                )
+            )
+        return out
 
-            # 단계적 필터링: prefix hash → suffix hash → full hash
-            prefix_hash_groups = self._group_by_prefix_hash(file_ids, file_entries)
+    def _relations_for_suffix_group(
+        self,
+        size: int,
+        prefix_hash: str,
+        suffix_hash: str,
+        suffix_file_ids: list[int],
+        file_entries: dict[int, FileEntry],
+    ) -> list[ExactDuplicateRelation]:
+        out: list[ExactDuplicateRelation] = []
+        full_hash_groups = self._group_by_full_hash(suffix_file_ids, file_entries)
+        for full_hash, hash_file_ids in full_hash_groups.items():
+            if len(hash_file_ids) < 2:
+                continue
+            out.append(
+                self._make_exact_relation(
+                    size, prefix_hash, suffix_hash, full_hash, hash_file_ids
+                )
+            )
+        return out
 
-            for prefix_hash, prefix_file_ids in prefix_hash_groups.items():
-                if len(prefix_file_ids) < 2:
-                    continue
-
-                suffix_hash_groups = self._group_by_suffix_hash(prefix_file_ids, file_entries)
-
-                for suffix_hash, suffix_file_ids in suffix_hash_groups.items():
-                    if len(suffix_file_ids) < 2:
-                        continue
-
-                    # Full hash로 최종 확인
-                    full_hash_groups = self._group_by_full_hash(suffix_file_ids, file_entries)
-
-                    for full_hash, hash_file_ids in full_hash_groups.items():
-                        if len(hash_file_ids) >= 2:
-                            evidence = {
-                                "hash": full_hash,
-                                "size": size,
-                                "prefix_hash": prefix_hash,
-                                "suffix_hash": suffix_hash,
-                            }
-
-                            relation = ExactDuplicateRelation(
-                                file_ids=hash_file_ids,
-                                evidence=evidence,
-                                confidence=1.0,  # Exact는 항상 1.0
-                            )
-                            exact_relations.append(relation)
-
-        return exact_relations
+    @staticmethod
+    def _make_exact_relation(
+        size: int,
+        prefix_hash: str,
+        suffix_hash: str,
+        full_hash: str,
+        hash_file_ids: list[int],
+    ) -> ExactDuplicateRelation:
+        evidence = {
+            "hash": full_hash,
+            "size": size,
+            "prefix_hash": prefix_hash,
+            "suffix_hash": suffix_hash,
+        }
+        return ExactDuplicateRelation(
+            file_ids=hash_file_ids,
+            evidence=evidence,
+            confidence=1.0,
+        )
 
     def _group_by_prefix_hash(
         self, file_ids: list[int], file_entries: dict[int, FileEntry]

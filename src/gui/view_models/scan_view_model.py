@@ -60,8 +60,11 @@ class ScanViewModel(BaseViewModel):
             job_manager.subscribe(self._on_job_event)
 
     def load_data(self) -> None:
-        """데이터 로드."""
-        # TODO: 실제 데이터 로드 로직
+        """데이터 로드.
+
+        스캔 폴더·진행 상태·옵션은 사용자 입력과 Job 이벤트로만 갱신된다.
+        영속 저장소에서 초기값을 읽는 경로는 없으므로 할 일이 없다.
+        """
         pass
 
     @property
