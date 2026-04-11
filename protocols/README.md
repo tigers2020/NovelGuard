@@ -1,20 +1,18 @@
-# Protocols
+# protocols
 
-프로젝트 개발 프로토콜 문서가 위치하는 폴더입니다.
+에이전트·기여자가 따르는 **절차 요약**이다. 세부 톤·역할 대사는 `.cursor/rules/persona-dialogue.mdc` 와 [persona/README.md](../persona/README.md)를 본다.
 
-## 프로토콜 문서
+## 기획과 코딩의 분리 ([AGENTS.md](../AGENTS.md))
 
-### [NovelGuard 개발 프로토콜](./development_protocol.md)
-NovelGuard 프로젝트의 개발 프로토콜:
-- 개발 절차 및 규칙 (MVP → v1.5 → v2)
-- 코딩 컨벤션 (PEP 8 기반)
-- 작업 흐름 정의
-- 품질 관리 기준
-- 라이브러리 및 의존성 가이드
-- 배포 프로토콜
+1. **리서치**: 관련 코드·규칙을 읽고 조사 메모를 [documents/](../documents/)에 남긴다.  
+2. **플랜**: 변경 범위·경로·트레이드오프를 담은 플랜 MD를 **같은 `documents/`** (또는 팀이 정한 하위 폴더)에 둔다.  
+3. **승인**: 사람이 플랜 본문을 검토·수정·승인한다.  
+4. **구현**: 승인 후에만 코드를 수정한다.
 
-## 프로토콜 문서 구조
-- 개발 절차 및 규칙
-- 코딩 컨벤션
-- 작업 흐름 정의
+플랜이 닫히기 전에는 Persona Dialogue 3단계의 "구현 진입"을 허용하지 않는다.
 
+## Cursor 규칙 우선순위
+
+1. `.cursor/rules/root.mdc`  
+2. `architecture.mdc`  
+3. 그 외 glob 규칙
