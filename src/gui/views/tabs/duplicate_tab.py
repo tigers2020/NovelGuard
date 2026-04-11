@@ -2,8 +2,9 @@
 
 import logging
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
+from PySide6.QtCore import QObject
 from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
@@ -85,12 +86,11 @@ class DuplicateTab(BaseTab):
 
     def _get_app_state(self) -> AppState:
         """AppState 가져오기."""
-        parent = self.parent()
-        while parent:
+        parent: QObject | None = self.parent()
+        while parent is not None:
             if hasattr(parent, "_app_state"):
-                return parent._app_state
+                return cast(AppState, getattr(parent, "_app_state"))
             parent = parent.parent()
-        # 기본값으로 새로 생성
         return AppState()
 
     def get_title(self) -> str:

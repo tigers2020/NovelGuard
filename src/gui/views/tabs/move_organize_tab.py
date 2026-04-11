@@ -1,8 +1,10 @@
 """이동 정리 탭 (초성별 폴더 정리)."""
+
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, cast
 
+from PySide6.QtCore import QObject
 from PySide6.QtWidgets import (
     QFileDialog,
     QGroupBox,
@@ -47,10 +49,10 @@ class MoveOrganizeTab(BaseTab):
 
     def _get_app_state(self) -> AppState:
         """AppState 가져오기."""
-        parent = self.parent()
-        while parent:
+        parent: QObject | None = self.parent()
+        while parent is not None:
             if hasattr(parent, "_app_state"):
-                return parent._app_state
+                return cast(AppState, getattr(parent, "_app_state"))
             parent = parent.parent()
         return AppState()
 
@@ -85,7 +87,9 @@ class MoveOrganizeTab(BaseTab):
         layout = QVBoxLayout(group)
         row = QHBoxLayout()
         self._folder_edit = QLineEdit()
-        self._folder_edit.setPlaceholderText("파일 스캔 탭에서 선택한 폴더와 연동됩니다. 여기서 바꾸면 스캔 탭에도 반영됩니다.")
+        self._folder_edit.setPlaceholderText(
+            "파일 스캔 탭에서 선택한 폴더와 연동됩니다. 여기서 바꾸면 스캔 탭에도 반영됩니다."
+        )
         self._folder_edit.setReadOnly(True)
         row.addWidget(self._folder_edit)
         browse_btn = QPushButton("폴더 선택")
@@ -93,7 +97,9 @@ class MoveOrganizeTab(BaseTab):
         browse_btn.clicked.connect(self._on_browse_folder)
         row.addWidget(browse_btn)
         layout.addLayout(row)
-        hint = QLabel(f"결과는 대상 폴더 아래 '{OUTPUT_SUBFOLDER}' 폴더에 저장되며, 파일명 끝 ' (1)' 은 제거됩니다.")
+        hint = QLabel(
+            f"결과는 대상 폴더 아래 '{OUTPUT_SUBFOLDER}' 폴더에 저장되며, 파일명 끝 ' (1)' 은 제거됩니다."
+        )
         hint.setStyleSheet("font-size: 11px; color: #606060;")
         hint.setWordWrap(True)
         layout.addWidget(hint)
@@ -229,10 +235,16 @@ class MoveOrganizeTab(BaseTab):
                         "한 번 실행한 뒤에는 같은 폴더를 다시 정리할 대상이 없습니다."
                     )
                 else:
-                    self._result_label.setText("대상 폴더에 파일이 없거나, 읽을 수 있는 파일이 없습니다.")
+                    self._result_label.setText(
+                        "대상 폴더에 파일이 없거나, 읽을 수 있는 파일이 없습니다."
+                    )
             else:
-                self._progress_info.setText(f"총 {result.total_processed}개 파일이 초성별로 분류됩니다.")
-                parts = [f"{name}: {result.counts_by_folder.get(name, 0)}개" for name in FOLDER_NAMES]
+                self._progress_info.setText(
+                    f"총 {result.total_processed}개 파일이 초성별로 분류됩니다."
+                )
+                parts = [
+                    f"{name}: {result.counts_by_folder.get(name, 0)}개" for name in FOLDER_NAMES
+                ]
                 self._result_label.setText(" · ".join(parts))
         except Exception as e:
             logger.exception("Dry run failed")
@@ -275,7 +287,9 @@ class MoveOrganizeTab(BaseTab):
                     f"{result.moved_or_copied}개 파일 {'이동' if move else '복사'} 완료"
                     + (f" (건너뜀: {result.skipped}개)" if result.skipped else "")
                 )
-                parts = [f"{name}: {result.counts_by_folder.get(name, 0)}개" for name in FOLDER_NAMES]
+                parts = [
+                    f"{name}: {result.counts_by_folder.get(name, 0)}개" for name in FOLDER_NAMES
+                ]
                 self._result_label.setText(" · ".join(parts))
         except Exception as e:
             logger.exception("Organize by chosung failed")

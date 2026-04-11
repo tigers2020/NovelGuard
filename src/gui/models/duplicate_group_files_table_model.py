@@ -1,4 +1,5 @@
 """중복 그룹 파일 테이블 모델."""
+
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +21,7 @@ if TYPE_CHECKING:
 @dataclass
 class FileInfo:
     """파일 정보 (Phase A: DuplicateGroupResult 기반)."""
+
     file_id: int
     path: Path
     size: Optional[int] = None
@@ -42,9 +44,7 @@ class DuplicateGroupFilesTableModel(QAbstractTableModel):
     COL_SIZE = 4
     COL_MODIFIED = 5
 
-    def __init__(
-        self, parent=None, file_data_store: Optional["FileDataStore"] = None
-    ) -> None:
+    def __init__(self, parent=None, *, file_data_store: "FileDataStore") -> None:
         """중복 그룹 파일 테이블 모델 초기화.
 
         Args:
@@ -52,21 +52,15 @@ class DuplicateGroupFilesTableModel(QAbstractTableModel):
             file_data_store: 파일 데이터 저장소 (필수).
         """
         super().__init__(parent)
-        if file_data_store is None:
-            raise ValueError("file_data_store is required")
         self._group_result: Optional[DuplicateGroupResult] = None
         self._file_info_list: list[FileInfo] = []
         self._file_data_store: "FileDataStore" = file_data_store
 
-    def rowCount(
-        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
-    ) -> int:
+    def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:
         """행 수 반환."""
         return len(self._file_info_list)
 
-    def columnCount(
-        self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()
-    ) -> int:
+    def columnCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:
         """컬럼 수 반환."""
         return 6
 
@@ -89,10 +83,7 @@ class DuplicateGroupFilesTableModel(QAbstractTableModel):
         return None
 
     def _is_recommended_keeper(self, file_id: int) -> bool:
-        return bool(
-            self._group_result
-            and self._group_result.recommended_keeper_id == file_id
-        )
+        return bool(self._group_result and self._group_result.recommended_keeper_id == file_id)
 
     def _display_cell_value(self, file_info: FileInfo, column: int) -> Any:
         if column == self.COL_KEEP:
@@ -104,17 +95,9 @@ class DuplicateGroupFilesTableModel(QAbstractTableModel):
         if column == self.COL_RANGE:
             return file_info.range_str or "—"
         if column == self.COL_SIZE:
-            return (
-                self._format_size(file_info.size)
-                if file_info.size is not None
-                else "—"
-            )
+            return self._format_size(file_info.size) if file_info.size is not None else "—"
         if column == self.COL_MODIFIED:
-            return (
-                self._format_datetime(file_info.mtime)
-                if file_info.mtime
-                else "—"
-            )
+            return self._format_datetime(file_info.mtime) if file_info.mtime else "—"
         return None
 
     def _user_role_cell_value(self, file_info: FileInfo, column: int) -> Any:
@@ -141,14 +124,7 @@ class DuplicateGroupFilesTableModel(QAbstractTableModel):
             return None
 
         if orientation == Qt.Orientation.Horizontal:
-            headers = [
-                "Keeper",
-                "파일명",
-                "경로",
-                "범위",
-                "크기",
-                "수정일"
-            ]
+            headers = ["Keeper", "파일명", "경로", "범위", "크기", "수정일"]
             if 0 <= section < len(headers):
                 return headers[section]
 
@@ -208,9 +184,7 @@ class DuplicateGroupFilesTableModel(QAbstractTableModel):
         if path is None:
             path = Path(f"file_id_{file_id}")
 
-        return FileInfo(
-            file_id=file_id, path=path, size=size, mtime=mtime, range_str=range_str
-        )
+        return FileInfo(file_id=file_id, path=path, size=size, mtime=mtime, range_str=range_str)
 
     def set_group(self, result: DuplicateGroupResult) -> None:
         """그룹 설정.
@@ -230,9 +204,7 @@ class DuplicateGroupFilesTableModel(QAbstractTableModel):
         file_info_list: list[FileInfo] = []
         for file_id in result.file_ids:
             file_data = self._file_data_store.get_file(file_id)
-            file_info_list.append(
-                self._file_info_for_group_member(file_id, file_data, files_info)
-            )
+            file_info_list.append(self._file_info_for_group_member(file_id, file_data, files_info))
 
         if result.recommended_keeper_id:
             file_info_list.sort(key=lambda fi: fi.file_id != result.recommended_keeper_id)

@@ -88,10 +88,11 @@ class NearDuplicateDetector:
                     candidate_pairs.append((file_id_a, file_id_b))
                 elif parse_a.has_range and parse_b.has_range:
                     # overlap 체크 (간단히 범위가 겹치면)
-                    if not (
-                        parse_a.range_end < parse_b.range_start
-                        or parse_b.range_end < parse_a.range_start
-                    ):
+                    a0, a1 = parse_a.range_start, parse_a.range_end
+                    b0, b1 = parse_b.range_start, parse_b.range_end
+                    if a0 is None or a1 is None or b0 is None or b1 is None:
+                        continue
+                    if not (a1 < b0 or b1 < a0):
                         candidate_pairs.append((file_id_a, file_id_b))
 
         # 샘플링 기반 SimHash 비교

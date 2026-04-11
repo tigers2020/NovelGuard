@@ -1,6 +1,7 @@
 """파일명 파싱 결과 ValueObject."""
+
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -10,44 +11,44 @@ from domain.value_objects.range_segment import RangeSegment
 @dataclass(frozen=True)
 class FilenameParseResult:
     """파일명 파싱 결과.
-    
+
     파일명에서 추출한 작품명, 범위, 태그 정보를 담는 불변 객체.
     중복 탐지의 핵심 데이터로 사용됨.
     """
-    
+
     # 원본
     original_path: Path
     """원본 파일 경로."""
-    
+
     original_name: str
     """확장자 제거한 파일명."""
-    
+
     # 파싱 결과
     series_title_norm: str
     """작품명 정규화 (공백/특수문자/태그 제거, 소문자).
-    
+
     예: "작품명 1-170.txt" → "작품명"
         "작품명 1-200(完, 후기 포함)@경우.txt" → "작품명"
     """
-    
+
     range_start: Optional[int] = None
     """시작 범위 (예: 1, 0). None이면 범위 추출 실패.
-    
+
     하위 호환성을 위해 유지. primary segment의 start와 동일.
     """
-    
+
     range_end: Optional[int] = None
     """끝 범위 (예: 170, 1445). None이면 범위 추출 실패.
-    
+
     하위 호환성을 위해 유지. primary segment의 end와 동일.
     """
-    
+
     range_unit: Optional[str] = None
     """범위 단위 (예: "화", "권", "장"). None이면 단위 없음.
-    
+
     하위 호환성을 위해 유지. primary segment의 unit과 동일.
     """
-    
+
     segments: Optional[list[RangeSegment]] = None
     """범위 세그먼트 리스트 (예: [("본편", 1, 1213, None), ("외전", 1, 71, None)]).
 
@@ -56,14 +57,14 @@ class FilenameParseResult:
 
     tags: Optional[list[str]] = None
     """태그 리스트 (예: ["완", "완결", "후기", "@경우"])."""
-    
+
     # 파싱 메타데이터
     confidence: float = 0.0
     """파싱 신뢰도 (0.0 ~ 1.0). 높을수록 파싱 성공 가능성 높음."""
-    
+
     parse_method: str = "fallback"
     """파싱 방법 ("pattern_match", "heuristic", "fallback")."""
-    
+
     def _validate_confidence(self) -> None:
         if not (0.0 <= self.confidence <= 1.0):
             raise ValueError(f"confidence must be between 0.0 and 1.0: {self.confidence}")
@@ -73,7 +74,11 @@ class FilenameParseResult:
             raise ValueError(f"range_start must be >= 0: {self.range_start}")
         if self.range_end is not None and self.range_end < 0:
             raise ValueError(f"range_end must be >= 0: {self.range_end}")
-        if self.range_start is not None and self.range_end is not None and self.range_start > self.range_end:
+        if (
+            self.range_start is not None
+            and self.range_end is not None
+            and self.range_start > self.range_end
+        ):
             raise ValueError(
                 f"range_start ({self.range_start}) must be <= range_end ({self.range_end})"
             )
@@ -117,63 +122,77 @@ class FilenameParseResult:
         self._normalize_and_validate_segments()
         self._validate_primary_segment_consistency()
         self._normalize_and_validate_tags()
-    
+
     @property
     def has_range(self) -> bool:
         """범위 정보가 있는지 여부."""
         return self.range_start is not None and self.range_end is not None
-    
+
     @property
     def has_segments(self) -> bool:
         """세그먼트 정보가 있는지 여부."""
-        return len(self.segments) > 0
-    
+        segs = self.segments
+        return bool(segs)
+
     @property
     def primary_segment(self) -> Optional[RangeSegment]:
         """Primary segment 반환 (segment_type이 None인 첫 번째 세그먼트).
-        
+
         Returns:
             Primary segment. 없으면 None.
         """
-        primary_segments = [s for s in self.segments if s.is_primary]
+        segs = self.segments
+        if not segs:
+            return None
+        primary_segments = [s for s in segs if s.is_primary]
         return primary_segments[0] if primary_segments else None
-    
+
     @property
     def total_coverage(self) -> int:
         """전체 커버리지 (모든 segments의 coverage 합산).
-        
+
         Returns:
             전체 커버리지. segments가 없으면 0.
         """
-        if not self.segments:
+        segs = self.segments
+        if not segs:
             return 0
-        
-        return sum(segment.coverage for segment in self.segments)
-    
+
+        return sum(segment.coverage for segment in segs)
+
     @property
     def has_tags(self) -> bool:
         """태그가 있는지 여부."""
-        return len(self.tags) > 0
-    
+        tags = self.tags
+        return bool(tags)
+
     @property
     def is_complete(self) -> bool:
         """완결본 태그가 있는지 여부 (완, 완결, 完 등)."""
         complete_tags = {"완", "완결", "完", "완전판", "완본", "complete", "finished"}
-        return any(tag in complete_tags for tag in self.tags)
-    
+        tags = self.tags or []
+        return any(tag in complete_tags for tag in tags)
+
     @property
     def is_epilogue_included(self) -> bool:
         """후기/에필로그 포함 태그가 있는지 여부."""
         epilogue_tags = {"후기", "에필", "에필로그", "epilogue", "afterword"}
-        return any(epilogue_tag in tag.lower() for tag in self.tags for epilogue_tag in epilogue_tags)
-    
+        tags = self.tags or []
+        return any(epilogue_tag in tag.lower() for tag in tags for epilogue_tag in epilogue_tags)
+
     def _range_contains_via_segments(self, other: "FilenameParseResult") -> bool:
         """segments 기반으로 other 범위가 이 범위에 포함되는지 판정. 호출 전 has_segments 양쪽 True 가정."""
+        self_segs = self.segments
+        other_segs = other.segments
+        if not self_segs or not other_segs:
+            return False
         other_by_type: dict[str, list[RangeSegment]] = defaultdict(list)
-        for s in other.segments:
-            other_by_type[s.segment_type].append(s)
-        for self_segment in self.segments:
-            for other_segment in other_by_type.get(self_segment.segment_type, []):
+        for s in other_segs:
+            key = s.segment_type or ""
+            other_by_type[key].append(s)
+        for self_segment in self_segs:
+            sk = self_segment.segment_type or ""
+            for other_segment in other_by_type.get(sk, []):
                 if self_segment.contains(other_segment):
                     return True
         return False
@@ -196,14 +215,18 @@ class FilenameParseResult:
             return self._range_contains_via_segments(other)
         if not self.has_range or not other.has_range:
             return False
-        return self.range_start <= other.range_start and self.range_end >= other.range_end
-    
+        rs, re = self.range_start, self.range_end
+        ors, ore = other.range_start, other.range_end
+        if rs is None or re is None or ors is None or ore is None:
+            return False
+        return rs <= ors and re >= ore
+
     def is_same_series(self, other: "FilenameParseResult") -> bool:
         """같은 작품인지 확인.
-        
+
         Args:
             other: 비교할 다른 파싱 결과.
-        
+
         Returns:
             series_title_norm이 동일하면 True.
         """

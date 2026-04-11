@@ -1,4 +1,6 @@
 """Preview 스캔 워커 (빠른 파일 수 카운트)."""
+
+import logging
 import os
 from collections import deque
 from pathlib import Path
@@ -11,20 +13,22 @@ from application.ports.log_sink import ILogSink
 from application.utils.debug_logger import debug_step
 from domain.value_objects.preview_stats import PreviewStats
 
+logger = logging.getLogger(__name__)
+
 
 class PreviewWorker(QThread):
     """Preview 스캔 워커 스레드.
-    
+
     빠른 미리보기 정보를 제공하기 위한 경량 스캔.
     os.scandir()만 사용하여 파일 수와 확장자 분포만 카운트.
     """
-    
+
     preview_completed = Signal(PreviewStats)
     """Preview 스캔 완료 시그널."""
-    
+
     preview_error = Signal(str)
     """Preview 스캔 오류 시그널."""
-    
+
     def __init__(
         self,
         folder: Path,
@@ -33,10 +37,10 @@ class PreviewWorker(QThread):
         include_hidden: bool = False,
         include_symlinks: bool = True,
         log_sink: Optional[ILogSink] = None,
-        parent: Optional[QObject] = None
+        parent: Optional[QObject] = None,
     ) -> None:
         """Preview 워커 초기화.
-        
+
         Args:
             folder: 스캔할 폴더 경로.
             extensions: 필터링할 확장자 리스트. None이면 기본 텍스트 확장자 사용.
@@ -56,11 +60,11 @@ class PreviewWorker(QThread):
         self._include_symlinks = include_symlinks
         self._log_sink = log_sink
         self._cancelled = False
-    
+
     def cancel(self) -> None:
         """스캔 취소."""
         self._cancelled = True
-    
+
     def run(self) -> None:
         """워커 실행."""
         debug_step(
@@ -72,9 +76,9 @@ class PreviewWorker(QThread):
                 "include_subdirs": self._include_subdirs,
                 "include_hidden": self._include_hidden,
                 "include_symlinks": self._include_symlinks,
-            }
+            },
         )
-        
+
         try:
             stats = self._scan_folder(self._folder)
             if not self._cancelled:
@@ -84,7 +88,7 @@ class PreviewWorker(QThread):
                     {
                         "estimated_total_files": stats.estimated_total_files,
                         "top_extensions_count": len(stats.top_extensions),
-                    }
+                    },
                 )
                 self.preview_completed.emit(stats)
         except Exception as e:
@@ -95,10 +99,10 @@ class PreviewWorker(QThread):
                     {
                         "error": str(e),
                         "error_type": type(e).__name__,
-                    }
+                    },
                 )
                 self.preview_error.emit(str(e))
-    
+
     def _should_skip_hidden(self, entry: os.DirEntry) -> bool:
         """숨김 파일/폴더 여부로 스킵할지 판단."""
         return not self._include_hidden and entry.name.startswith(".")
@@ -115,11 +119,9 @@ class PreviewWorker(QThread):
             return None
         return ext
 
-    def _process_entry(
-        self, entry: os.DirEntry
-    ) -> Tuple[int, Optional[str], Optional[Path]]:
+    def _process_entry(self, entry: os.DirEntry) -> Tuple[int, Optional[str], Optional[Path]]:
         """단일 scandir 엔트리 처리.
-        
+
         Returns:
             (추가할 파일 수, 확장자 또는 None, 하위 디렉토리 Path 또는 None)
         """
@@ -138,9 +140,7 @@ class PreviewWorker(QThread):
             return (0, None, Path(entry.path))
         return (0, None, None)
 
-    def _scan_one_dir(
-        self, current_dir: Path
-    ) -> Tuple[list[Path], int, dict[str, int]]:
+    def _scan_one_dir(self, current_dir: Path) -> Tuple[list[Path], int, dict[str, int]]:
         """한 디렉토리만 스캔. (subdirs, 파일 증가분, 확장자 증가분)."""
         subdirs: list[Path] = []
         added_files = 0
@@ -159,16 +159,16 @@ class PreviewWorker(QThread):
 
     def _scan_folder(self, folder: Path) -> PreviewStats:
         """폴더 스캔하여 PreviewStats 생성.
-        
+
         os.scandir()를 사용하여 빠른 순회 수행.
         stat() 호출 없이 파일 수와 확장자만 카운트.
-        
+
         Args:
             folder: 스캔할 폴더.
-        
+
         Returns:
             PreviewStats 객체.
-        
+
         Raises:
             FileNotFoundError: 폴더가 존재하지 않을 때.
             PermissionError: 폴더 접근 권한이 없을 때.
@@ -193,10 +193,7 @@ class PreviewWorker(QThread):
             except PermissionError:
                 continue
             except Exception as e:
-                print(f"디렉토리 스캔 오류 ({current_dir}): {e}")
+                logger.warning("디렉토리 스캔 오류 (%s): %s", current_dir, e)
                 continue
 
-        return PreviewStats(
-            estimated_total_files=total_files,
-            top_extensions=extension_counts
-        )
+        return PreviewStats(estimated_total_files=total_files, top_extensions=extension_counts)

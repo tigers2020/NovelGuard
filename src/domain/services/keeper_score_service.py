@@ -55,8 +55,11 @@ class KeeperScoreService:
             coverage = parse_result.total_coverage
             score += int(coverage * DetectionDefaults.SCORE_COVERAGE / 100)
         elif parse_result.has_range:
-            coverage = parse_result.range_end - parse_result.range_start + 1
-            score += int(coverage * DetectionDefaults.SCORE_COVERAGE / 100)
+            rs = parse_result.range_start
+            re = parse_result.range_end
+            if rs is not None and re is not None:
+                coverage = re - rs + 1
+                score += int(coverage * DetectionDefaults.SCORE_COVERAGE / 100)
 
         # +20: mtime 최신 (reference_mtime 기준)
         if reference_mtime is None:

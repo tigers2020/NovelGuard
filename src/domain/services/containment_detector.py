@@ -1,18 +1,18 @@
 """포함/버전 관계 탐지 서비스."""
+
 from collections import defaultdict
 from datetime import datetime
-from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from domain.entities.file_entry import FileEntry
+from domain.value_objects.duplicate_relation import ContainmentRelation, VersionRelation
+from domain.value_objects.filename_parse_result import FilenameParseResult
+from domain.value_objects.range_segment import RangeSegment
 
 # Sonar S1192: 공통 경고 메시지 상수
 WARNING_RANGE_INCREASED_SIZE_DECREASED = (
     "범위는 증가했지만 크기는 감소했습니다. 압축/정리본일 수 있습니다."
 )
-from domain.value_objects.duplicate_relation import ContainmentRelation, VersionRelation
-from domain.value_objects.filename_parse_result import FilenameParseResult
-from domain.value_objects.range_segment import RangeSegment
 
 if TYPE_CHECKING:
     from application.ports.log_sink import ILogSink
@@ -20,11 +20,11 @@ if TYPE_CHECKING:
 
 class ContainmentDetector:
     """포함/버전 관계 탐지 서비스.
-    
+
     파일명 파싱 결과를 기반으로 포함 관계 및 버전 관계를 탐지하는 서비스.
     내용을 읽지 않고도 판정 가능 (파일명과 메타데이터만으로 판정).
     """
-    
+
     def __init__(self, log_sink: Optional["ILogSink"] = None) -> None:
         """ContainmentDetector 초기화.
 
@@ -39,7 +39,7 @@ class ContainmentDetector:
         file_b: FileEntry,
         parse_a: FilenameParseResult,
         parse_b: FilenameParseResult,
-    ) -> Optional[tuple[str, str]]:
+    ) -> Optional[tuple[int, int]]:
         """동일 작품·범위·file_id 검증 후 (file_id_a, file_id_b) 반환."""
         if not parse_a.is_same_series(parse_b):
             return None
@@ -59,18 +59,20 @@ class ContainmentDetector:
 
     def _evidence_segments(
         self, parse_a: FilenameParseResult, parse_b: FilenameParseResult
-    ) -> dict:
+    ) -> dict[str, Any]:
         """세그먼트 기반 evidence 딕셔너리."""
+        segs_a = parse_a.segments or []
+        segs_b = parse_b.segments or []
         return {
-            "segments_a": [(s.segment_type, s.start, s.end, s.unit) for s in parse_a.segments],
-            "segments_b": [(s.segment_type, s.start, s.end, s.unit) for s in parse_b.segments],
+            "segments_a": [(s.segment_type, s.start, s.end, s.unit) for s in segs_a],
+            "segments_b": [(s.segment_type, s.start, s.end, s.unit) for s in segs_b],
             "tags_a": parse_a.tags,
             "tags_b": parse_b.tags,
         }
 
     def _evidence_range(
         self, parse_a: FilenameParseResult, parse_b: FilenameParseResult
-    ) -> dict:
+    ) -> dict[str, Any]:
         """범위 기반 evidence 딕셔너리."""
         return {
             "range_a": (parse_a.range_start, parse_a.range_end),
@@ -81,17 +83,21 @@ class ContainmentDetector:
 
     def _try_containment_via_segments(
         self,
-        file_id_a: str,
-        file_id_b: str,
+        file_id_a: int,
+        file_id_b: int,
         parse_a: FilenameParseResult,
         parse_b: FilenameParseResult,
     ) -> Optional[ContainmentRelation]:
         """세그먼트로 포함 관계 탐지. 없으면 None."""
+        segs_a = parse_a.segments or []
+        segs_b = parse_b.segments or []
         segs_b_by_type: dict[str, list[RangeSegment]] = defaultdict(list)
-        for s in parse_b.segments:
-            segs_b_by_type[s.segment_type].append(s)
-        for seg_a in parse_a.segments:
-            for seg_b in segs_b_by_type.get(seg_a.segment_type, []):
+        for s in segs_b:
+            key = s.segment_type or ""
+            segs_b_by_type[key].append(s)
+        for seg_a in segs_a:
+            sk = seg_a.segment_type or ""
+            for seg_b in segs_b_by_type.get(sk, []):
                 if seg_a.contains(seg_b):
                     evidence = self._evidence_segments(parse_a, parse_b)
                     confidence = self._containment_confidence(parse_a, parse_b)
@@ -114,8 +120,8 @@ class ContainmentDetector:
 
     def _try_containment_via_range(
         self,
-        file_id_a: str,
-        file_id_b: str,
+        file_id_a: int,
+        file_id_b: int,
         parse_a: FilenameParseResult,
         parse_b: FilenameParseResult,
     ) -> Optional[ContainmentRelation]:
@@ -143,12 +149,8 @@ class ContainmentDetector:
         file_b: FileEntry,
     ) -> ContainmentRelation:
         """Container 크기가 contained보다 작으면 evidence에 플래그 추가하고 confidence를 0.75로 낮춤."""
-        container_size = (
-            file_a.size if result.container_file_id == file_a.file_id else file_b.size
-        )
-        contained_size = (
-            file_b.size if result.contained_file_id == file_b.file_id else file_a.size
-        )
+        container_size = file_a.size if result.container_file_id == file_a.file_id else file_b.size
+        contained_size = file_b.size if result.contained_file_id == file_b.file_id else file_a.size
         if container_size >= contained_size:
             return result
         evidence = dict(result.evidence)
@@ -187,24 +189,20 @@ class ContainmentDetector:
 
         result = None
         if parse_a.has_segments and parse_b.has_segments:
-            result = self._try_containment_via_segments(
-                file_id_a, file_id_b, parse_a, parse_b
-            )
+            result = self._try_containment_via_segments(file_id_a, file_id_b, parse_a, parse_b)
         if result is None:
-            result = self._try_containment_via_range(
-                file_id_a, file_id_b, parse_a, parse_b
-            )
+            result = self._try_containment_via_range(file_id_a, file_id_b, parse_a, parse_b)
         if result is not None:
             result = self._apply_containment_size_heuristic(result, file_a, file_b)
         return result
-    
+
     def _version_confidence_and_warning(
         self,
         newer_size: int,
         older_size: int,
         newer_mtime: datetime,
         older_mtime: datetime,
-        evidence: dict,
+        evidence: dict[str, Any],
     ) -> float:
         """버전 관계 신뢰도 계산. 크기 감소 시 경고 추가 후 0.7, 아니면 0.85~0.9."""
         if newer_size >= older_size:
@@ -222,11 +220,13 @@ class ContainmentDetector:
         file_b: FileEntry,
         parse_a: FilenameParseResult,
         parse_b: FilenameParseResult,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """버전 판정용 세그먼트 evidence."""
+        segs_a = parse_a.segments or []
+        segs_b = parse_b.segments or []
         return {
-            "segments_a": [(s.segment_type, s.start, s.end, s.unit) for s in parse_a.segments],
-            "segments_b": [(s.segment_type, s.start, s.end, s.unit) for s in parse_b.segments],
+            "segments_a": [(s.segment_type, s.start, s.end, s.unit) for s in segs_a],
+            "segments_b": [(s.segment_type, s.start, s.end, s.unit) for s in segs_b],
             "size_a": file_a.size,
             "size_b": file_b.size,
             "mtime_a": file_a.mtime.isoformat(),
@@ -239,7 +239,7 @@ class ContainmentDetector:
         file_b: FileEntry,
         parse_a: FilenameParseResult,
         parse_b: FilenameParseResult,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """버전 판정용 범위 evidence."""
         return {
             "range_a": (parse_a.range_start, parse_a.range_end),
@@ -252,8 +252,8 @@ class ContainmentDetector:
 
     def _try_version_via_segments(
         self,
-        file_id_a: str,
-        file_id_b: str,
+        file_id_a: int,
+        file_id_b: int,
         file_a: FileEntry,
         file_b: FileEntry,
         parse_a: FilenameParseResult,
@@ -293,8 +293,8 @@ class ContainmentDetector:
 
     def _try_version_via_range(
         self,
-        file_id_a: str,
-        file_id_b: str,
+        file_id_a: int,
+        file_id_b: int,
         file_a: FileEntry,
         file_b: FileEntry,
         parse_a: FilenameParseResult,
@@ -303,12 +303,16 @@ class ContainmentDetector:
         """범위로 버전 관계 탐지. 없으면 None."""
         if parse_a.range_start != parse_b.range_start:
             return None
-        if parse_a.range_end == parse_b.range_end:
+        ra_end = parse_a.range_end
+        rb_end = parse_b.range_end
+        if ra_end is None or rb_end is None:
+            return None
+        if ra_end == rb_end:
             return None
 
         evidence = self._evidence_version_range(file_a, file_b, parse_a, parse_b)
 
-        if parse_a.range_end > parse_b.range_end:
+        if ra_end > rb_end:
             confidence = self._version_confidence_and_warning(
                 file_a.size, file_b.size, file_a.mtime, file_b.mtime, evidence
             )
@@ -318,7 +322,7 @@ class ContainmentDetector:
                 evidence=evidence,
                 confidence=confidence,
             )
-        if parse_b.range_end > parse_a.range_end:
+        if rb_end > ra_end:
             confidence = self._version_confidence_and_warning(
                 file_b.size, file_a.size, file_b.mtime, file_a.mtime, evidence
             )
@@ -360,6 +364,4 @@ class ContainmentDetector:
             if result is not None:
                 return result
 
-        return self._try_version_via_range(
-            file_id_a, file_id_b, file_a, file_b, parse_a, parse_b
-        )
+        return self._try_version_via_range(file_id_a, file_id_b, file_a, file_b, parse_a, parse_b)
