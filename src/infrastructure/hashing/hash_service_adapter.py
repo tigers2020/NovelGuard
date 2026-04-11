@@ -1,8 +1,9 @@
 """해시 서비스 어댑터 - IHashService 구현."""
+
 import hashlib
 from pathlib import Path
 
-from app.settings.constants import Constants
+from domain.value_objects.detection_config import DetectionDefaults
 
 
 class HashServiceAdapter:
@@ -21,7 +22,7 @@ class HashServiceAdapter:
         return h.hexdigest()
 
     def calculate_prefix_hash(
-        self, file_path: Path, size: int = Constants.SAMPLE_SIZE
+        self, file_path: Path, size: int = DetectionDefaults.SAMPLE_SIZE
     ) -> str:
         """파일 앞부분 해시 계산."""
         h = hashlib.sha256()
@@ -31,7 +32,7 @@ class HashServiceAdapter:
         return h.hexdigest()
 
     def calculate_suffix_hash(
-        self, file_path: Path, size: int = Constants.SAMPLE_SIZE
+        self, file_path: Path, size: int = DetectionDefaults.SAMPLE_SIZE
     ) -> str:
         """파일 뒷부분 해시 계산."""
         file_size = file_path.stat().st_size

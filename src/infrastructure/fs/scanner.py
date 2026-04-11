@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
 
+from application.dto.folder_scan_outcome import FolderScanOutcome
 from application.dto.scan_request import ScanRequest
 from application.ports.file_scanner import FileScanner
 from application.ports.log_sink import ILogSink
@@ -76,15 +77,15 @@ class FileSystemScanner:
         self,
         request: ScanRequest,
         progress_callback: Optional[Callable[[int, str], None]] = None,
-    ) -> list[FileEntry]:
-        """폴더를 스캔하여 FileEntry 리스트 반환.
+    ) -> FolderScanOutcome:
+        """폴더를 스캔하여 엔트리와 경고 수를 반환.
 
         Args:
             request: 스캔 요청 DTO.
             progress_callback: 진행률 콜백 (processed_count, message).
 
         Returns:
-            FileEntry 리스트.
+            스캔 결과(엔트리 + 비치명적 오류 건수).
 
         Raises:
             FileNotFoundError: 폴더가 존재하지 않을 때.
@@ -123,14 +124,16 @@ class FileSystemScanner:
         dirs_to_scan: deque[Path] = deque([root_folder])
         processed_files = 0
         total_bytes = 0
+        warnings_count = 0
         debug_step(self._log_sink, "directory_scan_start", {"root_path": str(root_folder)})
 
         while dirs_to_scan and not self._cancelled:
             current_dir = dirs_to_scan.popleft()
             try:
-                files_delta, bytes_delta = self._process_directory(
+                files_delta, bytes_delta, warn_delta = self._process_directory(
                     current_dir, request, extensions, entries, dirs_to_scan
                 )
+                warnings_count += warn_delta
                 old_count = processed_files
                 processed_files += files_delta
                 total_bytes += bytes_delta
@@ -139,6 +142,7 @@ class FileSystemScanner:
                     self._emit_progress(n, total_bytes, current_dir)
                     n += 100
             except OSError as e:
+                warnings_count += 1
                 debug_step(
                     self._log_sink,
                     "directory_access_error",
@@ -152,10 +156,11 @@ class FileSystemScanner:
                 "total_files": len(entries),
                 "total_bytes": total_bytes,
                 "processed_files": processed_files,
+                "warnings_count": warnings_count,
                 "cancelled": self._cancelled,
             },
         )
-        return entries
+        return FolderScanOutcome(entries=entries, warnings_count=warnings_count)
 
     def _process_directory(
         self,
@@ -164,10 +169,11 @@ class FileSystemScanner:
         extensions: Optional[list[str]],
         entries: list[FileEntry],
         dirs_to_scan: deque[Path],
-    ) -> tuple[int, int]:
-        """한 디렉터리 스캔: 처리 파일 수·바이트 증가분 반환."""
+    ) -> tuple[int, int, int]:
+        """한 디렉터리 스캔: 처리 파일 수·바이트·경고 증가분 반환."""
         files_delta = 0
         bytes_delta = 0
+        warnings_delta = 0
         with os.scandir(current_dir) as it:
             for entry in it:
                 if self._cancelled:
@@ -179,13 +185,14 @@ class FileSystemScanner:
                         continue
                     file_entry = _try_make_file_entry(entry)
                     if file_entry is None:
+                        warnings_delta += 1
                         continue
                     entries.append(file_entry)
                     files_delta += 1
                     bytes_delta += file_entry.size
                 elif entry.is_dir(follow_symlinks=False) and request.include_subdirs:
                     dirs_to_scan.append(Path(entry.path))
-        return files_delta, bytes_delta
+        return files_delta, bytes_delta, warnings_delta
 
     def _emit_progress(self, processed_files: int, total_bytes: int, current_dir: Path) -> None:
         """진행 로그 및 콜백 호출 (매 100개마다)."""
