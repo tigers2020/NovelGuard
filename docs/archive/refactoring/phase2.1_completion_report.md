@@ -1,4 +1,4 @@
-# Phase 2.1 완료 리포트
+﻿# Phase 2.1 완료 리포트
 
 ## 개요
 
@@ -13,7 +13,7 @@
 ### 1. 모델 분석 및 분류 계획 (Phase 2.1.1)
 
 **생성된 문서:**
-- `docs/refactoring/model_classification.md` - 모델 분류 계획서
+- `docs/archive/refactoring/model_classification.md` - 모델 분류 계획서
 
 **분류 결과:**
 - **Aggregate**: DuplicateGroup, ActionPlan

@@ -1,4 +1,4 @@
-# Phase 4 완료 리포트: 정리 및 최적화
+﻿# Phase 4 완료 리포트: 정리 및 최적화
 
 ## 📋 작업 개요
 
@@ -48,7 +48,7 @@ Phase 4는 리팩토링 작업의 최종 정리 단계로, 다음 세 가지 하
 
 **테스트 결과**: ✅ 326 passed (변경 없음)
 
-**자세한 내용**: `docs/refactoring/phase4.1_completion_report.md` 참조
+**자세한 내용**: `docs/archive/refactoring/phase4.1_completion_report.md` 참조
 
 ---
 
@@ -84,7 +84,7 @@ Phase 4는 리팩토링 작업의 최종 정리 단계로, 다음 세 가지 하
 - 또는 향후 개선 사항으로 기록
 - 현재 기능 동작에는 문제 없음
 
-**자세한 내용**: `docs/refactoring/phase4.2_architecture_validation.md` 참조
+**자세한 내용**: `docs/archive/refactoring/phase4.2_architecture_validation.md` 참조
 
 ---
 
@@ -270,13 +270,13 @@ src/common/types.py  (28 lines)
 
 ### 생성된 문서
 
-1. ✅ `docs/refactoring/phase4.1_completion_report.md`
+1. ✅ `docs/archive/refactoring/phase4.1_completion_report.md`
    - `common/types.py` 정리 작업 상세 리포트
 
-2. ✅ `docs/refactoring/phase4.2_architecture_validation.md`
+2. ✅ `docs/archive/refactoring/phase4.2_architecture_validation.md`
    - 전체 아키텍처 검증 결과 및 위반 사항
 
-3. ✅ `docs/refactoring/phase4_completion_report.md` (이 문서)
+3. ✅ `docs/archive/refactoring/phase4_completion_report.md` (이 문서)
    - Phase 4 전체 완료 리포트
 
 ---

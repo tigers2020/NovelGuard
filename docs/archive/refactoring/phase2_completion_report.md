@@ -1,4 +1,4 @@
-# Phase 2 완료 리포트
+﻿# Phase 2 완료 리포트
 
 ## 개요
 
@@ -13,12 +13,12 @@
 ### Phase 2.1: Domain Models 재분류
 - **소요 시간**: 약 2시간 (예상 17시간)
 - **신규 테스트**: 152개
-- **완료 리포트**: `docs/refactoring/phase2.1_completion_report.md`
+- **완료 리포트**: `docs/archive/refactoring/phase2.1_completion_report.md`
 
 ### Phase 2.2: 비교/판단 로직 Service로 이동
 - **소요 시간**: 약 1.5시간 (예상 18시간)
 - **신규 테스트**: 54개
-- **완료 리포트**: `docs/refactoring/phase2.2_completion_report.md`
+- **완료 리포트**: `docs/archive/refactoring/phase2.2_completion_report.md`
 
 ## 최종 테스트 결과
 
@@ -226,10 +226,10 @@ service.check_file(
 ## 문서
 
 ### 생성된 문서
-1. `docs/refactoring/model_classification.md` - 모델 분류 계획
-2. `docs/refactoring/phase2.1_completion_report.md` - Phase 2.1 완료 리포트
-3. `docs/refactoring/phase2.2_completion_report.md` - Phase 2.2 완료 리포트
-4. `docs/refactoring/phase2_completion_report.md` - Phase 2 전체 완료 리포트 (현재)
+1. `docs/archive/refactoring/model_classification.md` - 모델 분류 계획
+2. `docs/archive/refactoring/phase2.1_completion_report.md` - Phase 2.1 완료 리포트
+3. `docs/archive/refactoring/phase2.2_completion_report.md` - Phase 2.2 완료 리포트
+4. `docs/archive/refactoring/phase2_completion_report.md` - Phase 2 전체 완료 리포트 (현재)
 
 ## 다음 단계 (Phase 2.3~2.4)
 

@@ -227,17 +227,5 @@ SAVE/
 *.sqlite
 *.sqlite3
 
-
-
-tests/
-logs/
-protocols/
-persona/
-save/
-scripts/
-.cursor/
+# Local benchmark / tool output (not source)
 .benchmark/
-.vscode/
-.cursorignore
-.cursorindexingignore
-.cursorignore

@@ -1,4 +1,4 @@
-## 🔄 Phase 1: 폭발 반경 제거 (P0 - 즉시)
+﻿## 🔄 Phase 1: 폭발 반경 제거 (P0 - 즉시)
 
 > **목표**: 가장 위험한 파일들을 안전하게 분리하여 변경 영향 범위를 최소화
 
@@ -555,7 +555,7 @@ class FileComparisonService:
 - [ ] Adapter 제거 후 전체 테스트 재실행 및 검증
 
 ##### Step 1.2.6: 정리 및 문서화
-- [ ] 마이그레이션 가이드 문서 작성 (`docs/refactoring/file_record_migration.md`)
+- [ ] 마이그레이션 가이드 문서 작성 (`docs/archive/refactoring/file_record_migration.md`)
 - [ ] 아키텍처 다이어그램 업데이트
 - [ ] API 문서 업데이트 (Docstring)
 - [ ] `protocols/development_protocol.md` 업데이트 (새로운 구조 반영)

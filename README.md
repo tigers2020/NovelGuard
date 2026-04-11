@@ -2,6 +2,8 @@
 
 > 텍스트 소설 파일 정리 도구 - 중복 제거, 신구 버전 분리, 무결성 검사
 
+**현행 구조·진입점·검증의 문서 정본**: [docs/current_architecture.md](docs/current_architecture.md) · 지원 Python·의존성 하한: [`pyproject.toml`](pyproject.toml)
+
 ## 프로젝트 개요
 
 NovelGuard는 다운로드받은 텍스트 소설 파일을 안전하게 정리하는 도구입니다.
@@ -24,64 +26,68 @@ NovelGuard는 다운로드받은 텍스트 소설 파일을 안전하게 정리�
 
 ```
 NovelGuard/
-├── protocols/          # 프로토콜 문서
-│   ├── README.md
-│   └── development_protocol.md
-├── persona/            # 페르소나 관련 파일
-│   ├── README.md
-│   └── novelguard_developer.md
-├── src/                # 소스 코드
-│   ├── __init__.py
-│   └── main.py
-├── tests/              # 테스트 코드
-│   └── __init__.py
-├── requirements.txt    # 의존성 패키지
-├── agent.md           # Cursor AI용 타이딩 오케스트레이터
-└── README.md          # 프로젝트 설명
+├── AGENTS.md           # Cursor·기여 게이트, 검증 명령, 규칙 우선순위
+├── documents/          # 감사·플랜·조사 메모 (운영 게이트 문서)
+├── docs/
+│   ├── README.md                 # 문서 인덱스
+│   ├── current_architecture.md   # 현행 구조 정본
+│   ├── entry_points.md           # 실행 진입점 상세
+│   └── archive/                  # 리팩터링·Phase 보고 등 역사 자료
+├── protocols/          # 절차 요약 (정책 정본은 AGENTS.md + .cursor/rules/)
+├── persona/            # 페르소나·역할 (톤·책임; 정책은 AGENTS.md 위임)
+├── src/
+│   ├── main.py         # 공식 진입점 (sys.path 설정 후 app.main)
+│   ├── domain/
+│   ├── application/
+│   ├── infrastructure/
+│   ├── gui/
+│   └── app/            # composition root: app/main.py
+├── tests/              # pytest (기본 수집 경로는 pyproject.toml 참고)
+├── pyproject.toml      # 프로젝트 메타·Python 버전·도구 설정 정본
+├── requirements.txt    # 런타임 의존성 (pyproject와 동일 하한)
+└── README.md
 ```
 
 ## 설치 방법
 
 ### 필수 요구사항
-- Python 3.10 이상
+
+- **Python 3.12 이상** (`pyproject.toml`의 `requires-python`과 동일)
 - Windows / macOS / Linux
 
 ### 설치
 
 ```bash
-# 저장소 클론
 git clone <repository-url>
 cd NovelGuard
 
-# 가상환경 생성 (권장)
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate   # Windows: venv\Scripts\activate
 
-# 의존성 설치
+# 런타임만
 pip install -r requirements.txt
+# 또는 (권장) 메타데이터 기준 설치
+pip install -e .
+
+# 개발·검증 (pytest, ruff, mypy, black, psutil)
+pip install -e ".[dev]"
 ```
+
+이전에 `requirements.txt` 한 줄로 테스트까지 설치하던 경우, 위처럼 **`pip install -e ".[dev]"`를 추가**하면 된다.
 
 ## 사용 방법
 
 ### 실행
 
-**권장 방법** (프로젝트 루트에서):
+프로젝트 루트에서:
+
 ```bash
-# 직접 실행
 python src/main.py
-
-# 또는 실행 스크립트 사용
-run.bat      # Windows CMD
-run.ps1      # Windows PowerShell
 ```
 
-**대체 방법** (모듈로 실행):
-```bash
-cd src
-python -m app.main
-```
+또는 `run.bat` / `run.ps1` (동일하게 `src/main.py` 호출).
 
-자세한 내용은 [진입점 문서](./docs/entry_points.md)를 참고하세요.
+보조: `cd src` 후 `python -m app.main` — [docs/entry_points.md](docs/entry_points.md) 참고.
 
 ### 기본 워크플로우
 
@@ -93,33 +99,30 @@ python -m app.main
 
 ## 개발 가이드
 
-프로젝트의 `protocols/`와 `persona/` 폴더를 참고하여 개발을 진행합니다.
+- **[AGENTS.md](AGENTS.md)**: Persona Dialogue, 플랜 승인 게이트, MCP·검증 파이프라인
+- **[docs/current_architecture.md](docs/current_architecture.md)**: 레이어·진입점·테스트 정책
+- **[protocols/development_protocol.md](protocols/development_protocol.md)**: 절차·컨벤션
+- **[persona/novelguard_developer.md](persona/novelguard_developer.md)**: 역할·안전 원칙
 
-### 개발 문서
-
-- **[개발 프로토콜](./protocols/development_protocol.md)**: 개발 절차, 코딩 컨벤션, 작업 흐름
-- **[개발 페르소나](./persona/novelguard_developer.md)**: 개발 원칙, 역할 및 책임, 작업 스타일
-
-### 개발 단계
+### 개발 단계 (로드맵)
 
 - **MVP v1**: 기본 스캔, 중복 제거, 무결성 검사, GUI
 - **v1.5**: 파일명 파싱, 신구 버전 판정, 백업/Undo
 - **v2**: 유사본 탐지, 커스텀 규칙, 시리즈 그룹핑
 
-자세한 내용은 [개발 프로토콜](./protocols/development_protocol.md)을 참고하세요.
+## 런타임 라이브러리
 
-## 라이브러리
+`requirements.txt` / `pyproject.toml` `[project].dependencies`와 동일:
 
-### 필수
-- **PySide6**: GUI 프레임워크
-- **charset-normalizer**: 파일 인코딩 자동 감지
-- **pydantic**: 데이터 모델 검증
-- **PyInstaller**: 실행 파일 패키징
+- **PySide6** — GUI
+- **charset-normalizer** — 인코딩 감지
+- **pydantic** — 데이터 검증
+- **xxhash** — 빠른 해시
 
-### 강력 추천
-- **rich**: CLI 디버깅
+### 선택 (패키징·도구·문서 예시용)
 
-자세한 내용은 `requirements.txt`를 참고하세요.
+- **PyInstaller** — 실행 파일 빌드 시 별도 설치
+- **rich** — CLI/디버깅 편의용
 
 ## 라이선스
 
@@ -128,4 +131,3 @@ python -m app.main
 ## 기여
 
 (기여 가이드를 여기에 추가하세요)
-

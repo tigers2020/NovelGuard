@@ -1,4 +1,4 @@
-# Phase 1.2 완료 리포트
+﻿# Phase 1.2 완료 리포트
 
 ## 개요
 
@@ -97,7 +97,7 @@
 ### 5. Adapter 제거 기준 명시 (Phase 1.2.5)
 
 **생성된 파일:**
-- `docs/refactoring/file_record_migration.md` - 마이그레이션 가이드
+- `docs/archive/refactoring/file_record_migration.md` - 마이그레이션 가이드
 
 **제거 조건:**
 1. 모든 UseCase가 새 File 엔티티 사용

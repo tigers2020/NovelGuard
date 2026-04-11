@@ -1,4 +1,6 @@
-# Phase 1 완료 보고서
+﻿# Phase 1 완료 보고서
+
+> **역사 문서 (리팩터링 플랜 v1.4 관점의 Phase 1).** 이 보고서가 말하는 `bootstrap.py`·워크플로우 모듈 등은 **현재 저장소 상태와 일치하지 않을 수 있다.** 현행 진입점·조립은 [current_architecture.md](current_architecture.md), [entry_points.md](entry_points.md)를 본다.
 
 ## 개요
 Phase 1의 모든 단계가 성공적으로 완료되었습니다. 이 문서는 완료된 작업과 결과를 요약합니다.
@@ -111,7 +113,7 @@ Bootstrap → Infrastructure (유일한 wiring 지점)
 8. `src/domain/ports/encoding_detector.py` - 인코딩 감지 Port
 9. `src/infra/hashing/hash_service_adapter.py` - 해시 서비스 Adapter
 10. `docs/entry_points.md` - 진입점 문서
-11. `docs/phase1_completion_report.md` - 완료 보고서 (본 문서)
+11. `docs/archive/phase1_completion_report.md` - 완료 보고서 (본 문서)
 12. `tests/domain/__init__.py` - Domain 테스트 패키지
 13. `tests/domain/ports/__init__.py` - Ports 테스트 패키지
 14. `tests/domain/ports/test_protocol_compliance.py` - Protocol 준수 테스트

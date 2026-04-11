@@ -52,7 +52,9 @@ Cursor AI용 NovelGuard 프로젝트 가이드. [AGENTS.md](https://agents.md/) 
 
 ## 프로젝트 개요
 
-**NovelGuard** — 텍스트 소설 파일 중복 탐지·정리 도구. 파일명 파싱, 포함/버전 관계 판정, 해시 기반 완전 일치, 유사도 탐지를 조합하여 안전하게 중복을 정리한다.
+**NovelGuard** — 텍스트 소설 파일 중복 탐지·정리 도구.
+
+**현행 구조·진입점 문서 정본**: `docs/current_architecture.md` (버전·의존성 하한은 `pyproject.toml`). 파일명 파싱, 포함/버전 관계 판정, 해시 기반 완전 일치, 유사도 탐지를 조합하여 안전하게 중복을 정리한다.
 
 워크플로우: 스캔 → 파일명 파싱 → Blocking → 관계 탐지 → (Exact/Near) → 그룹 생성 → Dry-run 미리보기 → 사용자 승인 → 이동/정리
 
@@ -100,7 +102,8 @@ Cursor AI용 NovelGuard 프로젝트 가이드. [AGENTS.md](https://agents.md/) 
 
 | 목적 | 명령 |
 |------|------|
-| 설치 | `pip install -r requirements.txt` |
+| 설치 (런타임) | `pip install -r requirements.txt` 또는 `pip install -e .` |
+| 설치 (개발·검증) | `pip install -e ".[dev]"` (`pytest`, `ruff`, `mypy`, `black`, `psutil`) |
 | 실행 | `python src/main.py` |
 | 테스트 | `pytest` |
 | 검증 (로컬) | `ruff check .` → `mypy src` → `black .` (포맷 적용) |

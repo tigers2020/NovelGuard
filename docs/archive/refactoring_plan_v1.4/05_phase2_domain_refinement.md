@@ -1,4 +1,4 @@
-## 🏗️ Phase 2: 도메인 정제 (P1 - 구조 안정화)
+﻿## 🏗️ Phase 2: 도메인 정제 (P1 - 구조 안정화)
 
 > **목표**: Domain 계층의 모델들을 의미 단위로 재분류하고, 비교/판단 로직을 Service로 이동
 
@@ -25,7 +25,7 @@
   - [ ] 상태만 가지고 있는가? → Entity/ValueObject 후보
   - [ ] 비즈니스 로직을 가지고 있는가? → Service로 이동 필요
   - [ ] 다른 모델을 참조하는가? → Aggregate 후보
-- [ ] 분류 계획 문서 작성 (`docs/refactoring/model_classification.md`)
+- [ ] 분류 계획 문서 작성 (`docs/archive/refactoring/model_classification.md`)
 - [ ] 팀 리뷰 (필요시)
 
 ##### Step 2.1.2: DuplicateGroup → Aggregate 분리 (ID 기반 참조 강제!)

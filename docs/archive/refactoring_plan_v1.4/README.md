@@ -1,10 +1,12 @@
 # NovelGuard 리팩토링 계획서 (분할본 v1.4)
 
+> **역사·계획 아카이브.** 여기 적힌 Phase·체크리스트는 당시 설계이며, 현재 코드와 다를 수 있다. **현행 정본**은 [../../current_architecture.md](../../current_architecture.md) · [../../entry_points.md](../../entry_points.md) · [../../../pyproject.toml](../../../pyproject.toml)다.
+
 이 폴더는 루트의 `리팩토링_계획서.md`를 **실행 순서대로 따라가기 쉽도록** 섹션/Phase 단위로 분리한 문서 모음입니다.
 
 > **프로토콜/페르소나 준수**
-> - 개발 절차/품질 기준: `../../protocols/development_protocol.md`
-> - 작업 태도/안전 원칙: `../../persona/novelguard_developer.md`
+> - 개발 절차/품질 기준: `../../../protocols/development_protocol.md`
+> - 작업 태도/안전 원칙: `../../../persona/novelguard_developer.md`
 
 ---
 

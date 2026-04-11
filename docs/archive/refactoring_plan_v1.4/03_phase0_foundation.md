@@ -1,4 +1,4 @@
-## 🔄 Phase 0: 기반 작업 (선수 작업)
+﻿## 🔄 Phase 0: 기반 작업 (선수 작업)
 
 > **목표**: 리팩토링 시작 전 안전망 구축 및 기준선 확립
 
@@ -95,7 +95,7 @@
     "cpu_time_seconds": 28.4
   }
   ```
-- [ ] 벤치마크 문서화 (`docs/performance/benchmark_baseline.md`)
+- [ ] 벤치마크 문서화 (`docs/archive/performance/benchmark_baseline.md`)
 
 ##### Step 0.5.4: 회귀 테스트 자동화 (실패 후 액션 포함!)
 - [ ] 각 Phase 완료 시 Golden Tests 자동 실행 스크립트 작성

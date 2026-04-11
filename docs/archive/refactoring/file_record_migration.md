@@ -1,4 +1,4 @@
-# FileRecord 마이그레이션 가이드
+﻿# FileRecord 마이그레이션 가이드
 
 ## 개요
 
@@ -137,6 +137,6 @@ Phase 2.3 완료 후:
 
 ## 참고
 
-- 계획서: `docs/refactoring_plan_v1.4/04_phase1_p0_blast_radius.md` (Phase 1.2)
+- 계획서: `docs/archive/refactoring_plan_v1.4/04_phase1_p0_blast_radius.md` (Phase 1.2)
 - 테스트: `tests/domain/adapters/test_file_adapter.py`
 - 어댑터: `src/domain/adapters/file_adapter.py`
