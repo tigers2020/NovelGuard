@@ -1,4 +1,5 @@
 """파일 데이터 저장소 포트."""
+
 from pathlib import Path
 from typing import Optional, Protocol, Union
 

@@ -1,13 +1,14 @@
 """OrganizeByChosungUseCase 및 초성 폴더명 유틸 테스트."""
+
 from pathlib import Path
 
 from application.use_cases.organize_by_chosung import (
     FOLDER_NAMES,
     OUTPUT_SUBFOLDER,
+    OrganizeByChosungUseCase,
     effective_stem_for_sort,
     get_chosung_folder_name,
     normalize_target_filename,
-    OrganizeByChosungUseCase,
 )
 
 
@@ -79,7 +80,10 @@ class TestNormalizeTargetFilename:
 
     def test_strips_numbered_suffix_with_trailing_dot(self):
         """확장자 앞에 점이 하나 더 있는 경우(..txt)도 ' (1)' 제거."""
-        assert normalize_target_filename("가수 5회차 천재 매니저 1-148 본편 완결 (1)..txt") == "가수 5회차 천재 매니저 1-148 본편 완결.txt"
+        assert (
+            normalize_target_filename("가수 5회차 천재 매니저 1-148 본편 완결 (1)..txt")
+            == "가수 5회차 천재 매니저 1-148 본편 완결.txt"
+        )
 
     def test_plain_name_unchanged(self):
         assert normalize_target_filename("가나다.txt") == "가나다.txt"

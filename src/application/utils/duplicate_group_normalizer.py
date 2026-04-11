@@ -4,6 +4,7 @@
 같은 파일이 여러 그룹에 속하는 경우, 연결된 컴포넌트로 병합하여
 1 file_id → 1 group_id를 보장합니다.
 """
+
 from collections import defaultdict
 from typing import Any, Optional
 
@@ -13,45 +14,45 @@ from application.ports.file_data_store import IFileDataStore
 
 class _UnionFind:
     """Union-Find (Disjoint Set) 자료구조.
-    
+
     경로 압축과 union-by-rank를 사용하여 효율적인 집합 연산을 제공합니다.
     """
-    
+
     def __init__(self, elements: set[int]) -> None:
         """Union-Find 초기화.
-        
+
         Args:
             elements: 초기 요소 집합.
         """
         self._parent: dict[int, int] = {x: x for x in elements}
         self._rank: dict[int, int] = dict.fromkeys(elements, 0)
-    
+
     def find(self, x: int) -> int:
         """요소 x의 루트를 찾습니다 (경로 압축).
-        
+
         Args:
             x: 찾을 요소.
-        
+
         Returns:
             요소 x의 루트.
         """
         if self._parent[x] != x:
             self._parent[x] = self.find(self._parent[x])  # 경로 압축
         return self._parent[x]
-    
+
     def union(self, x: int, y: int) -> None:
         """두 요소를 같은 집합으로 병합 (union-by-rank).
-        
+
         Args:
             x: 첫 번째 요소.
             y: 두 번째 요소.
         """
         root_x = self.find(x)
         root_y = self.find(y)
-        
+
         if root_x == root_y:
             return  # 이미 같은 집합
-        
+
         # union-by-rank: rank가 낮은 트리를 높은 트리에 연결
         if self._rank[root_x] < self._rank[root_y]:
             self._parent[root_x] = root_y
@@ -60,10 +61,10 @@ class _UnionFind:
         else:
             self._parent[root_y] = root_x
             self._rank[root_x] += 1
-    
+
     def get_components(self) -> dict[int, list[int]]:
         """모든 연결 요소를 반환.
-        
+
         Returns:
             {root_id: [component_file_ids]} 딕셔너리.
         """
@@ -110,21 +111,20 @@ def _collect_component_original_groups(
 
 
 def normalize_duplicate_groups(
-    groups: list[DuplicateGroupResult],
-    file_data_store: Optional[IFileDataStore] = None
+    groups: list[DuplicateGroupResult], file_data_store: Optional[IFileDataStore] = None
 ) -> list[DuplicateGroupResult]:
     """중복 그룹들을 정규화하여 겹침을 제거합니다.
-    
+
     Union-Find 알고리즘을 사용하여 같은 파일이 여러 그룹에 속하는 경우
     연결된 컴포넌트로 병합합니다. 결과적으로 1 file_id → 1 group_id를 보장합니다.
-    
+
     Args:
         groups: 정규화할 중복 그룹 리스트 (겹침 가능).
         file_data_store: 파일 데이터 저장소 (keeper 선택을 위해 필요).
-    
+
     Returns:
         정규화된 중복 그룹 리스트 (겹침 없음).
-    
+
     Raises:
         ValueError: file_data_store가 None이고 keeper 선택이 필요한 경우.
     """
@@ -172,36 +172,36 @@ def _merge_group_components(
     file_data_store: Optional[IFileDataStore],
 ) -> DuplicateGroupResult:
     """컴포넌트를 하나의 그룹으로 병합합니다.
-    
+
     Args:
         component_file_ids: 컴포넌트에 포함된 file_id 리스트.
         original_groups: 이 컴포넌트와 겹치는 원본 그룹들.
         new_group_id: 새로운 그룹 ID.
         file_data_store: 파일 데이터 저장소.
-    
+
     Returns:
         병합된 DuplicateGroupResult.
     """
     # 1. duplicate_types 수집
     duplicate_types = list({g.duplicate_type for g in original_groups})
-    
+
     # 2. confidence의 max 값
     max_confidence = max((g.confidence for g in original_groups), default=0.0)
-    
+
     # 3. evidence 병합: 원본 evidence들을 리스트로 보존
     merged_evidence: dict[str, Any] = {
         "duplicate_types": duplicate_types,
         "merged_evidence": [g.evidence.copy() if g.evidence else {} for g in original_groups],
-        "original_groups_count": len(original_groups)
+        "original_groups_count": len(original_groups),
     }
-    
+
     # 4. Keeper 선택
     keeper_id = _select_keeper(
         component_file_ids,
         original_groups,
         file_data_store,
     )
-    
+
     # 5. DuplicateGroupResult 생성
     merged_result = DuplicateGroupResult(
         group_id=new_group_id,
@@ -209,9 +209,9 @@ def _merge_group_components(
         file_ids=sorted(component_file_ids),  # 정렬하여 결정성 보장
         recommended_keeper_id=keeper_id,
         evidence=merged_evidence,
-        confidence=max_confidence
+        confidence=max_confidence,
     )
-    
+
     return merged_result
 
 
@@ -253,7 +253,9 @@ def _narrow_by_mtime(
     file_data_by_id: dict[int, Any],
 ) -> tuple[list[int], Optional[int]]:
     """가장 최신 mtime 기준으로 후보를 좁힙니다."""
-    mtime_map = {fid: file_data_by_id[fid].mtime for fid in component_file_ids if fid in file_data_by_id}
+    mtime_map = {
+        fid: file_data_by_id[fid].mtime for fid in component_file_ids if fid in file_data_by_id
+    }
     if not mtime_map:
         return component_file_ids, None
     max_mtime = max(mtime_map.values())
@@ -268,7 +270,9 @@ def _pick_by_path(
     file_data_by_id: dict[int, Any],
 ) -> Optional[int]:
     """path 사전순으로 첫 번째 file_id를 반환합니다."""
-    path_map = {fid: str(file_data_by_id[fid].path) for fid in component_file_ids if fid in file_data_by_id}
+    path_map = {
+        fid: str(file_data_by_id[fid].path) for fid in component_file_ids if fid in file_data_by_id
+    }
     if not path_map:
         return None
     sorted_paths = sorted(path_map.items(), key=lambda x: x[1])
@@ -281,18 +285,18 @@ def _select_keeper(
     file_data_store: Optional[IFileDataStore],
 ) -> Optional[int]:
     """컴포넌트에서 keeper (대표 파일)를 선택합니다.
-    
+
     Tie-break 규칙:
     1. 원본 그룹들에서 is_canonical로 가장 많이 선택된 파일
     2. 가장 큰 size
     3. 가장 최신 mtime
     4. path 사전순 (완전 결정성 보장)
-    
+
     Args:
         component_file_ids: 컴포넌트에 포함된 file_id 리스트.
         original_groups: 원본 그룹들 (컴포넌트와 겹치는 그룹들).
         file_data_store: 파일 데이터 저장소.
-    
+
     Returns:
         선택된 keeper file_id. 선택 불가능하면 None.
     """
@@ -376,15 +380,14 @@ def _errors_duplicate_paths_in_group(
 
 
 def validate_normalized_groups(
-    groups: list[DuplicateGroupResult],
-    file_data_store: Optional[IFileDataStore] = None
+    groups: list[DuplicateGroupResult], file_data_store: Optional[IFileDataStore] = None
 ) -> list[str]:
     """정규화된 그룹들을 검증합니다.
-    
+
     Args:
         groups: 검증할 그룹 리스트.
         file_data_store: 파일 데이터 저장소 (path 유일성 검증용).
-    
+
     Returns:
         검증 오류 메시지 리스트. 오류가 없으면 빈 리스트.
     """

@@ -4,6 +4,7 @@
 ㄱ-ㄷ, ㄹ-ㅂ, ㅅ-ㅈ, ㅊ-ㅎ, A-Z, 0-9, 기타 폴더로 분류해 이동/복사합니다.
 파일명 앞의 [...] (...) 는 제거한 뒤의 제목으로 분류합니다.
 """
+
 import re
 import shutil
 from dataclasses import dataclass, field
@@ -23,10 +24,7 @@ _CHOSUNG_TO_BASIC_INDEX = (0, 0, 1, 2, 2, 3, 4, 5, 5, 6, 6, 7, 8, 8, 9, 10, 11, 
 # 14개 기본 자음 → 구간 인덱스 (ㄱㄴㄷ→0, ㄹㅁㅂ→1, ㅅㅇㅈ→2, ㅊㅋㅌㅍㅎ→3)
 _BASIC_INDEX_TO_GROUP = (0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3)
 # 구간 폴더명: ㄱ-ㄷ, ㄹ-ㅂ, ㅅ-ㅈ, ㅊ-ㅎ + A-Z, 0-9, 기타 = 7개
-FOLDER_NAMES = (
-    ("ㄱ-ㄷ", "ㄹ-ㅂ", "ㅅ-ㅈ", "ㅊ-ㅎ")
-    + ("A-Z", "0-9", "기타")
-)
+FOLDER_NAMES = ("ㄱ-ㄷ", "ㄹ-ㅂ", "ㅅ-ㅈ", "ㅊ-ㅎ") + ("A-Z", "0-9", "기타")
 
 
 # 앞쪽 [...] / (...) 블록을 한 번에 제거하는 정규식 (반복 매칭)
@@ -170,14 +168,18 @@ class OrganizeByChosungUseCase:
             if target_path.resolve() == path.resolve():
                 result.total_processed += 1
                 result.moved_or_copied += 1
-                result.counts_by_folder[folder_name] = result.counts_by_folder.get(folder_name, 0) + 1
+                result.counts_by_folder[folder_name] = (
+                    result.counts_by_folder.get(folder_name, 0) + 1
+                )
                 continue
             try:
                 if move:
                     shutil.move(str(path), str(target_path))
                 else:
                     shutil.copy2(str(path), str(target_path))
-                result.counts_by_folder[folder_name] = result.counts_by_folder.get(folder_name, 0) + 1
+                result.counts_by_folder[folder_name] = (
+                    result.counts_by_folder.get(folder_name, 0) + 1
+                )
                 result.moved_or_copied += 1
             except OSError:
                 result.skipped += 1
@@ -210,8 +212,7 @@ class OrganizeByChosungUseCase:
     def _remove_empty_dirs(self, root_path: Path) -> None:
         """루트 아래 빈 폴더 삭제. 출력 폴더(정리) 및 그 직하위 초성 폴더는 유지, 나머지 빈 폴더 제거."""
         dirs_to_check = [
-            p for p in root_path.rglob("*")
-            if self._is_dir_candidate_for_removal(root_path, p)
+            p for p in root_path.rglob("*") if self._is_dir_candidate_for_removal(root_path, p)
         ]
         dirs_to_check.sort(key=lambda p: len(p.relative_to(root_path).parts), reverse=True)
         for dir_path in dirs_to_check:

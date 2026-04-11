@@ -1,4 +1,5 @@
 """Near(유사) 중복 탐지 단계."""
+
 from typing import Optional
 
 from application.dto.duplicate_group_result import DuplicateGroupResult
@@ -24,10 +25,7 @@ def _build_parse_by_store(context: PipelineContext) -> dict[int, FilenameParseRe
     return result
 
 
-def _store_ids_for_group(
-    blocking_group: BlockingGroup,
-    context: PipelineContext
-) -> list[int]:
+def _store_ids_for_group(blocking_group: BlockingGroup, context: PipelineContext) -> list[int]:
     """Blocking 그룹의 file_ids 중 store에 존재하는 ID만 반환."""
     store_ids = []
     for orig_id in blocking_group.file_ids:
@@ -59,7 +57,7 @@ class NearDuplicateStage(PipelineStage):
     def __init__(
         self,
         near_detector: Optional[NearDuplicateDetector] = None,
-        log_sink: Optional[ILogSink] = None
+        log_sink: Optional[ILogSink] = None,
     ) -> None:
         """Near 중복 단계 초기화.
 
@@ -79,7 +77,7 @@ class NearDuplicateStage(PipelineStage):
         blocking_group: BlockingGroup,
         context: PipelineContext,
         parse_by_store: dict[int, FilenameParseResult],
-        next_group_id: int
+        next_group_id: int,
     ) -> tuple[list[DuplicateGroupResult], int]:
         """단일 blocking 그룹에 대해 near 탐지 후 결과 목록과 다음 group_id 반환."""
         assert self._near_detector is not None  # 호출 전 execute에서 이미 검사됨
@@ -91,12 +89,10 @@ class NearDuplicateStage(PipelineStage):
             series_title_norm=blocking_group.series_title_norm,
             extension=blocking_group.extension,
             file_ids=store_ids,
-            range_start=blocking_group.range_start
+            range_start=blocking_group.range_start,
         )
         relations = self._near_detector.detect_near(
-            synthetic_group,
-            context.file_entries_map,
-            parse_by_store
+            synthetic_group, context.file_entries_map, parse_by_store
         )
         results = []
         for rel in relations:
@@ -108,7 +104,7 @@ class NearDuplicateStage(PipelineStage):
                     file_ids=list(rel.file_ids),
                     recommended_keeper_id=keeper_id,
                     evidence=dict(rel.evidence),
-                    confidence=rel.confidence
+                    confidence=rel.confidence,
                 )
             )
             next_group_id += 1
@@ -116,11 +112,7 @@ class NearDuplicateStage(PipelineStage):
 
     def execute(self, context: PipelineContext) -> PipelineContext:
         """Near 중복 탐지 실행."""
-        debug_step(
-            self._log_sink,
-            "duplicate_detection_stage",
-            {"stage": self.name}
-        )
+        debug_step(self._log_sink, "duplicate_detection_stage", {"stage": self.name})
 
         if not context.request.enable_near or self._near_detector is None:
             return context
@@ -130,10 +122,7 @@ class NearDuplicateStage(PipelineStage):
 
         parse_by_store = _build_parse_by_store(context)
         near_results: list[DuplicateGroupResult] = []
-        next_group_id = max(
-            (r.group_id for r in context.results),
-            default=0
-        ) + 1
+        next_group_id = max((r.group_id for r in context.results), default=0) + 1
 
         for blocking_group in context.blocking_groups:
             group_results, next_group_id = self._process_blocking_group(
@@ -146,8 +135,8 @@ class NearDuplicateStage(PipelineStage):
             "duplicate_detection_near_complete",
             {
                 "near_groups_count": len(near_results),
-                "total_near_files": sum(len(r.file_ids) for r in near_results)
-            }
+                "total_near_files": sum(len(r.file_ids) for r in near_results),
+            },
         )
 
         context.results = list(context.results) + near_results

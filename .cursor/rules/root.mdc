@@ -1,0 +1,54 @@
+---
+description: "NovelGuard root rule: 자기 검증, 도메인 용어, 공통 DO/DON'T"
+alwaysApply: true
+---
+
+# NovelGuard Root
+
+이 파일은 NovelGuard의 사전 지시서다. 더 구체적인 glob rule이 있으면 함께 적용하되, 충돌 시 이 파일과 [AGENTS.md](mdc:AGENTS.md)의 우선순위를 따른다.
+
+## 최상위 운영 규칙
+
+1. `[시몬]`이 요청을 요약하고 책임 소제를 나눈다.
+2. 담당 캐릭터가 한두 문장으로 접근 방식을 브리핑한다.
+3. 그 뒤에만 코드 작성·수정을 진행한다.
+4. 의미 있는 변경은 구현 전 리서치 문서와 플랜 MD를 `documents/`에 남긴다.
+5. 사람이 플랜을 승인하기 전에는 구현으로 넘어가지 않는다.
+6. 구현 후 `[테스]` 테스트, `[렉스]` 검증 순서로 마무리한다.
+
+## 자기 검증 4단계
+
+1. 범위 확인: 요청이 프로젝트 워크플로우의 어느 단계인지 식별한다.
+2. 경계 확인: domain/application/infrastructure/gui 중 어느 레이어를 바꾸는지 확인한다.
+3. 영향 확인: 테스트, DTO/port, 테마, DB migration, 문서 승인 게이트 영향 여부를 확인한다.
+4. 검증 확인: `pytest` → `ruff check .` → `mypy src` → `black .` 실행 가능 여부를 보고한다.
+
+## 도메인 용어
+
+> 프로젝트에 맞게 아래를 수정하세요.
+
+- FileEntry: 스캔으로 수집된 개별 파일의 불변 정보(경로, 크기, 수정일, 확장자).
+- FilenameParseResult: 파일명에서 추출한 작품명·범위·태그 파싱 결과.
+- DuplicateGroupResult: 중복 그룹 판정 결과(file_ids, keeper, confidence, evidence).
+
+## DO
+
+- Python 3.12, src layout, line length 100을 전제로 한다.
+- 새 규칙이나 버그 수정에는 가능한 한 테스트를 함께 추가한다.
+- API 키와 비밀값은 `.env` 또는 설정 경계로만 다루고 코드에 하드코딩하지 않는다.
+- 검증 미실행 시 실행 못 한 명령, 이유, 남은 위험을 함께 보고한다.
+- `black .`이 파일을 바꾸면 검증 결과와 함께 포맷 변경 발생 사실을 보고한다.
+
+## DON'T
+
+- domain에 I/O, UI, DB, 외부 API 호출을 넣지 않는다.
+- application이 구체 infrastructure 구현을 import하지 않게 한다.
+- infrastructure에 비즈니스 정책을 넣지 않는다.
+- 검증하지 못한 명령을 통과했다고 보고하지 않는다.
+- 플랜 미승인 상태에서 구현으로 넘어가지 않는다.
+
+## 참조
+
+- [AGENTS.md](mdc:AGENTS.md)
+- [Persona index](mdc:persona/README.md)
+- [Cursor memo](mdc:documents/CURSOR_MEMO.md)

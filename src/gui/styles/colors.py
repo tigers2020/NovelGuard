@@ -1,4 +1,5 @@
 """색상 상수 정의."""
+
 from typing import Final
 
 # 배경색

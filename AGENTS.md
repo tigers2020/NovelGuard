@@ -106,8 +106,15 @@ Cursor AI용 NovelGuard 프로젝트 가이드. [AGENTS.md](https://agents.md/) 
 | 설치 (개발·검증) | `pip install -e ".[dev]"` (`pytest`, `ruff`, `mypy`, `black`, `psutil`) |
 | 실행 | `python src/main.py` |
 | 테스트 | `pytest` |
-| 검증 (로컬) | `ruff check .` → `mypy src` → `black .` (포맷 적용) |
-| 검증 (CI) | 동일 순서에서 **`black --check .`** 로 포맷만 검사 (파일 변경 없음) |
+| 검증 (한 번에, 권장) | `python scripts/verify_phase_completion.py` (순서: `pytest` → `ruff check .` → `mypy src` → `black --check .`, fail-fast) |
+| 검증 (단계별·로컬) | `ruff check .` → `mypy src` → `black .` (포맷 적용; 테스트는 위 스크립트 또는 `pytest`) |
+| 검증 (CI) | `.github/workflows/ci.yml` — `black --check .` 로 포맷만 검사 (파일 변경 없음) |
+
+### PR·머지 전 체크리스트
+
+1. `pip install -e ".[dev]"` 기준으로 **`python scripts/verify_phase_completion.py`** 가 끝까지 통과하는지 확인한다.
+2. 또는 동일 순서로 수동 실행: `pytest` → `ruff check .` → `mypy src` → `black --check .`
+3. 완료 보고에는 실행한 명령(스크립트 여부 포함)과 실패 시 로그 요약을 남긴다.
 
 ---
 

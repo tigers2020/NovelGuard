@@ -1,6 +1,6 @@
 # 플랜: 2026-04-11 저장소 감사 후속 해결 계획
 
-> 상태: 초안
+> 상태: Phase 0–5 이행 완료 (2026-04-11)
 
 ## 배경
 
@@ -300,6 +300,8 @@
 
 ## Phase 5. 마감 및 지속 운영 기준선
 
+> **완료 보고**: [documents/reports/Phase5_operational_baseline_closure.md](reports/Phase5_operational_baseline_closure.md)
+
 ### 목표
 
 - 정리된 기준선을 팀 운영 규칙과 CI 흐름에 고정한다.
@@ -353,10 +355,10 @@
 
 ## 검증 계획
 
-- [ ] `pytest`
-- [ ] `ruff check .`
-- [ ] `mypy src`
-- [ ] `black --check .`
+- [x] `pytest`
+- [x] `ruff check .`
+- [x] `mypy src`
+- [x] `black --check .`
 
 ## 승인
 

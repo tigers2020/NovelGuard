@@ -1,4 +1,5 @@
 """파일 데이터 DTO."""
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path

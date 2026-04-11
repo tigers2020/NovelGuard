@@ -1,0 +1,40 @@
+---
+description: "NovelGuard Cursor usage: planning, references, memo, multi-chat workflow"
+alwaysApply: true
+---
+
+# Cursor Usage
+
+## 계획 먼저
+
+- 복잡한 작업은 구현 전 `[시몬]` 브리핑에서 범위와 담당자를 나눈다.
+- 사용자가 "플랜만" 요청하면 코드를 수정하지 않고 계획만 제시한다.
+- 스펙이 필요한 큰 변경은 `documents/`에 리서치/플랜 문서를 먼저 남긴다.
+- 구현 전 최소 순서는 리서치 문서 → 플랜 MD → 사람 승인 → 구현이다.
+
+## @참조
+
+- 캐릭터 역할은 `@persona/README.md`와 각 카드에서 확인한다.
+- UI 작업은 `@persona/gina-gui.md`를 함께 본다.
+- 아키텍처 판단은 `@.cursor/rules/architecture.mdc`를 우선한다.
+
+## 메모
+
+- 반복 실수, 프로젝트 결정, 다음 할 일은 사용자가 요청할 때 `documents/CURSOR_MEMO.md`에 반영한다.
+- 메모를 업데이트할 때는 날짜와 짧은 이유를 남긴다.
+
+## 다중 채팅
+
+- 영역별로 대화가 분리된 경우에도 레이어 경계를 유지한다.
+- 다른 채팅의 결론을 적용할 때는 파일 기준으로 재확인한다.
+
+## 완료 보고
+
+- 변경 파일, 검증 명령, 미실행 사유를 짧게 보고한다.
+- 검증 실패가 있으면 실패 명령, 이유, 다음 담당 캐릭터를 명확히 남긴다.
+- 검증을 못 돌렸으면 실행 못 한 명령, 이유, 남은 위험을 남긴다.
+- `black .`이 파일을 바꾸면 검증 통과 여부와 별도로 포맷 변경 발생을 적는다.
+
+## 로컬 검증
+
+- PR·머지 전에는 `python scripts/verify_phase_completion.py`로 pytest → ruff → mypy → black `--check`를 한 번에 돌리는 것을 권장한다 (`AGENTS.md` 표와 동일).

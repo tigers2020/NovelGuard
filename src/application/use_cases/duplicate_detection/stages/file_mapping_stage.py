@@ -49,9 +49,7 @@ class FileMappingStage(PipelineStage):
             )
         )
 
-    def _collect_file_mappings(
-        self, context: PipelineContext
-    ) -> tuple[
+    def _collect_file_mappings(self, context: PipelineContext) -> tuple[
         int,
         int,
         list[tuple[FileEntry, FilenameParseResult]],
@@ -156,9 +154,9 @@ class FileMappingStage(PipelineStage):
                 "fetched_files_count": fetched_files_count,
                 "mapped_files_count": mapped_count,
                 "skipped_files_count": skipped_count,
-                "mapped_ratio": mapped_count / fetched_files_count
-                if fetched_files_count > 0
-                else 0.0,
+                "mapped_ratio": (
+                    mapped_count / fetched_files_count if fetched_files_count > 0 else 0.0
+                ),
                 "file_parse_pairs_count": len(file_parse_pairs),
             },
         )

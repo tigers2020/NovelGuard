@@ -1,0 +1,27 @@
+---
+description: "NovelGuard MCP usage guidance for docs, git history, and browser validation"
+alwaysApply: true
+---
+
+# NovelGuard MCP
+
+AGENTS.md 기준으로 관련 작업에서는 MCP 사용 가능성을 먼저 판단한다. 사용 가능한 MCP가 없으면 로컬 파일과 일반 검증으로 대체하고 그 사실을 남긴다.
+
+## context7
+
+- 신규 라이브러리, 프레임워크 API 사용법처럼 최신 문서가 필요한 경우 우선 검토한다.
+- 외부 API 예제를 그대로 복사하지 말고 프로젝트 레이어 경계에 맞게 application port와 adapter로 분리한다.
+
+## GitLens
+
+- 변경 이력, 회귀 원인, PR 리뷰 준비, 브랜치 분석이 필요하면 사용을 고려한다.
+- 히스토리 기반 추론은 현재 파일 내용과 함께 확인한다.
+
+## cursor-ide-browser
+
+- UI 시각 확인, 웹 문서 검증, 브라우저 기반 상호작용 확인이 필요할 때 사용한다.
+
+## 스키마 확인
+
+- `call_mcp_tool`, `fetch_mcp_resource`를 직접 호출해야 하는 환경에서는 `mcps/<server>/tools/` 스키마를 먼저 확인한다.
+- 도구가 없거나 실패하면 실패 이유를 남기고 로컬 대안을 사용한다.

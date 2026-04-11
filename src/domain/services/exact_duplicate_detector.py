@@ -1,6 +1,6 @@
 """Exact 중복 탐지 서비스."""
 
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from domain.entities.file_entry import FileEntry
 from domain.value_objects.blocking_group import BlockingGroup

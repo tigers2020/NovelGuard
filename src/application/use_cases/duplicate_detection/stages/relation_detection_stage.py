@@ -1,4 +1,5 @@
 """관계 탐지 단계."""
+
 from collections import defaultdict
 from typing import Optional
 
@@ -333,9 +334,7 @@ class RelationDetectionStage(PipelineStage):
     """
 
     def __init__(
-        self,
-        containment_detector: ContainmentDetector,
-        log_sink: Optional[ILogSink] = None
+        self, containment_detector: ContainmentDetector, log_sink: Optional[ILogSink] = None
     ) -> None:
         """관계 탐지 단계 초기화.
 
@@ -359,11 +358,7 @@ class RelationDetectionStage(PipelineStage):
         Returns:
             업데이트된 컨텍스트.
         """
-        debug_step(
-            self._log_sink,
-            "duplicate_detection_stage",
-            {"stage": self.name}
-        )
+        debug_step(self._log_sink, "duplicate_detection_stage", {"stage": self.name})
 
         if len(context.blocking_groups) == 0:
             context.results = []

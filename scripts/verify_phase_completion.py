@@ -1,11 +1,14 @@
-"""현행 저장소 검증 스크립트.
+"""Same verification pipeline as local dev / CI (fail-fast).
 
-기본 `pytest` 기준선(`pyproject.toml`의 testpaths)만 실행한다.
+Order: ``pytest`` → ``ruff check .`` → ``mypy src`` → ``black --check .``
 
-과거에는 Golden Tests와 `tests/_archive/performance/` 벤치마크까지 묶었으나,
-해당 하네스는 삭제된 `infra.*` / `usecases.*` 트리에 의존해 현재는 신뢰할 수 없다.
-아카이브 하네스는 [tests/_archive/README.md](../tests/_archive/README.md)를 참고한다.
+Excludes and tool config: ``pyproject.toml``. Legacy trees under
+``tests/common``, ``tests/domain``, ``tests/infra``, and ``tests/_archive/``
+are excluded from default pytest/ruff; ``tests/_archive/`` is also excluded
+from black (see ``pyproject.toml``).
 """
+
+from __future__ import annotations
 
 import subprocess
 import sys
@@ -13,49 +16,50 @@ from datetime import datetime
 from pathlib import Path
 
 
-def run_command(cmd: list[str], description: str, *, cwd: str | None = None) -> bool:
-    """명령 실행."""
+def run_command(cmd: list[str], description: str, *, cwd: str) -> bool:
+    """Run command; stream stdout/stderr. Return True if exit code is 0."""
     print(f"\n{'=' * 60}")
     print(description)
     print(f"{'=' * 60}\n")
-
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
-
-    print(result.stdout)
-    if result.stderr:
-        print(result.stderr, file=sys.stderr)
-
+    print(" ".join(cmd), "\n")
+    result = subprocess.run(cmd, cwd=cwd)
     return result.returncode == 0
 
 
 def main() -> None:
-    """기본 pytest 기준선만 검증."""
-    print("\n현행 검증 시작 (pytest 기본 수집)")
-    print(f"시각: {datetime.now().isoformat()}")
-    print(f"{'=' * 60}\n")
-
     project_root = Path(__file__).resolve().parent.parent
+    root = str(project_root)
 
-    # 회귀용 스모크 (문서에 기록된 Phase 0 subset; 주석으로 유지)
-    # python -m pytest tests/app/settings/test_constants.py \
-    #   tests/application/use_cases/duplicate_detection/test_pipeline_basic.py \
-    #   tests/gui/workers/test_duplicate_detection_worker.py \
-    #   tests/infrastructure/db/test_sqlite_index_repository.py \
-    #   tests/integration/test_scan_with_index_repository.py -q
+    steps: list[tuple[list[str], str]] = [
+        ([sys.executable, "-m", "pytest"], "1/4 python -m pytest"),
+        ([sys.executable, "-m", "ruff", "check", "."], "2/4 python -m ruff check ."),
+        ([sys.executable, "-m", "mypy", "src"], "3/4 python -m mypy src"),
+        ([sys.executable, "-m", "black", "--check", "."], "4/4 python -m black --check ."),
+    ]
 
-    passed = run_command(
-        [sys.executable, "-m", "pytest"],
-        "python -m pytest (프로젝트 루트, 기본 testpaths)",
-        cwd=str(project_root),
-    )
+    print("\nNovelGuard verification pipeline (fail-fast)")
+    print(f"Time: {datetime.now().isoformat()}")
+    print(f"Root: {project_root}")
+
+    results: list[tuple[str, bool]] = []
+    for cmd, label in steps:
+        ok = run_command(cmd, label, cwd=root)
+        results.append((label, ok))
+        if not ok:
+            break
 
     print(f"\n{'=' * 60}")
-    print("최종 결과")
+    print("Step summary")
     print(f"{'=' * 60}")
-    print(f"pytest: {'통과' if passed else '실패'}")
+    for label, ok in results:
+        print(f"  {label}: {'PASS' if ok else 'FAIL'}")
+    if len(results) < len(steps):
+        for label, _ in steps[len(results) :]:
+            print(f"  {label}: (skipped)")
     print(f"{'=' * 60}\n")
 
-    sys.exit(0 if passed else 1)
+    all_ok = all(ok for _, ok in results) and len(results) == len(steps)
+    sys.exit(0 if all_ok else 1)
 
 
 if __name__ == "__main__":

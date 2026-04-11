@@ -51,6 +51,22 @@ addopts = "-v --tb=short"
 line-length = 100
 target-version = "py312"
 src = ["src"]
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".benchmarks",
+    "tests/_archive",
+    # Legacy trees: pytest collect_ignore와 동일 (ruff만 별도 수집됨)
+    "tests/common",
+    "tests/domain",
+    "tests/infra",
+    "tests/app/test_bootstrap.py",
+    "tests/app/test_workflows.py",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
@@ -74,3 +90,4 @@ ignore_missing_imports = true
 [tool.black]
 line-length = 100
 target-version = ["py312"]
+extend-exclude = "/tests/_archive/"

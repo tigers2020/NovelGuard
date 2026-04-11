@@ -1,4 +1,5 @@
 """파일 시스템 스캐너."""
+
 import os
 from collections import deque
 from datetime import datetime
@@ -7,7 +8,6 @@ from typing import Callable, Optional
 
 from application.dto.folder_scan_outcome import FolderScanOutcome
 from application.dto.scan_request import ScanRequest
-from application.ports.file_scanner import FileScanner
 from application.ports.log_sink import ILogSink
 from application.utils.debug_logger import debug_step
 from domain.entities.file_entry import FileEntry

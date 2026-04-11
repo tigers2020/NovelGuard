@@ -44,12 +44,18 @@
 
 ## 검증 명령 (로컬)
 
-[`AGENTS.md`](../AGENTS.md)와 동일:
+[`AGENTS.md`](../AGENTS.md)와 동일. 한 번에 돌리려면 프로젝트 루트에서:
+
+- `python scripts/verify_phase_completion.py` — `pytest` → `ruff check .` → `mypy src` → `black --check .` (fail-fast)
+
+단계별로 실행할 때:
 
 - `pytest`
 - `ruff check .`
 - `mypy src`
-- `black --check .` (CI에서는 포맷만 검사; 로컬에서 적용 시 `black .`)
+- `black --check .` (CI와 동일; 로컬에서 포맷 적용만 할 때는 `black .`)
+
+Ruff/Black 제외: `tests/_archive/` 및 레거시 `tests/common`, `tests/domain`, `tests/infra` 일부 등은 [`pyproject.toml`](../pyproject.toml)의 `tool.ruff.exclude` / `tool.black.extend-exclude`를 본다.
 
 ## 관련 링크
 

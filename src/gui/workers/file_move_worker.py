@@ -9,7 +9,7 @@ from PySide6.QtCore import QObject, QThread, Signal
 
 from application.dto.log_entry import LogEntry
 from application.ports.log_sink import ILogSink
-from application.use_cases.move_duplicate_files import MoveDuplicateFilesUseCase, MoveOperation
+from application.use_cases.move_duplicate_files import MoveDuplicateFilesUseCase
 from application.utils.debug_logger import debug_step
 
 

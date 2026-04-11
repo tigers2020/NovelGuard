@@ -43,6 +43,7 @@ NovelGuard/
 │   ├── gui/
 │   └── app/            # composition root: app/main.py
 ├── tests/              # pytest (기본 수집 경로는 pyproject.toml 참고)
+├── scripts/            # verify_phase_completion.py — 로컬/CI와 동일 검증 파이프라인
 ├── pyproject.toml      # 프로젝트 메타·Python 버전·도구 설정 정본
 ├── requirements.txt    # 런타임 의존성 (pyproject와 동일 하한)
 └── README.md
@@ -74,6 +75,16 @@ pip install -e ".[dev]"
 ```
 
 이전에 `requirements.txt` 한 줄로 테스트까지 설치하던 경우, 위처럼 **`pip install -e ".[dev]"`를 추가**하면 된다.
+
+### 검증 한 번에 실행 (개발·PR)
+
+프로젝트 루트에서 (pytest → ruff → mypy → black `--check`, 실패 시 중단):
+
+```bash
+python scripts/verify_phase_completion.py
+```
+
+자세한 순서와 머지 전 체크리스트는 [AGENTS.md](AGENTS.md)를 본다. CI는 `.github/workflows/ci.yml`과 동일 단계다.
 
 ## 사용 방법
 
@@ -130,4 +141,6 @@ python src/main.py
 
 ## 기여
 
-(기여 가이드를 여기에 추가하세요)
+1. `pip install -e ".[dev]"`
+2. `python scripts/verify_phase_completion.py` 통과
+3. 커밋 메시지·완료 보고는 [AGENTS.md](AGENTS.md)의 원칙을 따른다.
