@@ -1,43 +1,51 @@
-# 테스트 레이아웃과 기본 스위트 (Phase 0 기준선)
+# ?�스???�이?�웃�?기본 ?�위??(Phase 0 기�???
 
-## 기본 `pytest`에 포함되는 경로
+## 기본 `pytest`???�함?�는 경로
 
-`pyproject.toml`의 `testpaths`가 아래만 수집한다. 이 묶음이 CI·로컬의 **현행 기준선**이다.
+`pyproject.toml`??`testpaths`가 ?�래�??�집?�다. ??묶음??CI·로컬??**?�행 기�???*?�다.
 
-**Git 추적**: 위 경로에 해당하는 테스트 파일은 **저장소에 추적된 상태**여야 한다. `git clone` 직후에만 `python -m pytest`를 돌렸을 때 건수가 문서(예: 약 144 passed)와 크게 어긋나면, 로컬 전용 **미추적** 복사본만 있는지 확인한다. 특히 `tests/unit/`은 `testpaths`에 포함되므로 비어 있으면 안 된다.
+**Git 추적**: ??경로???�당?�는 ?�스???�일?� **?�?�소??추적???�태**?�야 ?�다. `git clone` 직후?�만 `python -m pytest`�??�렸????건수가 문서(?? ??144 passed)?� ?�게 ?�긋?�면, 로컬 ?�용 **미추??* 복사본만 ?�는지 ?�인?�다. ?�히 `tests/unit/`?� `testpaths`???�함?��?�?비어 ?�으�????�다.
 
 - `tests/app/settings/`
 - `tests/application/`
 - `tests/gui/`
 - `tests/infrastructure/`
-- `tests/integration/` — 골든 러너는 `_archive`로 이동됨; 남은 파일만 수집
-- `tests/unit/` — 도메인·애플리케이션 단위 테스트(현행 `src` 구조 정렬)
+- `tests/integration/` ??골든 ?�너??`_archive`�??�동?? ?��? ?�일�??�집
+- `tests/unit/` ???�메?�·애?�리케?�션 ?�위 ?�스???�행 `src` 구조 ?�렬)
 
-## 기본 수집에서 제외되는 레거시 (체크리스트)
+## 기본 ?�집?�서 ?�외?�는 ?�거??(체크리스??
 
-2026-04-11 감사(P0-1) 기준. 포팅 우선순위는 이후 페이즈에서 결정한다.
+2026-04-11 감사(P0-1) 기�?. ?�팅 ?�선?�위???�후 ?�이즈에??결정?�다.
 
 | 구분 | 경로 | 비고 |
 |------|------|------|
-| 앱 레거시 | `tests/app/test_bootstrap.py`, `tests/app/test_workflows.py` | `app.bootstrap` / `app.workflows` 등 미존재 모듈 |
-| 공통 레거시 | `tests/common/test_exception_mapper.py` | `common.*` 패키지 미존재 |
-| 도메인 레거시 | `tests/domain/` 전체 | 현 `src/domain` 패키지 트리와 불일치 |
-| 인프라 레거시 | `tests/infra/` 전체 | `infra.*` 미존재 |
-| 골든·러너 | `tests/_archive/integration/` | `test_golden_scenarios.py`, `run_golden_tests.py` |
-| 퍼포먼스 | `tests/_archive/performance/` | `benchmark_*.py`, `benchmark_baseline.json` |
+| ???�거??| `tests/app/test_bootstrap.py`, `tests/app/test_workflows.py` | `app.bootstrap` / `app.workflows` ??미존??모듈 |
+| 공통 ?�거??| `tests/common/test_exception_mapper.py` | `common.*` ?�키지 미존??|
+| ?�메???�거??| `tests/domain/` ?�체 | ??`src/domain` ?�키지 ?�리?� 불일�?|
+| ?�프???�거??| `tests/infra/` ?�체 | `infra.*` 미존??|
+| 골든·?�너 | `tests/_archive/integration/` | `test_golden_scenarios.py`, `run_golden_tests.py` |
+| ?�포먼스 | `tests/_archive/performance/` | `benchmark_*.py`, `benchmark_baseline.json` |
 
-`tests/_archive/`는 `norecursedirs`에 `_archive` basename을 두어, `pytest tests`처럼 넓게 호출해도 재귀하지 않도록 했다.
+`tests/_archive/`??`norecursedirs`??`_archive` basename???�어, `pytest tests`처럼 ?�게 ?�출?�도 ?��??��? ?�도�??�다.
 
-## 스냅샷·픽스처
+## ?�냅?�·픽?�처
 
-- `tests/snapshots/` — 과거 스캔 결과 JSON 등을 두기 위한 자리였으나, **현재 저장소에는 파일이 없거나 비어 있을 수 있다.** [`tests/integration/test_snapshot_normalizer.py`](integration/test_snapshot_normalizer.py)는 디스크의 JSON을 읽지 않고, `snapshot_normalizer` 헬퍼의 순서·경로·타임스탬프 정규화만 검증한다.
-- `tests/fixtures/` — 고정 데이터셋 디렉터리. **기본 `pytest` 스위트에서 `tests.fixtures` / `FIXTURES_DIR`를 import하는 테스트는 없다** (수동·향후 통합·아카이브 하네스용으로 보관). 상세는 [fixtures/README.md](fixtures/README.md).
+- `tests/snapshots/` ??과거 ?�캔 결과 JSON ?�을 ?�기 ?�한 ?�리?�?�나, **?�재 ?�?�소?�는 ?�일???�거??비어 ?�을 ???�다.** [`tests/integration/test_snapshot_normalizer.py`](integration/test_snapshot_normalizer.py)???�스?�의 JSON???��? ?�고, `snapshot_normalizer` ?�퍼???�서·경로·?�?�스?�프 ?�규?�만 검증한??
+- `tests/fixtures/` ??고정 ?�이?�셋 ?�렉?�리. **기본 `pytest` ?�위?�에??`tests.fixtures` / `FIXTURES_DIR`�?import?�는 ?�스?�는 ?�다** (?�동·?�후 ?�합·?�카?�브 ?�네?�용?�로 보�?). ?�세??[fixtures/README.md](fixtures/README.md).
 
-## 기준선 개수 참고
+## 기�???개수 참고
 
-2026-04-11 감사에서는 특정 8개 파일만 모아 **78 passed**를 기록했다. Phase 0 이후 기본 `testpaths`에는 동일 파일 외에 `tests/application`의 나머지 스테이지·파이프라인 테스트와 `tests/unit/` 전체가 포함되므로, 로컬에서 `python -m pytest`는 **약 144 passed** 규모가 된다(환경에 따라 소폭 차이 가능).
+2026-04-11 감사?�서???�정 8�??�일�?모아 **78 passed**�?기록?�다. Phase 0 ?�후 기본 `testpaths`?�는 ?�일 ?�일 ?�에 `tests/application`???�머지 ?�테?��?·?�이?�라???�스?��? `tests/unit/` ?�체가 ?�함?��?�? 로컬?�서 `python -m pytest`??**??144 passed** 규모가 ?�다(?�경???�라 ?�폭 차이 가??.
 
-## 관련 문서
+## 관??문서
 
-- 해결 계획 Phase 0: `documents/2026-04-11_repo_audit_remediation_plan.md`
-- 감사 리포트 P0-1: `documents/2026-04-11_repo_audit_report.md`
+- ?�결 계획 Phase 0: 2026-04-13 local archive bundle
+- 감사 리포??P0-1: 2026-04-13 local archive bundle
+## 2026-04-13 cleanup note
+
+- Canonical active filename parser coverage now lives in `tests/unit/test_filename_parser.py`.
+- The removed duplicate file `tests/unit/domain/test_filename_parser.py` no longer participates in
+  the default suite.
+- Disposed legacy tests are no longer kept in the repository worktree; recover them only from the
+  2026-04-13 local archive bundle if you explicitly choose to port them.
+

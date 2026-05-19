@@ -1,6 +1,7 @@
 """스캔 폴더 UseCase."""
 
 import json
+import sqlite3
 import time
 from datetime import datetime
 from typing import Callable, Optional
@@ -74,7 +75,7 @@ class ScanFolderUseCase:
             run_id = self._index_repository.start_run(request)
             debug_step(self._log_sink, "run_start_success", {"run_id": run_id})
             return run_id
-        except Exception as e:
+        except (OSError, sqlite3.Error, ValueError) as e:
             self._write_index_error(
                 f"Failed to start run in index repository: {e}",
                 {"error_type": type(e).__name__},
@@ -96,7 +97,7 @@ class ScanFolderUseCase:
                 "files_save_success",
                 {"run_id": run_id, "entries_count": len(entries)},
             )
-        except Exception as e:
+        except (OSError, sqlite3.Error, ValueError) as e:
             self._write_index_error(
                 f"Failed to save files to index repository: {e}",
                 {"error_type": type(e).__name__, "run_id": run_id},
@@ -136,7 +137,7 @@ class ScanFolderUseCase:
             )
             self._index_repository.finalize_run(run_id, summary)
             debug_step(self._log_sink, "run_finalize_success", {"run_id": run_id})
-        except Exception as e:
+        except (OSError, sqlite3.Error, TypeError, ValueError) as e:
             self._write_index_error(
                 f"Failed to finalize run in index repository: {e}",
                 {"error_type": type(e).__name__, "run_id": run_id},

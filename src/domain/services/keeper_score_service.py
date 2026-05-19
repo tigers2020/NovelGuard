@@ -1,6 +1,5 @@
 """Keeper 점수화 서비스."""
 
-from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
 from domain.entities.file_entry import FileEntry
@@ -30,16 +29,14 @@ class KeeperScoreService:
 
     def calculate_keeper_score(
         self,
-        file_entry: FileEntry,
+        _file_entry: FileEntry,
         parse_result: FilenameParseResult,
-        reference_mtime: Optional[datetime] = None,
     ) -> int:
         """Keeper 점수 계산.
 
         Args:
-            file_entry: 파일 엔트리.
+            _file_entry: 파일 엔트리 (API 일관성·확장용; 현재 점수는 parse_result만 사용).
             parse_result: 파일명 파싱 결과.
-            reference_mtime: 기준 수정 시간 (None이면 file_entry.mtime 사용).
 
         Returns:
             Keeper 점수 (높을수록 keeper로 추천).
@@ -61,15 +58,7 @@ class KeeperScoreService:
                 coverage = re - rs + 1
                 score += int(coverage * DetectionDefaults.SCORE_COVERAGE / 100)
 
-        # +20: mtime 최신 (reference_mtime 기준)
-        if reference_mtime is None:
-            reference_mtime = file_entry.mtime
-
-        # 가장 최신 파일에 점수 부여 (상대적 비교는 select_keeper에서)
-        # 여기서는 절대 점수만 계산하므로 mtime 점수는 select_keeper에서 처리
-
-        # +10: size 큰 쪽 (상대적 비교는 select_keeper에서)
-        # 여기서는 절대 점수만 계산하므로 size 점수는 select_keeper에서 처리
+        # +20 mtime / +10 size: 상대 비교는 select_keeper에서만 적용
 
         # -1000: 파싱 신뢰도 낮음
         if parse_result.confidence < DetectionDefaults.CONFIDENCE_THRESHOLD:
@@ -103,7 +92,7 @@ class KeeperScoreService:
         # 각 파일의 점수 계산
         scored_files = []
         for file_entry, parse_result in files_with_parse:
-            base_score = self.calculate_keeper_score(file_entry, parse_result, max_mtime)
+            base_score = self.calculate_keeper_score(file_entry, parse_result)
 
             # 상대적 점수 추가
             # +20: mtime 최신 (가장 최신 파일에만)

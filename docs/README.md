@@ -1,3 +1,10 @@
+## 2026-04-13 cleanup note
+
+- Root-level legacy plans/reports and old `documents/` audit outputs were bundled into a local zip
+  archive and removed from the working tree.
+- The maintained source-of-truth set is now the repo root guides plus the curated `docs/` and
+  `docs/archive/` trees.
+
 # docs/
 
 ## 현행 정본 (이것만 우선하면 됨)

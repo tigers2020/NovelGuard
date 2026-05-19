@@ -108,7 +108,7 @@ class DuplicateDetectionPipeline:
         Raises:
             PipelineError: 파이프라인 실행 중 에러 발생 시.
         """
-        context = PipelineContext(request=request)
+        context = PipelineContext(request)
 
         for stage_idx, stage in enumerate(self._stages):
             # 취소 확인

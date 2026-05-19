@@ -106,9 +106,7 @@ class ExactDuplicateDetector:
             if len(hash_file_ids) < 2:
                 continue
             out.append(
-                self._make_exact_relation(
-                    size, prefix_hash, suffix_hash, full_hash, hash_file_ids
-                )
+                self._make_exact_relation(size, prefix_hash, suffix_hash, full_hash, hash_file_ids)
             )
         return out
 

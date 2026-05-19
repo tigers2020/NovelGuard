@@ -1,3 +1,9 @@
+## 2026-04-13 disposal bundle
+
+- Legacy tests, old `documents/` reports, and root-level planning/report markdown files were
+  bundled into a local zip archive and then removed from the working tree.
+- Keep using the curated files in `docs/archive/` for tracked historical reference.
+
 # docs/archive/
 
 **역사 기록 전용.** 여기 문서는 당시 계획·완료 보고·감사 메모이며, 현재 저장소 상태와 다를 수 있다.

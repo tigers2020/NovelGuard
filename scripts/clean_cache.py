@@ -28,7 +28,7 @@ def clean_pycache(root_path: Path) -> int:
                 shutil.rmtree(pycache_dir)
                 print(f"삭제됨: {pycache_dir}")
                 deleted_count += 1
-            except Exception as e:
+            except OSError as e:
                 print(f"오류 (삭제 실패): {pycache_dir} - {e}")
 
     # .pyc 파일 삭제 (__pycache__ 외부에 있을 수 있는 파일)
@@ -38,7 +38,7 @@ def clean_pycache(root_path: Path) -> int:
                 pyc_file.unlink()
                 print(f"삭제됨: {pyc_file}")
                 deleted_count += 1
-            except Exception as e:
+            except OSError as e:
                 print(f"오류 (삭제 실패): {pyc_file} - {e}")
 
     return deleted_count

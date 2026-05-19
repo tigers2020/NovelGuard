@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 import sys
 import tempfile
 from pathlib import Path
@@ -52,7 +53,7 @@ def run(target_dir: Path) -> None:
         db_path = Path(f.name)
     try:
         index_repo = SQLiteIndexRepository(db_path=db_path, log_sink=log_sink)
-    except Exception:
+    except (OSError, sqlite3.Error):
         db_path.unlink(missing_ok=True)
         raise
 
@@ -112,7 +113,7 @@ def run(target_dir: Path) -> None:
     finally:
         try:
             index_repo.close()
-        except Exception:
+        except sqlite3.Error:
             pass
         db_path.unlink(missing_ok=True)
 

@@ -2,10 +2,9 @@
 
 Order: ``pytest`` → ``ruff check .`` → ``mypy src`` → ``black --check .``
 
-Excludes and tool config: ``pyproject.toml``. Legacy trees under
-``tests/common``, ``tests/domain``, ``tests/infra``, and ``tests/_archive/``
-are excluded from default pytest/ruff; ``tests/_archive/`` is also excluded
-from black (see ``pyproject.toml``).
+Excludes and tool config: ``pyproject.toml``. The working tree now contains
+only the active test suite; disposed legacy tests live only in manual archive
+bundles outside the normal verification path.
 """
 
 from __future__ import annotations

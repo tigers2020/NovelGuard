@@ -1,7 +1,7 @@
 [project]
 name = "novelguard"
 version = "0.1.0"
-description = "텍스트 소설 파일 중복 탐지·정리 도구"
+description = "?띿뒪???뚯꽕 ?뚯씪 以묐났 ?먯?쨌?뺣━ ?꾧뎄"
 requires-python = ">=3.12"
 dependencies = [
     "PySide6>=6.6.0",
@@ -20,8 +20,8 @@ dev = [
 ]
 
 # ---------- pytest ----------
-# Default suite: current-layout tests only. Legacy trees live under tests/_archive/
-# (see tests/README.md). Run archived tests explicitly if ported.
+# Default suite: current-layout tests only. Disposed legacy tests are no longer
+# kept in the repository working set.
 [tool.pytest.ini_options]
 testpaths = [
     "tests/app/settings",
@@ -41,7 +41,6 @@ norecursedirs = [
     ".venv",
     "venv",
     "__pycache__",
-    "_archive",
 ]
 pythonpath = ["src"]
 addopts = "-v --tb=short"
@@ -59,13 +58,7 @@ exclude = [
     ".pytest_cache",
     ".ruff_cache",
     ".benchmarks",
-    "tests/_archive",
-    # Legacy trees: pytest collect_ignore와 동일 (ruff만 별도 수집됨)
-    "tests/common",
-    "tests/domain",
-    "tests/infra",
-    "tests/app/test_bootstrap.py",
-    "tests/app/test_workflows.py",
+    # Legacy trees: pytest collect_ignore? ?숈씪 (ruff留?蹂꾨룄 ?섏쭛??
 ]
 
 [tool.ruff.lint]
@@ -90,4 +83,5 @@ ignore_missing_imports = true
 [tool.black]
 line-length = 100
 target-version = ["py312"]
-extend-exclude = "/tests/_archive/"
+
+

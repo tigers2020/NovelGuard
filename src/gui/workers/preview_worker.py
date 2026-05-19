@@ -192,7 +192,7 @@ class PreviewWorker(QThread):
                 dirs_to_scan.extend(subdirs)
             except PermissionError:
                 continue
-            except Exception as e:
+            except OSError as e:
                 logger.warning("디렉토리 스캔 오류 (%s): %s", current_dir, e)
                 continue
 

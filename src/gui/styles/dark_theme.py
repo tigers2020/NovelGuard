@@ -1,6 +1,6 @@
 """다크 테마 스타일시트."""
 
-from .colors import (
+from gui.styles.colors import (
     BG_BODY,
     BG_CARD,
     BG_CONTAINER,
@@ -31,13 +31,17 @@ def get_dark_theme_stylesheet() -> str:
     QWidget {{
         background-color: {BG_CONTAINER};
         color: {TEXT_PRIMARY};
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans KR', sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+            'Noto Sans KR', sans-serif;
         font-size: 14px;
     }}
 
     /* 헤더 */
     QWidget#header {{
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {PRIMARY_START}, stop:1 {PRIMARY_END});
+        background: qlineargradient(
+            x1:0, y1:0, x2:1, y2:0,
+            stop:0 {PRIMARY_START}, stop:1 {PRIMARY_END}
+        );
         color: white;
         padding: 24px 32px;
         border-bottom: 1px solid {BORDER_PRIMARY};
@@ -95,7 +99,10 @@ def get_dark_theme_stylesheet() -> str:
     }}
 
     QPushButton#navItem:checked {{
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {PRIMARY_START}, stop:1 {PRIMARY_END});
+        background: qlineargradient(
+            x1:0, y1:0, x2:1, y2:0,
+            stop:0 {PRIMARY_START}, stop:1 {PRIMARY_END}
+        );
         color: white;
     }}
 
@@ -110,12 +117,18 @@ def get_dark_theme_stylesheet() -> str:
     }}
 
     QPushButton#btnPrimary {{
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {PRIMARY_START}, stop:1 {PRIMARY_END});
+        background: qlineargradient(
+            x1:0, y1:0, x2:1, y2:0,
+            stop:0 {PRIMARY_START}, stop:1 {PRIMARY_END}
+        );
         color: white;
     }}
 
     QPushButton#btnPrimary:hover {{
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {PRIMARY_END}, stop:1 {PRIMARY_START});
+        background: qlineargradient(
+            x1:0, y1:0, x2:1, y2:0,
+            stop:0 {PRIMARY_END}, stop:1 {PRIMARY_START}
+        );
     }}
 
     QPushButton#btnSecondary {{
@@ -237,7 +250,10 @@ def get_dark_theme_stylesheet() -> str:
     }}
 
     QProgressBar::chunk {{
-        background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {PRIMARY_START}, stop:1 {PRIMARY_END});
+        background: qlineargradient(
+            x1:0, y1:0, x2:1, y2:0,
+            stop:0 {PRIMARY_START}, stop:1 {PRIMARY_END}
+        );
         border-radius: 4px;
     }}
 

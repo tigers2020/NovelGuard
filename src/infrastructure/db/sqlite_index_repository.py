@@ -111,7 +111,10 @@ class SQLiteIndexRepository:
                 }
             )
             cursor.execute(
-                "INSERT INTO runs (started_at, root_path, options_json, status) VALUES (?, ?, ?, ?)",
+                (
+                    "INSERT INTO runs (started_at, root_path, options_json, status) "
+                    "VALUES (?, ?, ?, ?)"
+                ),
                 (
                     datetime.now().isoformat(),
                     str(request.root_folder.as_posix()),
@@ -245,9 +248,12 @@ class SQLiteIndexRepository:
             finished_at = summary.finished_at.isoformat() if summary.finished_at else None
             cursor = conn.cursor()
             cursor.execute(
-                """UPDATE runs
-                   SET finished_at = ?, total_files = ?, total_bytes = ?, elapsed_ms = ?, status = ?, error_message = ?
-                   WHERE run_id = ?""",
+                (
+                    "UPDATE runs "
+                    "SET finished_at = ?, total_files = ?, total_bytes = ?, elapsed_ms = ?, "
+                    "status = ?, error_message = ? "
+                    "WHERE run_id = ?"
+                ),
                 (
                     finished_at,
                     summary.total_files,
@@ -300,7 +306,11 @@ class SQLiteIndexRepository:
         try:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT started_at, finished_at, root_path, options_json, total_files, total_bytes, elapsed_ms, status, error_message FROM runs WHERE run_id = ?",
+                (
+                    "SELECT started_at, finished_at, root_path, options_json, total_files, "
+                    "total_bytes, elapsed_ms, status, error_message "
+                    "FROM runs WHERE run_id = ?"
+                ),
                 (run_id,),
             )
             row = cursor.fetchone()

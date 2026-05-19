@@ -57,7 +57,7 @@ class InMemoryLogSink(QObject):
                     current_file = Path(__file__)
                     # src/infrastructure/logging -> infrastructure -> src -> 프로젝트 루트
                     base_path = current_file.parent.parent.parent.parent
-            except Exception:
+            except (OSError, RuntimeError):
                 # 실패 시 현재 작업 디렉토리 사용
                 base_path = Path.cwd()
 
@@ -200,6 +200,6 @@ class InMemoryLogSink(QObject):
             if self._current_log_file:
                 with open(self._current_log_file, "a", encoding=Constants.LOG_FILE_ENCODING) as f:
                     f.write(log_line)
-        except Exception as e:
+        except (OSError, UnicodeError) as e:
             # 파일 쓰기 실패 시 콘솔에만 에러 출력 (무한 루프 방지)
             print(f"[ERROR] 로그 파일 쓰기 실패: {e}")

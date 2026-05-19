@@ -37,6 +37,105 @@ class NearDuplicateDetector:
         self._similarity_threshold = similarity_threshold
         self._log_sink = log_sink
 
+    @staticmethod
+    def _parse_with_range_if_present(
+        file_id: int,
+        file_entries: dict[int, FileEntry],
+        parse_results: dict[int, "FilenameParseResult"],
+    ) -> Optional["FilenameParseResult"]:
+        if file_id not in file_entries or file_id not in parse_results:
+            return None
+        pr = parse_results[file_id]
+        if not pr.has_range:
+            return None
+        return pr
+
+    @staticmethod
+    def _pair_is_simhash_candidate(
+        parse_a: "FilenameParseResult", parse_b: "FilenameParseResult"
+    ) -> bool:
+        if parse_a.range_start == parse_b.range_start:
+            return True
+        a0, a1 = parse_a.range_start, parse_a.range_end
+        b0, b1 = parse_b.range_start, parse_b.range_end
+        if a0 is None or a1 is None or b0 is None or b1 is None:
+            return False
+        return not (a1 < b0 or b1 < a0)
+
+    def _pairs_for_anchor(
+        self,
+        file_id_a: int,
+        parse_a: "FilenameParseResult",
+        successor_ids: list[int],
+        file_entries: dict[int, FileEntry],
+        parse_results: dict[int, "FilenameParseResult"],
+    ) -> list[tuple[int, int]]:
+        out: list[tuple[int, int]] = []
+        for file_id_b in successor_ids:
+            parse_b = self._parse_with_range_if_present(file_id_b, file_entries, parse_results)
+            if parse_b is None:
+                continue
+            if self._pair_is_simhash_candidate(parse_a, parse_b):
+                out.append((file_id_a, file_id_b))
+        return out
+
+    def _collect_candidate_pairs(
+        self,
+        file_ids: list[int],
+        file_entries: dict[int, FileEntry],
+        parse_results: dict[int, "FilenameParseResult"],
+    ) -> list[tuple[int, int]]:
+        pairs: list[tuple[int, int]] = []
+        for i, file_id_a in enumerate(file_ids):
+            parse_a = self._parse_with_range_if_present(file_id_a, file_entries, parse_results)
+            if parse_a is None:
+                continue
+            pairs.extend(
+                self._pairs_for_anchor(
+                    file_id_a,
+                    parse_a,
+                    file_ids[i + 1 :],
+                    file_entries,
+                    parse_results,
+                )
+            )
+        return pairs
+
+    def _relation_from_pair_if_similar(
+        self,
+        simhash_service: "ISimHashService",
+        file_id_a: int,
+        file_id_b: int,
+        file_entries: dict[int, FileEntry],
+    ) -> Optional[NearDuplicateRelation]:
+        file_entry_a = file_entries[file_id_a]
+        file_entry_b = file_entries[file_id_b]
+        try:
+            simhash_a = simhash_service.calculate_simhash_from_samples(
+                file_entry_a.path, sample_size=DetectionDefaults.SAMPLE_SIZE
+            )
+            simhash_b = simhash_service.calculate_simhash_from_samples(
+                file_entry_b.path, sample_size=DetectionDefaults.SAMPLE_SIZE
+            )
+        except (OSError, ValueError):
+            return None
+        similarity = simhash_service.calculate_similarity(simhash_a, simhash_b)
+        if similarity < self._similarity_threshold:
+            return None
+        evidence = {
+            "simhash_a": simhash_a,
+            "simhash_b": simhash_b,
+            "similarity": similarity,
+            "method": "sampling_based",
+            "sample_size_kb": 64,
+        }
+        return NearDuplicateRelation(
+            file_ids=[file_id_a, file_id_b],
+            similarity_score=similarity,
+            evidence=evidence,
+            confidence=similarity,
+        )
+
     def detect_near(
         self,
         blocking_group: BlockingGroup,
@@ -57,81 +156,18 @@ class NearDuplicateDetector:
             SimHash 서비스가 없으면 빈 리스트 반환 (v2 기능).
             샘플링 기반으로 대용량 파일에서도 효율적으로 동작.
         """
-        if self._simhash_service is None:
-            return []  # SimHash 서비스가 없으면 Near 중복 탐지 불가 (v2 기능)
+        simhash_service = self._simhash_service
+        if simhash_service is None:
+            return []
 
-        near_relations = []
-
-        # 같은 series_title_norm 그룹 내에서만 수행
-        file_ids = blocking_group.file_ids
-
-        # range_start가 같거나 overlap 높은 파일들만 비교 (효율성)
-        candidate_pairs = []
-        for i, file_id_a in enumerate(file_ids):
-            if file_id_a not in file_entries or file_id_a not in parse_results:
-                continue
-
-            parse_a = parse_results[file_id_a]
-            if not parse_a.has_range:
-                continue  # 범위 정보가 없으면 건너뜀
-
-            for file_id_b in file_ids[i + 1 :]:
-                if file_id_b not in file_entries or file_id_b not in parse_results:
-                    continue
-
-                parse_b = parse_results[file_id_b]
-                if not parse_b.has_range:
-                    continue
-
-                # range_start가 같거나 overlap 높은 경우만 비교
-                if parse_a.range_start == parse_b.range_start:
-                    candidate_pairs.append((file_id_a, file_id_b))
-                elif parse_a.has_range and parse_b.has_range:
-                    # overlap 체크 (간단히 범위가 겹치면)
-                    a0, a1 = parse_a.range_start, parse_a.range_end
-                    b0, b1 = parse_b.range_start, parse_b.range_end
-                    if a0 is None or a1 is None or b0 is None or b1 is None:
-                        continue
-                    if not (a1 < b0 or b1 < a0):
-                        candidate_pairs.append((file_id_a, file_id_b))
-
-        # 샘플링 기반 SimHash 비교
+        candidate_pairs = self._collect_candidate_pairs(
+            blocking_group.file_ids, file_entries, parse_results
+        )
+        near_relations: list[NearDuplicateRelation] = []
         for file_id_a, file_id_b in candidate_pairs:
-            file_entry_a = file_entries[file_id_a]
-            file_entry_b = file_entries[file_id_b]
-
-            # 샘플링 기반 SimHash 계산 (앞/중간/끝 64KB)
-            try:
-                simhash_a = self._simhash_service.calculate_simhash_from_samples(
-                    file_entry_a.path, sample_size=DetectionDefaults.SAMPLE_SIZE
-                )
-                simhash_b = self._simhash_service.calculate_simhash_from_samples(
-                    file_entry_b.path, sample_size=DetectionDefaults.SAMPLE_SIZE
-                )
-            except Exception:
-                # 파일 읽기 실패 시 건너뜀
-                continue
-
-            similarity = self._simhash_service.calculate_similarity(simhash_a, simhash_b)
-
-            if similarity >= self._similarity_threshold:
-                evidence = {
-                    "simhash_a": simhash_a,
-                    "simhash_b": simhash_b,
-                    "similarity": similarity,
-                    "method": "sampling_based",  # 샘플링 기반임을 명시
-                    "sample_size_kb": 64,
-                }
-
-                # 유사도가 높을수록 신뢰도 증가
-                confidence = similarity
-
-                relation = NearDuplicateRelation(
-                    file_ids=[file_id_a, file_id_b],
-                    similarity_score=similarity,
-                    evidence=evidence,
-                    confidence=confidence,
-                )
+            relation = self._relation_from_pair_if_similar(
+                simhash_service, file_id_a, file_id_b, file_entries
+            )
+            if relation is not None:
                 near_relations.append(relation)
-
         return near_relations

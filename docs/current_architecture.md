@@ -63,3 +63,9 @@ Ruff/Black 제외: `tests/_archive/` 및 레거시 `tests/common`, `tests/domain
 - [AGENTS.md](../AGENTS.md) — Cursor·운영 게이트, 규칙 우선순위
 - [entry_points.md](entry_points.md) — 진입점 상세
 - [tests/README.md](../tests/README.md) — 테스트 디렉터리 정책
+
+## 2026-04-13 cleanup note
+
+- Legacy test trees that used to sit beside the active suite were removed from the working tree and preserved only in a local archive bundle.
+- Current verification behavior should be read from pyproject.toml plus the active tests documentation, not older archive-era exclusion notes.
+
