@@ -28,9 +28,12 @@ from app.settings.constants import (
     SETTINGS_KEY_INCREMENTAL_SCAN,
     SETTINGS_KEY_NEAR_DUPLICATE,
     SETTINGS_KEY_SIMILARITY_PERCENT,
+    SETTINGS_KEY_UI_THEME,
     SETTINGS_KEY_WORKER_THREADS,
     Constants,
 )
+from gui.styles.theme_apply import apply_theme_to_app
+from gui.styles.theme_mode import ThemeMode
 from gui.views.tabs.base_tab import BaseTab
 
 
@@ -49,10 +52,13 @@ class SettingsTab(BaseTab):
 
     def get_title(self) -> str:
         """페이지 제목 반환."""
-        return "⚙️ 설정"
+        return "설정"
 
     def _setup_content(self, layout: QVBoxLayout) -> None:
         """컨텐츠 설정."""
+        appearance_group = self._create_appearance_group()
+        layout.addWidget(appearance_group)
+
         # 스캔 설정 그룹
         scan_group = self._create_scan_settings_group()
         layout.addWidget(scan_group)
@@ -71,6 +77,29 @@ class SettingsTab(BaseTab):
 
         # 설정 로드 (UI 위젯 생성 후)
         self._load_settings()
+
+    def _create_appearance_group(self) -> QGroupBox:
+        """모양 설정 그룹."""
+        group = QGroupBox("모양")
+        group.setObjectName("settingsGroup")
+        box = QVBoxLayout(group)
+        box.setSpacing(12)
+
+        label = QLabel("테마")
+        label.setObjectName("formLabel")
+        box.addWidget(label)
+
+        self._theme_combo = QComboBox()
+        self._theme_combo.addItem("다크 (기본)", ThemeMode.DARK.value)
+        self._theme_combo.addItem("라이트", ThemeMode.LIGHT.value)
+        self._theme_combo.currentIndexChanged.connect(self._on_theme_changed)
+        box.addWidget(self._theme_combo)
+        return group
+
+    def _on_theme_changed(self) -> None:
+        mode = ThemeMode.from_settings_value(self._theme_combo.currentData())
+        self._settings.setValue(SETTINGS_KEY_UI_THEME, mode.value)
+        apply_theme_to_app(mode)
 
     def _create_scan_settings_group(self) -> QGroupBox:
         """스캔 설정 그룹 생성."""
@@ -320,6 +349,14 @@ class SettingsTab(BaseTab):
 
         _setup_content 이후에 호출되어야 합니다.
         """
+        theme_value = cast(
+            str, self._settings.value(SETTINGS_KEY_UI_THEME, ThemeMode.DARK.value, type=str)
+        )
+        self._theme_combo.blockSignals(True)
+        index = self._theme_combo.findData(theme_value)
+        self._theme_combo.setCurrentIndex(index if index >= 0 else 0)
+        self._theme_combo.blockSignals(False)
+
         # 스캔 설정 로드
         extension_filter = cast(
             str, self._settings.value(SETTINGS_KEY_EXTENSION_FILTER, "", type=str)

@@ -4,12 +4,16 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
 
+from app.settings.constants import SETTINGS_KEY_UI_THEME
 from application.dto.log_entry import LogEntry
 from gui.models.app_state import AppState
 from gui.services.qt_job_manager import QtJobManager
-from gui.styles.dark_theme import get_dark_theme_stylesheet
+from gui.styles.fonts import apply_application_font
+from gui.styles.theme_apply import apply_theme_to_app
+from gui.styles.theme_mode import ThemeMode
 from gui.views.main_window import MainWindow
 from infrastructure.db.sqlite_index_repository import SQLiteIndexRepository
 from infrastructure.fs.scanner import FileSystemScanner
@@ -23,8 +27,10 @@ def main() -> int:
     app.setApplicationName("텍스트 정리 프로그램")
     app.setOrganizationName("NovelGuard")
 
-    # 다크 테마 적용
-    app.setStyleSheet(get_dark_theme_stylesheet())
+    settings = QSettings()
+    theme_mode = ThemeMode.from_settings_value(settings.value(SETTINGS_KEY_UI_THEME, "dark"))
+    apply_application_font(app)
+    apply_theme_to_app(theme_mode)
 
     # 프로젝트 루트 찾기 (src/main.py 기준)
     # src/main.py -> src -> 프로젝트 루트

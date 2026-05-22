@@ -17,7 +17,6 @@ from app.settings.constants import SETTINGS_KEY_SCAN_FOLDER, Constants
 from application.utils.debug_logger import debug_step
 from application.utils.extensions import parse_extensions
 from gui.models.app_state import AppState
-from gui.styles.dark_theme import get_dark_theme_stylesheet
 from gui.views.components.file_list_table import FileListTableWidget
 from gui.views.components.header import HeaderWidget
 from gui.views.components.sidebar import SidebarWidget
@@ -65,10 +64,6 @@ class MainWindow(QMainWindow):
 
         # Preview 워커
         self._preview_worker: Optional[PreviewWorker] = None
-
-        # 다크 테마 적용
-        self.setStyleSheet(get_dark_theme_stylesheet())
-        debug_step(self._log_sink, "main_window_theme_applied")
 
         # UI 설정
         self._setup_ui()

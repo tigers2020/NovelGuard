@@ -229,3 +229,6 @@ SAVE/
 
 # Local benchmark / tool output (not source)
 .benchmark/
+
+# npm (DESIGN.md linter tooling)
+node_modules/

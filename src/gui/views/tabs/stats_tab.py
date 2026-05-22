@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QPushButton,
     QVBoxLayout,
+    QWidget,
 )
 
 from app.settings.constants import Constants
@@ -58,7 +59,7 @@ class StatsTab(BaseTab):
 
     def get_title(self) -> str:
         """페이지 제목 반환."""
-        return "📊 통계 및 리포트"
+        return "통계 및 리포트"
 
     def _setup_content(self, layout: QVBoxLayout) -> None:
         """컨텐츠 설정."""
@@ -93,15 +94,15 @@ class StatsTab(BaseTab):
         layout.setSpacing(16)
 
         # 파일 수
-        self._total_files_card = self._create_stat_card("총 파일 수", "0", "개", "#6366f1")
+        self._total_files_card = self._create_stat_card("총 파일 수", "0", "개")
         layout.addWidget(self._total_files_card)
 
         # 총 용량
-        self._total_bytes_card = self._create_stat_card("총 용량", "0", "bytes", "#43e97b")
+        self._total_bytes_card = self._create_stat_card("총 용량", "0", "bytes")
         layout.addWidget(self._total_bytes_card)
 
         # 경과 시간
-        self._elapsed_time_card = self._create_stat_card("경과 시간", "0", "ms", "#f093fb")
+        self._elapsed_time_card = self._create_stat_card("경과 시간", "0", "ms")
         layout.addWidget(self._elapsed_time_card)
 
         return group
@@ -115,21 +116,7 @@ class StatsTab(BaseTab):
 
         # 리스트 위젯
         self._ext_list = QListWidget()
-        self._ext_list.setStyleSheet("""
-            QListWidget {
-                background-color: #1a1a1a;
-                border: 1px solid #2a2a2a;
-                border-radius: 8px;
-                padding: 8px;
-            }
-            QListWidgetItem {
-                padding: 8px;
-                border-bottom: 1px solid #2a2a2a;
-            }
-            QListWidgetItem:hover {
-                background-color: #252525;
-            }
-        """)
+        self._ext_list.setObjectName("statsList")
         layout.addWidget(self._ext_list)
 
         return group
@@ -143,21 +130,7 @@ class StatsTab(BaseTab):
 
         # 리스트 위젯
         self._top_files_list = QListWidget()
-        self._top_files_list.setStyleSheet("""
-            QListWidget {
-                background-color: #1a1a1a;
-                border: 1px solid #2a2a2a;
-                border-radius: 8px;
-                padding: 8px;
-            }
-            QListWidgetItem {
-                padding: 8px;
-                border-bottom: 1px solid #2a2a2a;
-            }
-            QListWidgetItem:hover {
-                background-color: #252525;
-            }
-        """)
+        self._top_files_list.setObjectName("statsList")
         layout.addWidget(self._top_files_list)
 
         return group
@@ -207,7 +180,7 @@ class StatsTab(BaseTab):
             self._update_stat_card(self._total_bytes_card, "0", "bytes")
             self._update_stat_card(self._elapsed_time_card, "0", "ms")
 
-    def _update_stat_card(self, card: QGroupBox, value: str, unit: str) -> None:
+    def _update_stat_card(self, card: QWidget, value: str, unit: str) -> None:
         """통계 카드 값 업데이트.
 
         Args:
@@ -271,40 +244,25 @@ class StatsTab(BaseTab):
             self._top_files_list.addItem(item)
 
     def _create_stat_card(
-        self, label: str, value: str, unit: Optional[str], color: str
-    ) -> QGroupBox:
+        self, label: str, value: str, unit: Optional[str], _color: str = ""
+    ) -> QWidget:
         """통계 카드 생성."""
-        card = QGroupBox()
-        card.setStyleSheet(f"""
-            QGroupBox {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {color}, stop:1 {color}dd);
-                border: none;
-                border-radius: 12px;
-                padding: 20px;
-                color: white;
-            }}
-        """)
-
+        card = QWidget()
+        card.setObjectName("statCard")
         layout = QVBoxLayout(card)
         layout.setSpacing(8)
 
         label_widget = QLabel(label)
-        label_widget.setStyleSheet(
-            "background: transparent; font-size: 13px; opacity: 0.9; color: white;"
-        )
+        label_widget.setObjectName("statCardLabel")
         layout.addWidget(label_widget)
 
         value_widget = QLabel(value)
-        value_widget.setStyleSheet(
-            "background: transparent; font-size: 32px; font-weight: 700; color: white;"
-        )
+        value_widget.setObjectName("statCardValue")
         layout.addWidget(value_widget)
 
         if unit:
             unit_widget = QLabel(unit)
-            unit_widget.setStyleSheet(
-                "background: transparent; font-size: 14px; opacity: 0.9; color: white;"
-            )
+            unit_widget.setObjectName("statCardUnit")
             layout.addWidget(unit_widget)
 
         return card

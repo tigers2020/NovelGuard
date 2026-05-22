@@ -23,7 +23,7 @@ class UndoTab(BaseTab):
 
     def get_title(self) -> str:
         """페이지 제목 반환."""
-        return "↩️ Undo / Rollback"
+        return "Undo / Rollback"
 
     def _create_not_implemented_notice(self) -> QGroupBox:
         """미구현 안내 (Phase 4: 플레이스홀더 명시)."""
@@ -33,7 +33,7 @@ class UndoTab(BaseTab):
         msg = QLabel(_NOT_IMPLEMENTED_MSG)
         msg.setWordWrap(True)
         msg.setObjectName("progressInfo")
-        msg.setStyleSheet("font-size: 13px; color: #a0a0a0; padding: 4px 0;")
+        msg.setObjectName("placeholder")
         gl.addWidget(msg)
         return group
 
@@ -107,7 +107,7 @@ class UndoTab(BaseTab):
         # 프로그레스 정보
         self._progress_info = QLabel("대기 중...")
         self._progress_info.setObjectName("progressInfo")
-        self._progress_info.setStyleSheet("font-size: 12px; color: #808080;")
+        self._progress_info.setObjectName("progressInfo")
         layout.addWidget(self._progress_info)
 
         # 항상 보이도록 설정
@@ -123,7 +123,7 @@ class UndoTab(BaseTab):
         layout = QVBoxLayout(group)
 
         placeholder = QLabel("구현 후 실행 기록이 여기에 표시됩니다.")
-        placeholder.setStyleSheet("color: #808080; font-size: 14px; padding: 20px;")
+        placeholder.setObjectName("placeholder")
         layout.addWidget(placeholder)
 
         return group

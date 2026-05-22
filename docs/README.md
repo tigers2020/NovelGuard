@@ -13,6 +13,7 @@
 |------|------|
 | [current_architecture.md](current_architecture.md) | 레이어, 진입점, 테스트·검증 정책 |
 | [entry_points.md](entry_points.md) | `python src/main.py` 등 실행 방법 상세 |
+| [superpowers/README.md](superpowers/README.md) | Superpowers 설계·구현 계획 (신규 spec/plan) |
 
 버전·의존성·도구 설정은 저장소 루트의 [`pyproject.toml`](../pyproject.toml)가 단일 정본이다.
 

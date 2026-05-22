@@ -62,7 +62,7 @@ class BaseTab(QWidget):
     def _setup_content(self, layout: QVBoxLayout) -> None:
         """컨텐츠 설정 (서브클래스에서 구현)."""
         placeholder = QLabel("컨텐츠 구현 예정...")
-        placeholder.setStyleSheet("color: #808080; font-size: 14px;")
+        placeholder.setObjectName("placeholder")
         layout.addWidget(placeholder)
 
     def get_title(self) -> str:

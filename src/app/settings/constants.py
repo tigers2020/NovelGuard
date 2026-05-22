@@ -224,6 +224,8 @@ DEFAULT_TEXT_EXTENSIONS: Final[list[str]] = [
 ]
 
 # QSettings 키
+SETTINGS_KEY_UI_THEME: Final[str] = "ui/theme"
+
 SETTINGS_KEY_SCAN_FOLDER: Final[str] = "scan/last_folder"
 SETTINGS_KEY_EXTENSION_FILTER: Final[str] = "scan/extension_filter"
 SETTINGS_KEY_INCLUDE_SUBDIRS: Final[str] = "scan/include_subdirs"

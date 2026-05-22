@@ -95,7 +95,7 @@ class DuplicateTab(BaseTab):
 
     def get_title(self) -> str:
         """페이지 제목 반환."""
-        return "🔍 중복 파일 정리"
+        return "중복 파일 정리"
 
     def _setup_content(self, layout: QVBoxLayout) -> None:
         """컨텐츠 설정."""
@@ -169,7 +169,7 @@ class DuplicateTab(BaseTab):
         # 프로그레스 정보
         self._progress_info = QLabel("대기 중...")
         self._progress_info.setObjectName("progressInfo")
-        self._progress_info.setStyleSheet("font-size: 12px; color: #808080;")
+        self._progress_info.setObjectName("progressInfo")
         layout.addWidget(self._progress_info)
 
         # 항상 보이도록 설정

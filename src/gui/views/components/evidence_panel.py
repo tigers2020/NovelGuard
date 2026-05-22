@@ -58,15 +58,7 @@ class EvidencePanel(QWidget):
         self._reason_text = QTextEdit()
         self._reason_text.setReadOnly(True)
         self._reason_text.setMaximumHeight(100)
-        self._reason_text.setStyleSheet("""
-            QTextEdit {
-                background-color: #1a1a1a;
-                border: 1px solid #2a2a2a;
-                border-radius: 4px;
-                padding: 8px;
-                font-size: 12px;
-            }
-        """)
+        self._reason_text.setObjectName("evidenceReason")
         reason_layout.addWidget(self._reason_text)
 
         layout.addWidget(reason_group)
@@ -79,16 +71,7 @@ class EvidencePanel(QWidget):
         # JSON 텍스트 영역
         self._evidence_json = QPlainTextEdit()
         self._evidence_json.setReadOnly(True)
-        self._evidence_json.setStyleSheet("""
-            QPlainTextEdit {
-                background-color: #1a1a1a;
-                border: 1px solid #2a2a2a;
-                border-radius: 4px;
-                padding: 8px;
-                font-family: 'Consolas', 'Monaco', monospace;
-                font-size: 11px;
-            }
-        """)
+        self._evidence_json.setObjectName("evidenceJson")
         evidence_layout.addWidget(self._evidence_json)
 
         # Copy 버튼

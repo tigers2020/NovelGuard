@@ -36,7 +36,7 @@ class LogsTab(BaseTab):
 
     def get_title(self) -> str:
         """페이지 제목 반환."""
-        return "📝 작업 로그"
+        return "작업 로그"
 
     def _setup_content(self, layout: QVBoxLayout) -> None:
         """컨텐츠 설정."""
@@ -113,17 +113,7 @@ class LogsTab(BaseTab):
         # 로그 콘솔
         self._log_console = QPlainTextEdit()
         self._log_console.setReadOnly(True)
-        self._log_console.setStyleSheet("""
-            QPlainTextEdit {
-                background-color: #0d0d0d;
-                color: #d4d4d4;
-                border: 1px solid #2a2a2a;
-                border-radius: 8px;
-                padding: 16px;
-                font-family: 'Consolas', 'Monaco', monospace;
-                font-size: 12px;
-            }
-        """)
+        self._log_console.setObjectName("logConsole")
         self._log_console.setPlainText("로그가 여기에 표시됩니다...\n")
         layout.addWidget(self._log_console)
 

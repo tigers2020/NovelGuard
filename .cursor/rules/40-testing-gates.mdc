@@ -1,0 +1,38 @@
+---
+description: Testing, verification gates, and reporting
+globs:
+  - "tests/**"
+  - "pyproject.toml"
+  - "scripts/**"
+  - ".github/workflows/**"
+alwaysApply: false
+---
+
+# Testing Gates
+
+## Commands
+
+| Purpose | Command |
+|---------|---------|
+| Full gate (recommended) | `python scripts/verify_phase_completion.py` |
+| Tests only | `pytest` |
+| Lint | `ruff check .` |
+| Types | `mypy src` |
+| Format check (CI-style) | `black --check .` |
+| Format apply (local) | `black .` |
+
+Order in verify script: `pytest` → `ruff check .` → `mypy src` → `black --check .` (fail-fast).
+
+## Practice
+
+- Prefer narrow test runs first when iterating (`pytest path::test_name`).
+- Add or update tests when behavior changes.
+- Do not delete tests only to save time; slim only if contract coverage stays equivalent.
+- Report exact command, pass/fail count, and runtime when claiming results.
+- If `black .` modifies files, report format changes separately from "tests passed."
+
+## PR / merge
+
+Before merge: `pip install -e ".[dev]"` then `python scripts/verify_phase_completion.py`, or the same steps manually.
+
+See [AGENTS.md](mdc:AGENTS.md) for completion report requirements.

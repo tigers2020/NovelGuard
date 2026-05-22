@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "design:lint": "design.md lint DESIGN.md",
+    "design:spec": "design.md spec"
+  },
+  "dependencies": {
+    "@google/design.md": "^0.1.1"
+  }
+}

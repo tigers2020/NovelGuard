@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QVBoxLayout,
+    QWidget,
 )
 
 from gui.views.tabs.base_tab import BaseTab
@@ -19,7 +20,7 @@ class IntegrityTab(BaseTab):
 
     def get_title(self) -> str:
         """페이지 제목 반환."""
-        return "✓ 무결성 확인"
+        return "무결성 확인"
 
     def _setup_content(self, layout: QVBoxLayout) -> None:
         """컨텐츠 설정."""
@@ -86,7 +87,7 @@ class IntegrityTab(BaseTab):
         # 프로그레스 정보
         self._progress_info = QLabel("대기 중...")
         self._progress_info.setObjectName("progressInfo")
-        self._progress_info.setStyleSheet("font-size: 12px; color: #808080;")
+        self._progress_info.setObjectName("progressInfo")
         layout.addWidget(self._progress_info)
 
         # 항상 보이도록 설정
@@ -103,15 +104,15 @@ class IntegrityTab(BaseTab):
         stats_layout.setSpacing(16)
 
         # 정상 파일
-        normal_card = self._create_stat_card("정상 파일", "0", "95.5%", "#10b981")
+        normal_card = self._create_stat_card("정상 파일", "0", "95.5%")
         stats_layout.addWidget(normal_card)
 
         # 경고
-        warning_card = self._create_stat_card("경고", "0", None, "#f59e0b")
+        warning_card = self._create_stat_card("경고", "0", None)
         stats_layout.addWidget(warning_card)
 
         # 오류
-        error_card = self._create_stat_card("오류", "0", None, "#ef4444")
+        error_card = self._create_stat_card("오류", "0", None)
         stats_layout.addWidget(error_card)
 
         layout.addLayout(stats_layout)
@@ -119,40 +120,25 @@ class IntegrityTab(BaseTab):
         return layout
 
     def _create_stat_card(
-        self, label: str, value: str, unit: Optional[str], color: str
-    ) -> QGroupBox:
+        self, label: str, value: str, unit: Optional[str], _color: str = ""
+    ) -> QWidget:
         """통계 카드 생성."""
-        card = QGroupBox()
-        card.setStyleSheet(f"""
-            QGroupBox {{
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 {color}, stop:1 {color}dd);
-                border: none;
-                border-radius: 12px;
-                padding: 20px;
-                color: white;
-            }}
-        """)
-
+        card = QWidget()
+        card.setObjectName("statCard")
         layout = QVBoxLayout(card)
         layout.setSpacing(8)
 
         label_widget = QLabel(label)
-        label_widget.setStyleSheet(
-            "background: transparent; font-size: 13px; opacity: 0.9; color: white;"
-        )
+        label_widget.setObjectName("statCardLabel")
         layout.addWidget(label_widget)
 
         value_widget = QLabel(value)
-        value_widget.setStyleSheet(
-            "background: transparent; font-size: 32px; font-weight: 700; color: white;"
-        )
+        value_widget.setObjectName("statCardValue")
         layout.addWidget(value_widget)
 
         if unit:
             unit_widget = QLabel(unit)
-            unit_widget.setStyleSheet(
-                "background: transparent; font-size: 14px; opacity: 0.9; color: white;"
-            )
+            unit_widget.setObjectName("statCardUnit")
             layout.addWidget(unit_widget)
 
         return card

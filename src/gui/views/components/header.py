@@ -34,12 +34,7 @@ class HeaderWidget(QWidget):
         title_layout.setContentsMargins(0, 0, 0, 0)
         title_layout.setSpacing(12)
 
-        # 아이콘 라벨 (SVG 대신 텍스트로 표현)
-        icon_label = QLabel("📄")
-        icon_label.setStyleSheet("font-size: 32px;")
-        title_layout.addWidget(icon_label)
-
-        title_label = QLabel("텍스트 정리 프로그램")
+        title_label = QLabel("NovelGuard")
         title_label.setObjectName("headerTitle")
         title_font = QFont()
         title_font.setPointSize(16)
@@ -93,6 +88,7 @@ class HeaderWidget(QWidget):
     def _create_stat_item(self, label_text: str, value_text: str) -> QWidget:
         """통계 항목 위젯 생성."""
         widget = QWidget()
+        widget.setObjectName("statChip")
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)

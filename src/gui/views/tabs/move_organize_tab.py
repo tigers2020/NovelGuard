@@ -58,7 +58,7 @@ class MoveOrganizeTab(BaseTab):
 
     def get_title(self) -> str:
         """페이지 제목 반환."""
-        return "📂 이동 정리"
+        return "이동 정리"
 
     def _setup_content(self, layout: QVBoxLayout) -> None:
         if self._app_state is None:
@@ -77,7 +77,7 @@ class MoveOrganizeTab(BaseTab):
         layout.addWidget(self._progress_section)
 
         self._result_label = QLabel("")
-        self._result_label.setStyleSheet("font-size: 12px; color: #808080;")
+        self._result_label.setObjectName("progressInfo")
         self._result_label.setWordWrap(True)
         layout.addWidget(self._result_label)
 
@@ -100,7 +100,7 @@ class MoveOrganizeTab(BaseTab):
         hint = QLabel(
             f"결과는 대상 폴더 아래 '{OUTPUT_SUBFOLDER}' 폴더에 저장되며, 파일명 끝 ' (1)' 은 제거됩니다."
         )
-        hint.setStyleSheet("font-size: 11px; color: #606060;")
+        hint.setObjectName("formHint")
         hint.setWordWrap(True)
         layout.addWidget(hint)
         return group
@@ -153,7 +153,7 @@ class MoveOrganizeTab(BaseTab):
         layout.addWidget(self._progress_bar)
         self._progress_info = QLabel("대기 중...")
         self._progress_info.setObjectName("progressInfo")
-        self._progress_info.setStyleSheet("font-size: 12px; color: #808080;")
+        self._progress_info.setObjectName("progressInfo")
         layout.addWidget(self._progress_info)
         group.setVisible(True)
         return group

@@ -1,5 +1,7 @@
 # 플랜: [제목]
 
+> **신규 플랜 저장 위치:** `docs/superpowers/plans/YYYY-MM-DD-<topic>.md` (이 파일은 구조 참고용)
+
 > 상태: 초안 / 검토 중 / 승인됨 / 완료
 
 ## 배경
