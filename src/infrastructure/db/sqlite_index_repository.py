@@ -9,6 +9,7 @@ from typing import Any, Optional
 from application.dto.ext_stat import ExtStat
 from application.dto.run_summary import RunSummary
 from application.dto.scan_request import ScanRequest
+from application.exceptions import IndexPersistenceError
 from application.ports.log_sink import ILogSink
 from application.utils.debug_logger import debug_step
 from domain.entities.file_entry import FileEntry
@@ -85,6 +86,12 @@ class SQLiteIndexRepository:
         Returns:
             생성된 run_id.
         """
+        try:
+            return self._start_run_impl(request)
+        except sqlite3.Error as e:
+            raise IndexPersistenceError(str(e)) from e
+
+    def _start_run_impl(self, request: ScanRequest) -> int:
         debug_step(
             self._log_sink,
             "start_run",
@@ -142,7 +149,12 @@ class SQLiteIndexRepository:
         """
         if not entries:
             return
+        try:
+            self._upsert_files_impl(run_id, entries)
+        except sqlite3.Error as e:
+            raise IndexPersistenceError(str(e)) from e
 
+    def _upsert_files_impl(self, run_id: int, entries: list[FileEntry]) -> None:
         debug_step(
             self._log_sink,
             "upsert_files_start",
@@ -230,6 +242,12 @@ class SQLiteIndexRepository:
             run_id: Run ID.
             summary: Run 요약 정보.
         """
+        try:
+            self._finalize_run_impl(run_id, summary)
+        except sqlite3.Error as e:
+            raise IndexPersistenceError(str(e)) from e
+
+    def _finalize_run_impl(self, run_id: int, summary: RunSummary) -> None:
         debug_step(
             self._log_sink,
             "finalize_run",

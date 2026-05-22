@@ -6,7 +6,7 @@ from domain.services.filename_parser import FilenameParser  # noqa: F401
 from domain.services.keeper_score_service import KeeperScoreService  # noqa: F401
 
 # NOTE: ExactDuplicateDetector와 NearDuplicateDetector는 v2 기능
-# (application.ports.hash_service의 IHashService/ISimHashService 필요)
+# (domain.ports의 IHashService/ISimHashService 필요)
 # 현재는 미구현 의존성으로 인해 비활성화. 파일은 유지하되 export하지 않음.
 # from domain.services.exact_duplicate_detector import ExactDuplicateDetector  # noqa: F401
 # from domain.services.near_duplicate_detector import NearDuplicateDetector  # noqa: F401

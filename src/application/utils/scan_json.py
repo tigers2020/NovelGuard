@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from application.constants import Constants
 from application.dto.scan_result import ScanResult
 
 logger = logging.getLogger(__name__)
@@ -76,8 +77,6 @@ def save_scan_result_to_json(
         data = serialize_scan_result_to_json(result, folder_path)
 
         # JSON 파일로 저장
-        from app.settings.constants import Constants
-
         with open(output_path, "w", encoding=Constants.DEFAULT_ENCODING) as f:
             json.dump(data, f, indent=2, ensure_ascii=False, sort_keys=True)
 

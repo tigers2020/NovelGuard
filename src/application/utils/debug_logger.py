@@ -7,6 +7,7 @@ from functools import wraps
 from time import time
 from typing import Any, Callable, Optional
 
+from application.constants import Constants
 from application.dto.log_entry import LogEntry
 from application.ports.log_sink import ILogSink
 
@@ -63,8 +64,6 @@ def debug_log(
             start_time = time()
             try:
                 result = func(*args, **kwargs)
-                from app.settings.constants import Constants
-
                 duration_ms = int((time() - start_time) * Constants.MILLISECONDS_PER_SECOND)
 
                 # EXIT 로그
@@ -82,8 +81,6 @@ def debug_log(
 
                 return result
             except Exception as e:
-                from app.settings.constants import Constants
-
                 duration_ms = int((time() - start_time) * Constants.MILLISECONDS_PER_SECOND)
                 log_sink.write(
                     LogEntry(

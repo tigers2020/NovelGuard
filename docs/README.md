@@ -12,8 +12,11 @@
 | 문서 | 내용 |
 |------|------|
 | [current_architecture.md](current_architecture.md) | 레이어, 진입점, 테스트·검증 정책 |
+| [CONTEXT.md](CONTEXT.md) | 도메인 용어·레이어/포트 맵 (온보딩·에이전트용) |
 | [entry_points.md](entry_points.md) | `python src/main.py` 등 실행 방법 상세 |
 | [superpowers/README.md](superpowers/README.md) | Superpowers 설계·구현 계획 (신규 spec/plan) |
+
+**UI vs architecture:** 루트 [`DESIGN.md`](../DESIGN.md)는 Calm SaaS 토큰·`design.md` lint용. 런타임 구조는 `current_architecture.md`만 정본으로 본다.
 
 버전·의존성·도구 설정은 저장소 루트의 [`pyproject.toml`](../pyproject.toml)가 단일 정본이다.
 

@@ -1,15 +1,12 @@
 """Blocking Service - 후보군 축소."""
 
 from collections import defaultdict
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 from domain.entities.file_entry import FileEntry
 from domain.services.filename_parser import FilenameParser
 from domain.value_objects.blocking_group import BlockingGroup
 from domain.value_objects.filename_parse_result import FilenameParseResult
-
-if TYPE_CHECKING:
-    from application.ports.log_sink import ILogSink
 
 _FileParsePair = tuple[FileEntry, FilenameParseResult]
 
@@ -21,19 +18,13 @@ class BlockingService:
     중복 탐지의 효율성을 높이는 서비스.
     """
 
-    def __init__(
-        self,
-        filename_parser: Optional[FilenameParser] = None,
-        log_sink: Optional["ILogSink"] = None,
-    ) -> None:
+    def __init__(self, filename_parser: Optional[FilenameParser] = None) -> None:
         """BlockingService 초기화.
 
         Args:
             filename_parser: 파일명 파서 (None이면 새로 생성).
-            log_sink: 로그 싱크 (선택적, 디버깅 목적).
         """
         self._parser = filename_parser or FilenameParser()
-        self._log_sink = log_sink
 
     def create_blocking_groups(
         self,

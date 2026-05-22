@@ -1,13 +1,10 @@
 """Keeper 점수화 서비스."""
 
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 from domain.entities.file_entry import FileEntry
 from domain.value_objects.detection_config import DetectionDefaults
 from domain.value_objects.filename_parse_result import FilenameParseResult
-
-if TYPE_CHECKING:
-    from application.ports.log_sink import ILogSink
 
 
 class KeeperScoreService:
@@ -18,14 +15,6 @@ class KeeperScoreService:
 
     점수 체계 상수는 Constants 클래스에서 관리합니다.
     """
-
-    def __init__(self, log_sink: Optional["ILogSink"] = None) -> None:
-        """KeeperScoreService 초기화.
-
-        Args:
-            log_sink: 로그 싱크 (선택적, 디버깅 목적).
-        """
-        self._log_sink = log_sink
 
     def calculate_keeper_score(
         self,

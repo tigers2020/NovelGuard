@@ -2,7 +2,7 @@
 
 from collections import defaultdict
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Optional
+from typing import Any, Optional
 
 from domain.entities.file_entry import FileEntry
 from domain.value_objects.duplicate_relation import ContainmentRelation, VersionRelation
@@ -14,9 +14,6 @@ WARNING_RANGE_INCREASED_SIZE_DECREASED = (
     "범위는 증가했지만 크기는 감소했습니다. 압축/정리본일 수 있습니다."
 )
 
-if TYPE_CHECKING:
-    from application.ports.log_sink import ILogSink
-
 
 class ContainmentDetector:
     """포함/버전 관계 탐지 서비스.
@@ -24,14 +21,6 @@ class ContainmentDetector:
     파일명 파싱 결과를 기반으로 포함 관계 및 버전 관계를 탐지하는 서비스.
     내용을 읽지 않고도 판정 가능 (파일명과 메타데이터만으로 판정).
     """
-
-    def __init__(self, log_sink: Optional["ILogSink"] = None) -> None:
-        """ContainmentDetector 초기화.
-
-        Args:
-            log_sink: 로그 싱크 (선택적, 디버깅 목적).
-        """
-        self._log_sink = log_sink
 
     def _get_containment_file_ids(
         self,

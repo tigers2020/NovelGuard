@@ -82,11 +82,11 @@ def run(target_dir: Path) -> None:
     store.add_files(result.entries)
 
     # 파이프라인 의존성
-    filename_parser = FilenameParser(log_sink=log_sink)
-    blocking_service = BlockingService(filename_parser=filename_parser, log_sink=log_sink)
-    containment_detector = ContainmentDetector(log_sink=log_sink)
+    filename_parser = FilenameParser()
+    blocking_service = BlockingService(filename_parser=filename_parser)
+    containment_detector = ContainmentDetector()
     hash_service = HashServiceAdapter()
-    exact_detector = ExactDuplicateDetector(hash_service=hash_service, log_sink=log_sink)
+    exact_detector = ExactDuplicateDetector(hash_service=hash_service)
 
     pipeline = DuplicateDetectionPipeline(
         filename_parser=filename_parser,

@@ -1,7 +1,8 @@
 """Qt Job Manager 구현."""
 
+from collections.abc import Callable
 from datetime import datetime
-from typing import TYPE_CHECKING, Callable, Optional, Union
+from typing import TYPE_CHECKING, Optional, Union
 
 from PySide6.QtCore import QObject, Signal
 
@@ -13,6 +14,9 @@ from application.dto.scan_result import ScanResult
 from application.ports.file_scanner import FileScanner
 from application.ports.index_repository import IIndexRepository
 from application.ports.log_sink import ILogSink
+from application.use_cases.duplicate_detection.duplicate_detection_pipeline import (
+    DuplicateDetectionPipeline,
+)
 from application.utils.debug_logger import debug_step
 from gui.workers.duplicate_detection_worker import DuplicateDetectionWorker
 from gui.workers.scan_worker import ScanWorker
@@ -54,6 +58,7 @@ class QtJobManager(QObject):
         index_repository: Optional[IIndexRepository] = None,
         log_sink: Optional[ILogSink] = None,
         file_data_store: Optional["FileDataStore"] = None,
+        duplicate_pipeline_factory: Callable[[], DuplicateDetectionPipeline] | None = None,
         parent: Optional[QObject] = None,
     ) -> None:
         """Qt Job Manager 초기화.
@@ -63,6 +68,7 @@ class QtJobManager(QObject):
             index_repository: 인덱스 저장소 (선택적).
             log_sink: 로그 싱크 (선택적).
             file_data_store: 파일 데이터 저장소 (선택적).
+            duplicate_pipeline_factory: 중복 탐지 파이프라인 팩토리 (composition root).
             parent: 부모 객체.
         """
         super().__init__(parent)
@@ -71,6 +77,7 @@ class QtJobManager(QObject):
         self._index_repository = index_repository
         self._log_sink = log_sink
         self._file_data_store = file_data_store
+        self._duplicate_pipeline_factory = duplicate_pipeline_factory
 
         # Job 관리
         self._next_job_id = 1
@@ -159,12 +166,11 @@ class QtJobManager(QObject):
             },
         )
 
-        # Worker 생성
+        pipeline = self._duplicate_pipeline_factory() if self._duplicate_pipeline_factory else None
         worker = DuplicateDetectionWorker(
             request,
-            index_repository=self._index_repository,
+            pipeline=pipeline,
             log_sink=self._log_sink,
-            file_data_store=self._file_data_store,
             parent=self,
         )
 

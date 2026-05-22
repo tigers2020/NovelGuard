@@ -1,16 +1,16 @@
 """스캔 폴더 UseCase."""
 
 import json
-import sqlite3
 import time
 from datetime import datetime
 from typing import Callable, Optional
 
-from app.settings.constants import DEFAULT_TEXT_EXTENSIONS, Constants
+from application.constants import DEFAULT_TEXT_EXTENSIONS, Constants
 from application.dto.log_entry import LogEntry
 from application.dto.run_summary import RunSummary
 from application.dto.scan_request import ScanRequest
 from application.dto.scan_result import ScanResult
+from application.exceptions import IndexPersistenceError
 from application.ports.file_scanner import FileScanner
 from application.ports.index_repository import IIndexRepository
 from application.ports.log_sink import ILogSink
@@ -75,7 +75,7 @@ class ScanFolderUseCase:
             run_id = self._index_repository.start_run(request)
             debug_step(self._log_sink, "run_start_success", {"run_id": run_id})
             return run_id
-        except (OSError, sqlite3.Error, ValueError) as e:
+        except (OSError, IndexPersistenceError, ValueError) as e:
             self._write_index_error(
                 f"Failed to start run in index repository: {e}",
                 {"error_type": type(e).__name__},
@@ -97,7 +97,7 @@ class ScanFolderUseCase:
                 "files_save_success",
                 {"run_id": run_id, "entries_count": len(entries)},
             )
-        except (OSError, sqlite3.Error, ValueError) as e:
+        except (OSError, IndexPersistenceError, ValueError) as e:
             self._write_index_error(
                 f"Failed to save files to index repository: {e}",
                 {"error_type": type(e).__name__, "run_id": run_id},
@@ -137,7 +137,7 @@ class ScanFolderUseCase:
             )
             self._index_repository.finalize_run(run_id, summary)
             debug_step(self._log_sink, "run_finalize_success", {"run_id": run_id})
-        except (OSError, sqlite3.Error, TypeError, ValueError) as e:
+        except (OSError, IndexPersistenceError, TypeError, ValueError) as e:
             self._write_index_error(
                 f"Failed to finalize run in index repository: {e}",
                 {"error_type": type(e).__name__, "run_id": run_id},

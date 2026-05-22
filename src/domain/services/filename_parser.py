@@ -2,13 +2,10 @@
 
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 from domain.value_objects.filename_parse_result import FilenameParseResult
 from domain.value_objects.range_segment import RangeSegment
-
-if TYPE_CHECKING:
-    from application.ports.log_sink import ILogSink
 
 
 class FilenameParser:
@@ -54,14 +51,6 @@ class FilenameParser:
 
     # 후기 태그
     EPILOGUE_TAGS = {"후기", "에필", "에필로그", "epilogue", "afterword"}
-
-    def __init__(self, log_sink: Optional["ILogSink"] = None) -> None:
-        """FilenameParser 초기화.
-
-        Args:
-            log_sink: 로그 싱크 (선택적, 디버깅 목적).
-        """
-        self._log_sink = log_sink
 
     def parse(self, path: Path) -> FilenameParseResult:
         """파일명을 파싱하여 FilenameParseResult 반환.

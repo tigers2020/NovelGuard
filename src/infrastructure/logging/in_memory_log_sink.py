@@ -12,7 +12,7 @@ from typing import Optional
 
 from PySide6.QtCore import QObject, Signal
 
-from app.settings.constants import Constants
+from application.constants import Constants
 from application.dto.log_entry import LogEntry
 
 

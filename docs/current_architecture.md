@@ -20,8 +20,11 @@
 - `SQLiteIndexRepository` — 인덱스 저장소
 - `FileSystemScanner` — 파일 시스템 스캔
 - `AppState` — 전역 UI 상태; `set_log_sink` 후 `file_data_store`를 한 번 확보해 아래와 공유
-- `QtJobManager` — 스캐너·인덱스·로그·**`AppState.file_data_store`**를 주입받아 스캔·중복 탐지 워커를 띄움
+- `QtJobManager` — 스캐너·인덱스·로그·**`AppState.file_data_store`**·**`duplicate_pipeline_factory`**를 주입받아 스캔·중복 탐지 워커를 띄움
 - `MainWindow` — `index_repo`, `log_sink`, `job_manager`와 **동일 `AppState` 인스턴스** 주입
+- **중복 탐지 파이프라인** — `app/factories.create_duplicate_detection_pipeline`으로 `app/main.py`에서 조립 후 `QtJobManager` → `DuplicateDetectionWorker`에 주입 (GUI는 `app.factories`를 import하지 않음)
+- **해시 포트** — `domain/ports/` (`IHashService`, `ISimHashService`); infrastructure 어댑터가 구현
+- **비즈니스 상수** — `application/constants.py` (`Constants`, `DEFAULT_TEXT_EXTENSIONS`); `app/settings/constants`는 QSettings 키 + re-export
 
 **Job 포트 (`application.ports.job_runner.IJobRunner`)**: GUI는 구체 클래스가 아니라 이 계약에만 의존한다. 메서드는 `start_scan`, `start_duplicate_detection`, `cancel`, `get_status`, `subscribe(JobEvent)`이며, 진행·완료·실패는 `subscribe`로 수신한다 (구현체는 `gui.services.qt_job_manager.QtJobManager`).
 
@@ -31,7 +34,7 @@
 
 | 경로 | 역할 |
 |------|------|
-| `src/domain/` | 도메인 모델·서비스·규칙 |
+| `src/domain/` | 도메인 모델·서비스·규칙·**`ports/`** (해시 등 outbound seam) |
 | `src/application/` | 유스케이스, DTO, 애플리케이션 포트 |
 | `src/infrastructure/` | DB, FS, 로깅 등 어댑터 구현 |
 | `src/gui/` | PySide6 UI, 뷰모델, 서비스 |

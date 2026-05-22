@@ -7,8 +7,12 @@ from pathlib import Path
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
 
+from app.factories import create_duplicate_detection_pipeline
 from app.settings.constants import SETTINGS_KEY_UI_THEME
 from application.dto.log_entry import LogEntry
+from application.use_cases.duplicate_detection.duplicate_detection_pipeline import (
+    DuplicateDetectionPipeline,
+)
 from gui.models.app_state import AppState
 from gui.services.qt_job_manager import QtJobManager
 from gui.styles.fonts import apply_application_font
@@ -56,11 +60,19 @@ def main() -> int:
     app_state.set_log_sink(log_sink)
     _ = app_state.file_data_store
 
+    def duplicate_pipeline_factory() -> DuplicateDetectionPipeline:
+        return create_duplicate_detection_pipeline(
+            index_repository=index_repo,
+            file_data_store=app_state.file_data_store,
+            log_sink=log_sink,
+        )
+
     job_manager = QtJobManager(
         scanner,
         index_repository=index_repo,
         log_sink=log_sink,
         file_data_store=app_state.file_data_store,
+        duplicate_pipeline_factory=duplicate_pipeline_factory,
     )
 
     # 메인 윈도우 생성 및 표시 (의존성 주입)

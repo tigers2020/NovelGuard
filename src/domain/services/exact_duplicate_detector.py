@@ -1,14 +1,9 @@
 """Exact 중복 탐지 서비스."""
 
-from typing import TYPE_CHECKING, Optional
-
 from domain.entities.file_entry import FileEntry
+from domain.ports.content_hash import IHashService
 from domain.value_objects.blocking_group import BlockingGroup
 from domain.value_objects.duplicate_relation import ExactDuplicateRelation
-
-if TYPE_CHECKING:
-    from application.ports.hash_service import IHashService
-    from application.ports.log_sink import ILogSink
 
 
 class ExactDuplicateDetector:
@@ -18,15 +13,13 @@ class ExactDuplicateDetector:
     해시 기반으로 동일성을 판정.
     """
 
-    def __init__(self, hash_service: "IHashService", log_sink: Optional["ILogSink"] = None) -> None:
+    def __init__(self, hash_service: IHashService) -> None:
         """ExactDuplicateDetector 초기화.
 
         Args:
             hash_service: 해시 서비스 (Port).
-            log_sink: 로그 싱크 (선택적, 디버깅 목적).
         """
         self._hash_service = hash_service
-        self._log_sink = log_sink
 
     def detect_exact(
         self, blocking_group: BlockingGroup, file_entries: dict[int, FileEntry]

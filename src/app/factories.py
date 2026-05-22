@@ -1,7 +1,7 @@
 """Composition Root 팩토리 함수들.
 
 도메인 서비스·infrastructure 어댑터를 조립하여 application 유스케이스에
-필요한 객체 그래프를 생성한다. GUI 워커는 이 함수들을 통해 주입받는다.
+필요한 객체 그래프를 생성한다. `app/main.py`에서 팩토리를 QtJobManager에 주입한다.
 """
 
 from typing import Optional
@@ -25,11 +25,11 @@ def create_duplicate_detection_pipeline(
     log_sink: Optional[ILogSink] = None,
 ) -> DuplicateDetectionPipeline:
     """중복 탐지 파이프라인을 조립하여 반환한다."""
-    filename_parser = FilenameParser(log_sink=log_sink)
-    blocking_service = BlockingService(filename_parser=filename_parser, log_sink=log_sink)
-    containment_detector = ContainmentDetector(log_sink=log_sink)
+    filename_parser = FilenameParser()
+    blocking_service = BlockingService(filename_parser=filename_parser)
+    containment_detector = ContainmentDetector()
     hash_service = HashServiceAdapter()
-    exact_detector = ExactDuplicateDetector(hash_service=hash_service, log_sink=log_sink)
+    exact_detector = ExactDuplicateDetector(hash_service=hash_service)
 
     return DuplicateDetectionPipeline(
         filename_parser=filename_parser,

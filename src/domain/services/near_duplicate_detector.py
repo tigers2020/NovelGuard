@@ -3,13 +3,12 @@
 from typing import TYPE_CHECKING, Optional
 
 from domain.entities.file_entry import FileEntry
+from domain.ports.sim_hash import ISimHashService
 from domain.value_objects.blocking_group import BlockingGroup
 from domain.value_objects.detection_config import DetectionDefaults
 from domain.value_objects.duplicate_relation import NearDuplicateRelation
 
 if TYPE_CHECKING:
-    from application.ports.hash_service import ISimHashService
-    from application.ports.log_sink import ILogSink
     from domain.value_objects.filename_parse_result import FilenameParseResult
 
 
@@ -22,20 +21,17 @@ class NearDuplicateDetector:
 
     def __init__(
         self,
-        simhash_service: Optional["ISimHashService"] = None,
+        simhash_service: Optional[ISimHashService] = None,
         similarity_threshold: float = DetectionDefaults.DEFAULT_SIMILARITY_THRESHOLD,
-        log_sink: Optional["ILogSink"] = None,
     ) -> None:
         """NearDuplicateDetector 초기화.
 
         Args:
             simhash_service: SimHash 서비스 (Port, 선택적, v2 기능).
             similarity_threshold: 유사도 임계값 (기본값: 0.85).
-            log_sink: 로그 싱크 (선택적, 디버깅 목적).
         """
         self._simhash_service = simhash_service
         self._similarity_threshold = similarity_threshold
-        self._log_sink = log_sink
 
     @staticmethod
     def _parse_with_range_if_present(
