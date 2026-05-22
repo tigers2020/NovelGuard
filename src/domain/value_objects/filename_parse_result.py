@@ -25,10 +25,10 @@ class FilenameParseResult:
 
     # 파싱 결과
     series_title_norm: str
-    """작품명 정규화 (공백/특수문자/태그 제거, 소문자).
+    """작품명 정규화 — Blocking·is_same_series 키 (NFKC, 구두점 제거, 소문자).
 
     예: "작품명 1-170.txt" → "작품명"
-        "작품명 1-200(完, 후기 포함)@경우.txt" → "작품명"
+        "던전 & 커맨더 …" / "던전  커맨더 …" → 동일 키
     """
 
     range_start: Optional[int] = None

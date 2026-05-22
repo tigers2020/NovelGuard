@@ -19,6 +19,9 @@ class DetectionDefaults:
     CONFIDENCE_THRESHOLD: Final[float] = 0.5
     """파싱 신뢰도 최소 기준."""
 
+    MAX_FILES_PER_BLOCKING_GROUP_FOR_VERSION_PAIRS: Final[int] = 500
+    """range_start 버킷 내 version 쌍 비교 상한. 초과 버킷은 스킵."""
+
     # Keeper 점수 체계
     SCORE_COMPLETE_TAG: Final[int] = 100
     SCORE_COVERAGE: Final[int] = 50

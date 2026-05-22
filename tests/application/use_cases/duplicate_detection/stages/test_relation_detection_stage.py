@@ -153,6 +153,60 @@ def test_relation_detection_stage_execute_version():
     assert result_context.results[0].recommended_keeper_id == 20  # newer
 
 
+def test_version_pairs_skipped_when_bucket_over_cap(monkeypatch) -> None:
+    """range_start 버킷이 cap을 넘으면 version 쌍 비교를 스킵한다."""
+    from domain.value_objects import detection_config
+
+    monkeypatch.setattr(
+        detection_config.DetectionDefaults,
+        "MAX_FILES_PER_BLOCKING_GROUP_FOR_VERSION_PAIRS",
+        2,
+    )
+
+    containment_detector = Mock(spec=ContainmentDetector)
+    containment_detector.detect_containment.return_value = None
+    containment_detector.detect_version.return_value = None
+
+    log_sink = Mock(spec=ILogSink)
+    stage = RelationDetectionStage(containment_detector=containment_detector, log_sink=log_sink)
+
+    store_ids = [10, 20, 30]
+    entries = {
+        fid: FileEntry(
+            path=Path(f"t{fid}.txt"),
+            size=100,
+            mtime=datetime.now(),
+            extension=".txt",
+            file_id=fid,
+        )
+        for fid in store_ids
+    }
+    parses = {
+        idx: FilenameParseResult(
+            original_path=Path(f"t{idx}.txt"),
+            original_name=f"t{idx}",
+            series_title_norm="test",
+            range_start=1,
+            range_end=100 + idx,
+            confidence=0.9,
+        )
+        for idx in (1, 2, 3)
+    }
+
+    blocking_group = BlockingGroup(series_title_norm="test", extension=".txt", file_ids=[1, 2, 3])
+    request = DuplicateDetectionRequest(run_id=1, enable_containment=False, enable_version=True)
+    context = PipelineContext(request=request)
+    context.blocking_groups = [blocking_group]
+    context.file_id_mapping = {1: 10, 2: 20, 3: 30}
+    context.file_entries_map = entries
+    context.parse_results = parses
+
+    result_context = stage.execute(context)
+
+    assert result_context.results == []
+    containment_detector.detect_version.assert_not_called()
+
+
 def test_relation_detection_stage_execute_skip_small_groups():
     """파일이 2개 미만인 그룹은 스킵 테스트."""
     containment_detector = ContainmentDetector()

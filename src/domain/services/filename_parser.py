@@ -1,11 +1,15 @@
 """파일명 파싱 서비스."""
 
 import re
+import unicodedata
 from pathlib import Path
 from typing import Optional
 
 from domain.value_objects.filename_parse_result import FilenameParseResult
 from domain.value_objects.range_segment import RangeSegment
+
+# Blocking key: punctuation/symbols → space (after NFKC).
+_TITLE_PUNCT_PATTERN = re.compile(r"[&!?.,·…:;|/\\~`\"'+\-=\*#]+")
 
 
 class FilenameParser:
@@ -315,33 +319,29 @@ class FilenameParser:
         )
 
     def _normalize_series_title(self, title: str) -> str:
-        """작품명 정규화.
+        """작품명 정규화 (blocking / is_same_series 키).
 
         Args:
             title: 원본 작품명.
 
         Returns:
-            정규화된 작품명 (소문자, 공백 정리, 태그 제거).
+            NFKC·구두점 제거·공백 정리·소문자 변환된 작품명.
         """
-        # 태그 제거
-        normalized = re.sub(r"[\(\[][^\)\]]*[\)\]]", "", title)  # (태그), [태그] 제거
-        normalized = re.sub(r"@[^\s]+", "", normalized)  # @태그 제거
+        normalized = unicodedata.normalize("NFKC", title)
+        normalized = re.sub(r"[\(\[][^\)\]]*[\)\]]", "", normalized)
+        normalized = re.sub(r"@[^\s]+", "", normalized)
 
-        # 완결 태그 단어 기반 제거 (문자 클래스가 아닌 alternation 사용)
-        # 주의: [완결完후기에필]+ 같은 문자 클래스는 개별 문자를 삭제하므로
-        # 서로 다른 작품명이 같은 normalized로 뭉개질 수 있음
         tag_words_pattern = re.compile(
             r"(완결|완전판|완본|완|完|후기|에필로그|에필|epilogue|afterword|complete|finished|end)",
             re.IGNORECASE,
         )
         normalized = tag_words_pattern.sub("", normalized)
-
-        # 공백 정리
+        normalized = _TITLE_PUNCT_PATTERN.sub(" ", normalized)
         normalized = re.sub(r"\s+", " ", normalized).strip()
-
-        # 소문자 변환 (한글은 영향 없음)
         normalized = normalized.lower()
 
+        if len(normalized) < 2:
+            return title.strip().lower()
         return normalized
 
     def _extract_tags(self, text: str) -> list[str]:

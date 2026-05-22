@@ -13,6 +13,7 @@ from application.utils.debug_logger import debug_step
 from domain.entities.file_entry import FileEntry
 from domain.services.containment_detector import ContainmentDetector
 from domain.value_objects.blocking_group import BlockingGroup
+from domain.value_objects.detection_config import DetectionDefaults
 from domain.value_objects.filename_parse_result import FilenameParseResult
 
 # 범위가 없는 항목 정렬 시 맨 뒤로 보내기 위한 sentinel
@@ -301,18 +302,34 @@ def _compute_version_groups(
     context: PipelineContext,
     group_id: int,
     detector: ContainmentDetector,
+    log_sink: Optional[ILogSink] = None,
 ) -> tuple[list[DuplicateGroupResult], int]:
     """Version 관계를 탐지해 DuplicateGroupResult 리스트와 다음 group_id 반환.
 
     range_start가 같은 파일끼리만 쌍 비교 (detect_version 조건과 일치, 비교 횟수 감소).
     """
+    cap = DetectionDefaults.MAX_FILES_PER_BLOCKING_GROUP_FOR_VERSION_PAIRS
+    if len(file_ids_list) > cap:
+        debug_step(
+            log_sink,
+            "relation_version_pair_cap",
+            {"file_count": len(file_ids_list), "cap": cap},
+        )
+
     results: list[DuplicateGroupResult] = []
     by_range_start: dict[Optional[int], list[int]] = defaultdict(list)
     for file_id in file_ids_list:
         rs = _range_start_for_grouping(file_id, group_parse_results)
         by_range_start[rs].append(file_id)
-    for _range_start, ids in by_range_start.items():
+    for range_start, ids in by_range_start.items():
         if len(ids) < 2:
+            continue
+        if len(ids) > cap:
+            debug_step(
+                log_sink,
+                "relation_version_bucket_skipped",
+                {"range_start": range_start, "bucket_size": len(ids), "cap": cap},
+            )
             continue
         bucket_results, group_id = _collect_version_results_for_ids(
             ids,
@@ -396,6 +413,7 @@ class RelationDetectionStage(PipelineStage):
                     context,
                     group_id,
                     self._containment_detector,
+                    log_sink=self._log_sink,
                 )
                 group_results.extend(version_results)
 

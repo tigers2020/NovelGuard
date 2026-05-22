@@ -68,3 +68,20 @@ class TestCreateBlockingGroups:
 
     def test_empty_input(self, service: BlockingService) -> None:
         assert service.create_blocking_groups([]) == []
+
+    def test_title_variants_share_blocking_group(self, service: BlockingService) -> None:
+        """던전 & / spacing variants → one BlockingGroup for version pairing."""
+        parser = FilenameParser()
+        files = [
+            (
+                _entry(1, "던전 & 커맨더 1-2194.txt"),
+                parser.parse(Path("던전 & 커맨더 1-2194.txt")),
+            ),
+            (
+                _entry(2, "던전  커맨더 1-2168.txt"),
+                parser.parse(Path("던전  커맨더 1-2168.txt")),
+            ),
+        ]
+        groups = service.create_blocking_groups(files)
+        assert len(groups) == 1
+        assert set(groups[0].file_ids) == {1, 2}
