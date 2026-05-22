@@ -306,3 +306,9 @@ class DuplicateViewModel(BaseViewModel):
                 {"error": str(e), "error_type": type(e).__name__},
             )
             self.duplicate_error.emit(f"중복 탐지 시작 실패: {e}")
+
+    def stop_duplicate_detection(self) -> None:
+        """중복 탐지 중지."""
+        if not self._is_detecting or not self._job_manager or self._current_job_id is None:
+            return
+        self._job_manager.cancel(self._current_job_id)

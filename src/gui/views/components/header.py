@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 
 class HeaderWidget(QWidget):
-    """헤더 위젯 — 제목 및 서브타이틀 (통계는 WorkContextBar)."""
+    """헤더 위젯 — 제목 및 서브타이틀 (작업 지표는 WorkTab CompactBar)."""
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)

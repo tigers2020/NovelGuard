@@ -1,4 +1,9 @@
-"""Pre-flight counts for PipelineRunConfirmSheet (GUI aggregation only)."""
+"""Pre-flight counts for a full pipeline run (GUI aggregation only).
+
+Rev. 3.3: **not called from WorkTab** (``PipelineRunConfirmSheet`` removed).
+Kept for ``tests/gui/services/test_pipeline_run_preview.py`` and future
+one-shot confirm if auto-pipeline returns.
+"""
 
 from __future__ import annotations
 

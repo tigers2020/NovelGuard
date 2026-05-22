@@ -359,7 +359,7 @@ class MainWindow(QMainWindow):
         self._update_header_stats_from_store()
 
     def _update_header_stats_from_store(self) -> None:
-        """FileDataStore에서 통계를 계산하여 WorkContextBar 갱신."""
+        """FileDataStore에서 통계를 계산하여 WorkTab CompactBar 갱신."""
         work_stats = compute_work_stats(self._app_state.file_data_store)
         self._update_work_context_stats(
             total_files=work_stats.total_files,

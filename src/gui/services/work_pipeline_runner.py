@@ -1,4 +1,9 @@
-"""One-button sequential work pipeline orchestrator (GUI layer)."""
+"""Sequential work pipeline orchestrator (GUI service layer).
+
+Rev. 3.3: **not wired from WorkTab** (step-only footer execution). Retained for
+``tests/gui/services/test_work_pipeline_runner.py`` and possible future
+auto-pipeline reintroduction behind an explicit product decision.
+"""
 
 from __future__ import annotations
 

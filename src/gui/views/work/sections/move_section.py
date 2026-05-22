@@ -7,7 +7,6 @@ from typing import Optional
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMessageBox,
     QProgressBar,
     QPushButton,
@@ -43,25 +42,19 @@ class MoveSection(QWidget):
         self._build_ui()
         self.refresh_folder()
 
+    def execute_organize(self) -> bool:
+        """Run organize with confirmation (invoked from wizard footer)."""
+        return self.pipeline_execute_with_confirmation(self)
+
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
-        folder_block = QWidget()
-        folder_block.setObjectName("pipelineFieldBlock")
-        fg = QVBoxLayout(folder_block)
-        fg.setContentsMargins(0, 0, 0, 0)
-        folder_label = QLabel("대상 폴더 (라이브러리와 동일)")
-        folder_label.setObjectName("formLabel")
-        fg.addWidget(folder_label)
-        self._folder_edit = QLineEdit()
-        self._folder_edit.setReadOnly(True)
-        fg.addWidget(self._folder_edit)
         hint = QLabel(
-            f"결과는 '{OUTPUT_SUBFOLDER}' 하위에 저장됩니다. 폴더는 라이브러리 섹션에서 선택하세요."
+            f"대상 폴더는 상단 CompactBar와 동일합니다. "
+            f"결과는 '{OUTPUT_SUBFOLDER}' 하위에 저장됩니다."
         )
         hint.setObjectName("formHint")
         hint.setWordWrap(True)
-        fg.addWidget(hint)
-        layout.addWidget(folder_block)
+        layout.addWidget(hint)
 
         options = QWidget()
         options.setObjectName("pipelineFieldBlock")
@@ -83,10 +76,6 @@ class MoveSection(QWidget):
         dry_run_btn.setObjectName("btnSecondary")
         dry_run_btn.clicked.connect(self._on_dry_run)
         bar.addWidget(dry_run_btn)
-        run_btn = QPushButton("초성별로 정리 실행")
-        run_btn.setObjectName("btnPrimary")
-        run_btn.clicked.connect(self._on_run)
-        bar.addWidget(run_btn)
         bar.addStretch()
         layout.addLayout(bar)
 
@@ -101,15 +90,14 @@ class MoveSection(QWidget):
         layout.addWidget(self._result_label)
 
     def refresh_folder(self) -> None:
-        folder = self._app_state.scan_folder or ""
-        self._folder_edit.setText(folder)
+        """No-op: folder path comes from AppState (CompactBar)."""
 
     def _get_target_path(self) -> Optional[Path]:
-        text = self._folder_edit.text().strip()
-        if text:
-            p = Path(text)
-            return p if p.is_dir() else None
-        return None
+        raw = self._app_state.scan_folder
+        if not raw:
+            return None
+        p = Path(str(raw))
+        return p if p.is_dir() else None
 
     def _on_dry_run(self) -> None:
         self.refresh_folder()
@@ -203,27 +191,3 @@ class MoveSection(QWidget):
             logger.exception("pipeline move auto execute failed")
             self._progress_info.setText(f"실행 실패: {e}")
             return False
-
-    def _on_run(self) -> None:
-        self.refresh_folder()
-        root = self._get_target_path()
-        if not root:
-            QMessageBox.warning(
-                self, "대상 폴더 필요", "라이브러리에서 스캔 폴더를 먼저 선택하세요."
-            )
-            return
-        move = self._move_radio.isChecked()
-        self._progress_bar.setRange(0, 0)
-        self._progress_info.setText("실행 중...")
-        try:
-            result = self._use_case.execute(root_path=root, move=move, dry_run=False)
-            self._progress_bar.setRange(0, 100)
-            self._progress_bar.setValue(100)
-            self._progress_info.setText(
-                f"{result.moved_or_copied}개 {'이동' if move else '복사'} 완료"
-            )
-            parts = [f"{n}: {result.counts_by_folder.get(n, 0)}" for n in FOLDER_NAMES]
-            self._result_label.setText(" · ".join(parts))
-        except Exception as e:
-            logger.exception("Organize failed")
-            QMessageBox.critical(self, "실행 오류", str(e))

@@ -1,4 +1,4 @@
-"""Library section: folder pick, preview trigger, full scan."""
+"""Library section: scan progress only (folder/scan actions live in CompactBar + Footer)."""
 
 import logging
 from pathlib import Path
@@ -6,13 +6,10 @@ from typing import Optional
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
-    QFileDialog,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMessageBox,
     QProgressBar,
-    QPushButton,
     QVBoxLayout,
     QWidget,
 )
@@ -27,9 +24,10 @@ logger = logging.getLogger(__name__)
 
 
 class LibrarySection(QWidget):
-    """Folder selection and full scan (single owner of folder picker)."""
+    """Full scan progress and preview status (folder picker owned by CompactBar)."""
 
     folder_selected = Signal(Path)
+    scan_completed = Signal()
 
     def __init__(
         self,
@@ -59,42 +57,14 @@ class LibrarySection(QWidget):
         preview_row.addStretch()
         layout.addLayout(preview_row)
 
-        action_bar = QHBoxLayout()
-        action_bar.setSpacing(16)
-        folder_btn = QPushButton("폴더 선택")
-        folder_btn.setObjectName("btnPrimary")
-        folder_btn.clicked.connect(self._on_select_folder)
-        action_bar.addWidget(folder_btn)
-        scan_btn = QPushButton("전체 스캔")
-        scan_btn.setObjectName("btnPrimary")
-        scan_btn.clicked.connect(self._on_start_scan)
-        action_bar.addWidget(scan_btn)
-        stop_btn = QPushButton("중지")
-        stop_btn.setObjectName("btnSecondary")
-        stop_btn.clicked.connect(self._on_stop_scan)
-        action_bar.addWidget(stop_btn)
-        action_bar.addStretch()
-        layout.addLayout(action_bar)
-
         self._progress_section = self._create_progress_section()
         layout.addWidget(self._progress_section)
 
-        folder_block = QWidget()
-        folder_block.setObjectName("pipelineFieldBlock")
-        fg_layout = QVBoxLayout(folder_block)
-        fg_layout.setContentsMargins(0, 0, 0, 0)
-        folder_label = QLabel("대상 폴더")
-        folder_label.setObjectName("formLabel")
-        fg_layout.addWidget(folder_label)
-        self._folder_input = QLineEdit()
-        self._folder_input.setReadOnly(True)
-        self._folder_input.setPlaceholderText("폴더를 선택하세요")
-        fg_layout.addWidget(self._folder_input)
         hint = QLabel("확장자·하위 폴더 옵션은 설정 탭에서 변경할 수 있습니다.")
         hint.setObjectName("formHint")
         hint.setWordWrap(True)
-        fg_layout.addWidget(hint)
-        layout.addWidget(folder_block)
+        layout.addWidget(hint)
+        layout.addStretch()
 
     def _create_progress_section(self) -> QWidget:
         group = QWidget()
@@ -132,16 +102,11 @@ class LibrarySection(QWidget):
         self._on_start_scan()
 
     def cancel_scan(self) -> None:
-        self._on_stop_scan()
+        self._view_model.stop_scan()
 
-    def set_scan_folder(self, folder: Path) -> None:
-        self._scan_folder = folder
-        self._folder_input.setText(str(folder))
+    def select_folder(self) -> None:
+        from PySide6.QtWidgets import QFileDialog
 
-    def get_scan_folder(self) -> Optional[Path]:
-        return self._scan_folder
-
-    def _on_select_folder(self) -> None:
         folder = QFileDialog.getExistingDirectory(
             self, "스캔할 폴더 선택", str(self._scan_folder) if self._scan_folder else ""
         )
@@ -149,6 +114,13 @@ class LibrarySection(QWidget):
             folder_path = Path(folder)
             self.set_scan_folder(folder_path)
             self.folder_selected.emit(folder_path)
+
+    def set_scan_folder(self, folder: Path) -> None:
+        self._scan_folder = folder
+        self._view_model.scan_folder = folder
+
+    def get_scan_folder(self) -> Optional[Path]:
+        return self._scan_folder
 
     def _get_settings(self):
         return get_settings_tab(self)
@@ -167,9 +139,6 @@ class LibrarySection(QWidget):
             include_symlinks=settings.get_include_symlinks() if settings else True,
             incremental_scan=settings.get_incremental_scan() if settings else True,
         )
-
-    def _on_stop_scan(self) -> None:
-        self._view_model.stop_scan()
 
     def _on_progress_updated(self, progress: int, message: str) -> None:
         self._progress_bar.setRange(0, 0)
@@ -193,6 +162,7 @@ class LibrarySection(QWidget):
                 data_store.scan_folder = self._scan_folder
             data_store.add_files(result.entries)
         self._save_scan_result_to_json(result)
+        self.scan_completed.emit()
 
     def _on_scan_error(self, error_message: str) -> None:
         self._progress_bar.setRange(0, 100)

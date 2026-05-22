@@ -134,24 +134,35 @@ class DuplicateSection(QWidget):
         self._progress_info.setText(f"자동 적용 중… {len(operations)}건 → duplicate/")
         return True
 
+    def start_detection(self) -> None:
+        """Start duplicate detection (invoked from wizard footer)."""
+        self._on_start_detection()
+
+    def apply_duplicates(self) -> None:
+        """Apply duplicate moves with confirmation (invoked from wizard footer)."""
+        self._on_apply()
+
+    def has_detection_results(self) -> bool:
+        return bool(self._view_model.results)
+
+    def is_apply_running(self) -> bool:
+        return self._move_worker is not None and self._move_worker.isRunning()
+
+    def cancel_apply(self) -> None:
+        if self._move_worker and self._move_worker.isRunning():
+            self._move_worker.cancel()
+            self._move_worker.wait(2000)
+
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
 
         action_bar = QHBoxLayout()
         action_bar.setSpacing(16)
-        detect_btn = QPushButton("중복 탐지 시작")
-        detect_btn.setObjectName("btnPrimary")
-        detect_btn.clicked.connect(self._on_start_detection)
-        action_bar.addWidget(detect_btn)
         dry_run_btn = QPushButton("Dry Run")
         dry_run_btn.setObjectName("btnSecondary")
         dry_run_btn.clicked.connect(self._on_dry_run)
         action_bar.addWidget(dry_run_btn)
-        apply_btn = QPushButton("적용하기")
-        apply_btn.setObjectName("btnSuccess")
-        apply_btn.clicked.connect(self._on_apply)
-        action_bar.addWidget(apply_btn)
         action_bar.addStretch()
         layout.addLayout(action_bar)
 

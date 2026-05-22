@@ -1,6 +1,6 @@
 # Workflow Pipeline UI (Work Screen Rev. 3)
 
-> Status: **approved** (rev. 3.2 wizard shell + dialog policy 2026-05-22; supersedes rev. 3.0–3.1 layout/dialog details below)
+> Status: **approved** (rev. 3.3 unified step-only UI 2026-05-22; rev. 3.2 wizard shell; supersedes rev. 3.0–3.1 layout/dialog details below)
 > Prerequisite: [2026-05-22-ui-work-hub-ia-design.md](2026-05-22-ui-work-hub-ia-design.md) Phase 1–8 complete + verification green
 > Related: [2026-05-22-design-md-ui-rebrand-design.md](2026-05-22-design-md-ui-rebrand-design.md) (tokens, button QSS)
 > UX source: Desktop UI/UX review (2026-05-22) — information hierarchy and step pipeline
@@ -462,6 +462,47 @@ Rev. 2 section internals (`library_section`, `duplicate_section`, `move_section`
 │        │  └──────────────────────────────────────┘  │
 └────────┴─────────────────────────────────────────────┘
 ```
+
+## §8 Rev. 3.3 — Unified controls, step-only execution (approved 2026-05-22)
+
+> **Supersedes** for Work UI: Goal #9 auto-pipeline, §7 `PipelineRunConfirmSheet`, §7 WizardFooter `전체 작업 실행`, duplicate `WorkContextBar` / `StepCard` / `WorkSection` widgets.
+
+### User decisions
+
+| Topic | Choice |
+|-------|--------|
+| Execution | **A** — `현재 단계 실행` only (no `전체 작업 실행` in UI) |
+| Layout reference | User HTML mockup 2026-05-22 |
+| Folder / rescan | **CompactBar only** (icon buttons) |
+| Step primary actions | **WizardFooter only** |
+| Auto pipeline UI | **Removed** (`PipelineRunConfirmSheet` deleted; `WorkPipelineRunner` not wired from WorkTab) |
+
+### Deleted view modules
+
+- `work_context_bar.py` (replaced by `work_compact_bar.py` + `wizard_footer.py`)
+- `pipeline_run_confirm_sheet.py`
+- `step_card.py` (replaced by `pipeline_stepper.py`)
+- `work_section.py` (rev. 2 collapsible wrapper)
+
+### Footer step actions
+
+| Step | Primary label | Invokes |
+|------|---------------|---------|
+| scan | `스캔 실행` | `LibrarySection.request_full_scan()` |
+| duplicate | `중복 탐지` → `적용하기` | detect → apply (confirm dialog) |
+| move | `정리 실행` | `MoveSection.execute_organize()` |
+| finalize | `적용·검증` | `FinalizeSection.run_apply_and_integrity_auto()` |
+
+Running: hide Primary, show `중지` only. Secondary Dry Run stays in step body.
+
+### Section bodies (slim)
+
+- **LibrarySection:** preview status + progress panel only (no folder field, no scan buttons).
+- **DuplicateSection:** Dry Run + tables (no detect/apply buttons).
+- **MoveSection:** move/copy options + Dry Run (no folder field, no run button).
+- **FinalizeSection:** status + hints (no apply button row).
+
+---
 
 ## References
 

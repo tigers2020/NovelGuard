@@ -4,11 +4,11 @@ from gui.models.app_state import AppState
 from gui.views.work.work_tab import WorkTab
 
 
-def test_work_tab_has_footer_not_context_run(qapp) -> None:
+def test_work_tab_has_footer_and_compact_bar(qapp) -> None:
     tab = WorkTab(app_state=AppState())
     assert hasattr(tab, "_footer")
     assert hasattr(tab, "_compact_bar")
-    assert not hasattr(tab, "_context_bar")
+    assert "실행" in tab.footer._execute_btn.text()
 
 
 def test_work_tab_splitter_and_dock_after_table(qapp) -> None:

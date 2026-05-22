@@ -60,7 +60,7 @@ class PipelineSnapshot:
 
 @dataclass(frozen=True)
 class PipelineRunProgress:
-    """Global auto-pipeline progress shown on WorkContextBar."""
+    """Step pipeline progress (legacy DTO; footer uses step-only UI in rev. 3.3)."""
 
     run_id: str
     current_step_id: str
