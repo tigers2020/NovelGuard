@@ -30,6 +30,7 @@ Older research and plans remain under [`documents/`](../../documents/README.md).
 - [2026-05-22-design-md-ui-rebrand-design.md](specs/2026-05-22-design-md-ui-rebrand-design.md) — DESIGN.md + Calm SaaS rebrand (approved)
 - [2026-05-22-layer-seams-and-composition-design.md](specs/2026-05-22-layer-seams-and-composition-design.md)
 - [2026-05-22-duplicate-detection-title-blocking-design.md](specs/2026-05-22-duplicate-detection-title-blocking-design.md) — title norm + blocking for updated anthologies (approved)
+- [2026-05-22-exact-hash-io-optimization-design.md](specs/2026-05-22-exact-hash-io-optimization-design.md) — Exact hash I/O metrics, pruning, fused reads (approved)
 - [2026-05-22-ui-work-hub-ia-design.md](specs/2026-05-22-ui-work-hub-ia-design.md) — single work screen, minimal nav, global toolbar (approved)
 - [2026-05-22-workflow-pipeline-ui-design.md](specs/2026-05-22-workflow-pipeline-ui-design.md) — step pipeline UX rev. 3 (approved; **rev. 3.3** step-only footer; §7 rev. 3.2 superseded for run-all UI)
 - [2026-05-22-workflow-pipeline-ui.md](plans/2026-05-22-workflow-pipeline-ui.md) — rev. 3.1 implementation plan (partially landed)
@@ -42,4 +43,5 @@ Older research and plans remain under [`documents/`](../../documents/README.md).
 - [2026-05-22-design-md-ui-rebrand.md](plans/2026-05-22-design-md-ui-rebrand.md) — DESIGN.md UI rebrand (in progress)
 - [2026-05-22-layer-seams-and-composition.md](plans/2026-05-22-layer-seams-and-composition.md)
 - [2026-05-22-duplicate-detection-title-blocking.md](plans/2026-05-22-duplicate-detection-title-blocking.md) — title blocking (ready)
+- [2026-05-22-exact-hash-io-optimization.md](plans/2026-05-22-exact-hash-io-optimization.md) — Exact hash I/O: PR-1 metrics → PR-2 pruning → PR-3 fused I/O (ready)
 - [2026-05-22-ui-work-hub-ia.md](plans/2026-05-22-ui-work-hub-ia.md) — work screen IA (implemented)

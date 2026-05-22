@@ -1,5 +1,6 @@
 """Exact(완전 동일) 중복 탐지 단계."""
 
+import time
 from collections import defaultdict
 from typing import Optional
 
@@ -13,6 +14,7 @@ from application.utils.debug_logger import debug_step
 from domain.entities.file_entry import FileEntry
 from domain.services.exact_duplicate_detector import ExactDuplicateDetector
 from domain.value_objects.blocking_group import BlockingGroup
+from domain.value_objects.exact_detect_metrics import ExactDetectMetrics
 
 
 class ExactDuplicateStage(PipelineStage):
@@ -57,6 +59,8 @@ class ExactDuplicateStage(PipelineStage):
 
         exact_results: list[DuplicateGroupResult] = []
         next_group_id = max((r.group_id for r in context.results), default=0) + 1
+        t0 = time.perf_counter()
+        total_metrics = ExactDetectMetrics()
 
         for size, file_ids in size_to_ids.items():
             if len(file_ids) < 2:
@@ -64,8 +68,9 @@ class ExactDuplicateStage(PipelineStage):
             synthetic_group = BlockingGroup(
                 series_title_norm="", extension="", file_ids=file_ids, range_start=None
             )
-            relations = self._exact_detector.detect_exact(synthetic_group, context.file_entries_map)
-            for rel in relations:
+            detection = self._exact_detector.detect_exact(synthetic_group, context.file_entries_map)
+            total_metrics = total_metrics.merged(detection.metrics)
+            for rel in detection.relations:
                 # 추천 keeper: 수정일이 가장 최신인 파일
                 keeper_id = self._pick_keeper(rel.file_ids, context.file_entries_map)
                 exact_results.append(
@@ -80,12 +85,20 @@ class ExactDuplicateStage(PipelineStage):
                 )
                 next_group_id += 1
 
+        wall_ms = int((time.perf_counter() - t0) * 1000)
         debug_step(
             self._log_sink,
             "duplicate_detection_exact_complete",
             {
                 "exact_groups_count": len(exact_results),
                 "total_exact_files": sum(len(r.file_ids) for r in exact_results),
+                "wall_ms": wall_ms,
+                "size_bucket_count": total_metrics.size_bucket_count,
+                "files_considered": total_metrics.files_considered,
+                "prefix_hash_count": total_metrics.prefix_hash_count,
+                "suffix_hash_count": total_metrics.suffix_hash_count,
+                "full_hash_count": total_metrics.full_hash_count,
+                "file_open_count": total_metrics.file_open_count,
             },
         )
 

@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import Protocol
 
+from domain.ports.staged_content_fingerprints import StagedContentFingerprints
 from domain.value_objects.detection_config import DetectionDefaults
 
 
@@ -23,4 +24,14 @@ class IHashService(Protocol):
         self, file_path: Path, size: int = DetectionDefaults.SAMPLE_SIZE
     ) -> str:
         """파일 뒷부분 해시 계산."""
+        ...
+
+    def read_staged_fingerprints(
+        self,
+        file_path: Path,
+        file_size: int,
+        *,
+        need_full: bool = False,
+    ) -> StagedContentFingerprints:
+        """Single open: prefix + suffix samples; optional full SHA256 in same session."""
         ...
