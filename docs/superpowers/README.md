@@ -31,6 +31,9 @@ Older research and plans remain under [`documents/`](../../documents/README.md).
 - [2026-05-22-layer-seams-and-composition-design.md](specs/2026-05-22-layer-seams-and-composition-design.md)
 - [2026-05-22-duplicate-detection-title-blocking-design.md](specs/2026-05-22-duplicate-detection-title-blocking-design.md) — title norm + blocking for updated anthologies (approved)
 - [2026-05-22-ui-work-hub-ia-design.md](specs/2026-05-22-ui-work-hub-ia-design.md) — single work screen, minimal nav, global toolbar (approved)
+- [2026-05-22-workflow-pipeline-ui-design.md](specs/2026-05-22-workflow-pipeline-ui-design.md) — step pipeline UX rev. 3 (approved; **rev. 3.2** wizard shell + one-shot confirm)
+- [2026-05-22-workflow-pipeline-ui.md](plans/2026-05-22-workflow-pipeline-ui.md) — rev. 3.1 implementation plan (partially landed)
+- [2026-05-22-workflow-pipeline-ui-rev32.md](plans/2026-05-22-workflow-pipeline-ui-rev32.md) — rev. 3.2 wizard shell + one-shot confirm (ready)
 
 ### Plans
 

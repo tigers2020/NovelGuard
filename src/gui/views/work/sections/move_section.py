@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Optional
 
 from PySide6.QtWidgets import (
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -46,9 +45,13 @@ class MoveSection(QWidget):
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
-        folder_group = QGroupBox("대상 폴더 (라이브러리와 동일)")
-        folder_group.setObjectName("settingsGroup")
-        fg = QVBoxLayout(folder_group)
+        folder_block = QWidget()
+        folder_block.setObjectName("pipelineFieldBlock")
+        fg = QVBoxLayout(folder_block)
+        fg.setContentsMargins(0, 0, 0, 0)
+        folder_label = QLabel("대상 폴더 (라이브러리와 동일)")
+        folder_label.setObjectName("formLabel")
+        fg.addWidget(folder_label)
         self._folder_edit = QLineEdit()
         self._folder_edit.setReadOnly(True)
         fg.addWidget(self._folder_edit)
@@ -58,11 +61,15 @@ class MoveSection(QWidget):
         hint.setObjectName("formHint")
         hint.setWordWrap(True)
         fg.addWidget(hint)
-        layout.addWidget(folder_group)
+        layout.addWidget(folder_block)
 
-        options = QGroupBox("동작")
-        options.setObjectName("settingsGroup")
+        options = QWidget()
+        options.setObjectName("pipelineFieldBlock")
         opt_layout = QHBoxLayout(options)
+        opt_layout.setContentsMargins(0, 0, 0, 0)
+        action_label = QLabel("동작")
+        action_label.setObjectName("formLabel")
+        opt_layout.addWidget(action_label)
         self._move_radio = QRadioButton("이동")
         self._move_radio.setChecked(True)
         self._copy_radio = QRadioButton("복사")
@@ -125,6 +132,77 @@ class MoveSection(QWidget):
         except Exception as e:
             logger.exception("Dry run failed")
             QMessageBox.critical(self, "Dry Run 오류", str(e))
+
+    def pipeline_dry_run_sync(self) -> bool:
+        self.refresh_folder()
+        root = self._get_target_path()
+        if not root:
+            return False
+        try:
+            result = self._use_case.execute(root_path=root, move=True, dry_run=True)
+            self._progress_bar.setRange(0, 100)
+            self._progress_bar.setValue(100)
+            self._progress_info.setText(f"예상 처리: {result.total_processed}개")
+            return True
+        except Exception as e:
+            logger.exception("pipeline dry run failed")
+            QMessageBox.critical(self, "Dry Run 오류", str(e))
+            return False
+
+    def pipeline_execute_with_confirmation(self, parent: QWidget) -> bool:
+        self.refresh_folder()
+        root = self._get_target_path()
+        if not root:
+            QMessageBox.warning(
+                parent, "대상 폴더 필요", "라이브러리에서 스캔 폴더를 먼저 선택하세요."
+            )
+            return False
+        move = self._move_radio.isChecked()
+        reply = QMessageBox.question(
+            parent,
+            "이동 실행",
+            f"{'이동' if move else '복사'} 작업을 실행합니다. 계속하시겠습니까?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return False
+        self._progress_bar.setRange(0, 0)
+        self._progress_info.setText("실행 중...")
+        try:
+            result = self._use_case.execute(root_path=root, move=move, dry_run=False)
+            self._progress_bar.setRange(0, 100)
+            self._progress_bar.setValue(100)
+            self._progress_info.setText(
+                f"{result.moved_or_copied}개 {'이동' if move else '복사'} 완료"
+            )
+            return True
+        except Exception as e:
+            logger.exception("pipeline move execute failed")
+            QMessageBox.critical(parent, "실행 오류", str(e))
+            return False
+
+    def pipeline_execute_auto(self) -> bool:
+        """Execute move/copy without confirmation (auto pipeline)."""
+        self.refresh_folder()
+        root = self._get_target_path()
+        if not root:
+            return False
+        move = self._move_radio.isChecked()
+        self._progress_bar.setRange(0, 0)
+        self._progress_info.setText("자동 실행 중…")
+        try:
+            result = self._use_case.execute(root_path=root, move=move, dry_run=False)
+            self._progress_bar.setRange(0, 100)
+            self._progress_bar.setValue(100)
+            self._progress_info.setText(
+                f"{result.moved_or_copied}개 {'이동' if move else '복사'} 완료"
+            )
+            return True
+        except Exception as e:
+            logger.exception("pipeline move auto execute failed")
+            self._progress_info.setText(f"실행 실패: {e}")
+            return False
 
     def _on_run(self) -> None:
         self.refresh_folder()

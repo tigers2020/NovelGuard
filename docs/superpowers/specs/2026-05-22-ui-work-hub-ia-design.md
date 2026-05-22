@@ -2,6 +2,7 @@
 
 > Status: **approved** (2026-05-22, brainstorming + plan sign-off)
 > Related: [2026-05-22-design-md-ui-rebrand-design.md](2026-05-22-design-md-ui-rebrand-design.md) (visual tokens only)
+> Follow-on: [2026-05-22-workflow-pipeline-ui-design.md](2026-05-22-workflow-pipeline-ui-design.md) (rev. 3 step pipeline — after this spec ships)
 > Supersedes: hub-first + multi-tab workspaces (rev. 1)
 
 ## Problem

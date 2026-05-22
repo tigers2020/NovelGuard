@@ -117,14 +117,9 @@ class MainWindow(QMainWindow):
         center_layout.setContentsMargins(0, 0, 0, 0)
         center_layout.setSpacing(0)
 
-        # 컨텐츠 영역 (탭 스택)
         self._content_stack = QStackedWidget()
         self._content_stack.setObjectName("contentArea")
-        center_layout.addWidget(self._content_stack, stretch=2)
-
-        # 파일 리스트 테이블 (항상 보임)
-        self._file_list_table = FileListTableWidget(self._app_state.file_data_store, self)
-        center_layout.addWidget(self._file_list_table, stretch=1)
+        center_layout.addWidget(self._content_stack, stretch=1)
 
         content_layout.addWidget(center_widget, stretch=1)
 
@@ -151,6 +146,9 @@ class MainWindow(QMainWindow):
             log_sink=self._log_sink,
         )
         self._work_tab.bind_work_view_model(self._work_view_model)
+        self._work_tab.bind_main_window(self)
+        self._file_list_table = FileListTableWidget(self._app_state.file_data_store, self._work_tab)
+        self._work_tab.set_file_list_table(self._file_list_table)
 
         tabs = {
             "work": self._work_tab,
@@ -310,7 +308,7 @@ class MainWindow(QMainWindow):
                 f"약 {stats.estimated_total_files:,}개 파일 (추정)"
             )
 
-        self.update_header_stats(
+        self._update_work_context_stats(
             total_files=stats.estimated_total_files,
             duplicate_groups=0,
             saved_gb=0.0,
@@ -361,9 +359,9 @@ class MainWindow(QMainWindow):
         self._update_header_stats_from_store()
 
     def _update_header_stats_from_store(self) -> None:
-        """FileDataStore에서 통계를 계산하여 HeaderWidget 업데이트."""
+        """FileDataStore에서 통계를 계산하여 WorkContextBar 갱신."""
         work_stats = compute_work_stats(self._app_state.file_data_store)
-        self.update_header_stats(
+        self._update_work_context_stats(
             total_files=work_stats.total_files,
             duplicate_groups=work_stats.duplicate_groups,
             saved_gb=work_stats.saved_gb,
@@ -375,17 +373,16 @@ class MainWindow(QMainWindow):
             work_stats.saved_gb,
         )
 
-    def update_header_stats(
+    def _update_work_context_stats(
         self,
         total_files: int,
         duplicate_groups: int,
         saved_gb: float,
         integrity_issues: int,
     ) -> None:
-        """헤더 통계 업데이트."""
         debug_step(
             self._log_sink,
-            "update_header_stats",
+            "update_work_context_stats",
             {
                 "total_files": total_files,
                 "saved_gb": saved_gb,
@@ -393,13 +390,8 @@ class MainWindow(QMainWindow):
                 "integrity_issues": integrity_issues,
             },
         )
-
-        self._header.update_stats(
-            total_files,
-            duplicate_groups,
-            saved_gb,
-            integrity_issues,
-        )
+        if hasattr(self, "_work_view_model"):
+            self._work_view_model.refresh()
 
     def save_scan_folder(self, folder: Path) -> None:
         """스캔 폴더를 QSettings에 저장.

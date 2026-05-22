@@ -4,8 +4,9 @@ import logging
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
-    QGroupBox,
+    QDialog,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -37,6 +38,8 @@ logger = logging.getLogger(__name__)
 class DuplicateSection(QWidget):
     """Duplicate detect, dry-run, apply, groups + evidence."""
 
+    pipeline_apply_finished = Signal(bool)
+
     def __init__(
         self,
         parent: Optional[QWidget] = None,
@@ -61,7 +64,75 @@ class DuplicateSection(QWidget):
         self._view_model.duplicate_completed.connect(self._on_duplicate_completed)
         self._view_model.duplicate_error.connect(self._on_duplicate_error)
         self._view_model.results_updated.connect(self._on_results_updated)
+        self._pipeline_apply_pending = False
         self._build_ui()
+
+    @property
+    def duplicate_view_model(self) -> DuplicateViewModel:
+        return self._view_model
+
+    def request_detection(self) -> None:
+        self._on_start_detection()
+
+    def pipeline_dry_run_preview(self, parent: QWidget) -> bool:
+        store = self._app_state.file_data_store
+        scan_folder = store.scan_folder
+        if not scan_folder:
+            QMessageBox.warning(parent, "오류", "스캔 폴더가 설정되지 않았습니다.")
+            return False
+        use_case = MoveDuplicateFilesUseCase(store, self._log_sink)
+        operations = use_case.execute(scan_folder)
+        if not operations:
+            return True
+        dialog = DryRunPreviewDialog(operations, scan_folder, parent)
+        return dialog.exec() == QDialog.DialogCode.Accepted
+
+    def pipeline_start_apply(self, parent: QWidget) -> bool:
+        store = self._app_state.file_data_store
+        scan_folder = store.scan_folder
+        if not scan_folder:
+            QMessageBox.warning(parent, "오류", "스캔 폴더가 설정되지 않았습니다.")
+            return False
+        use_case = MoveDuplicateFilesUseCase(store, self._log_sink)
+        operations = use_case.execute(scan_folder)
+        if not operations:
+            return False
+        reply = QMessageBox.question(
+            parent,
+            "적용하기",
+            f"총 {len(operations)}개 파일을 duplicate/ 폴더로 이동합니다.\n계속하시겠습니까?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return False
+        self._pipeline_apply_pending = True
+        self._move_worker = FileMoveWorker(use_case, scan_folder, self._log_sink, self)
+        self._move_worker.move_completed.connect(self._on_move_completed)
+        self._move_worker.move_error.connect(self._on_move_error)
+        self._move_worker.start()
+        self._progress_bar.setRange(0, 0)
+        self._progress_info.setText("파일 이동 중...")
+        return True
+
+    def pipeline_apply_auto(self) -> bool:
+        """Apply duplicate moves without confirmation (auto pipeline)."""
+        store = self._app_state.file_data_store
+        scan_folder = store.scan_folder
+        if not scan_folder:
+            return False
+        use_case = MoveDuplicateFilesUseCase(store, self._log_sink)
+        operations = use_case.execute(scan_folder)
+        if not operations:
+            return False
+        self._pipeline_apply_pending = True
+        self._move_worker = FileMoveWorker(use_case, scan_folder, self._log_sink, self)
+        self._move_worker.move_completed.connect(self._on_move_completed)
+        self._move_worker.move_error.connect(self._on_move_error)
+        self._move_worker.start()
+        self._progress_bar.setRange(0, 0)
+        self._progress_info.setText(f"자동 적용 중… {len(operations)}건 → duplicate/")
+        return True
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -96,9 +167,11 @@ class DuplicateSection(QWidget):
         self._evidence_panel = EvidencePanel(self)
         layout.addWidget(self._evidence_panel)
 
-    def _create_progress_section(self) -> QGroupBox:
-        group = QGroupBox()
+    def _create_progress_section(self) -> QWidget:
+        group = QWidget()
+        group.setObjectName("pipelineProgressBlock")
         layout = QVBoxLayout(group)
+        layout.setContentsMargins(12, 12, 12, 12)
         progress_header = QHBoxLayout()
         progress_title = QLabel("중복 탐지")
         progress_title.setObjectName("progressTitle")
@@ -112,6 +185,7 @@ class DuplicateSection(QWidget):
         self._progress_bar.setRange(0, 100)
         self._progress_bar.setValue(0)
         self._progress_bar.setTextVisible(False)
+        self._progress_bar.setMaximumWidth(520)
         layout.addWidget(self._progress_bar)
         self._progress_info = QLabel("대기 중...")
         self._progress_info.setObjectName("progressInfo")
@@ -238,9 +312,15 @@ class DuplicateSection(QWidget):
         if self._move_worker:
             self._move_worker.deleteLater()
             self._move_worker = None
+        if self._pipeline_apply_pending:
+            self._pipeline_apply_pending = False
+            self.pipeline_apply_finished.emit(error_count == 0)
 
     def _on_move_error(self, error_message: str) -> None:
         self._progress_info.setText(f"오류: {error_message}")
         if self._move_worker:
             self._move_worker.deleteLater()
             self._move_worker = None
+        if self._pipeline_apply_pending:
+            self._pipeline_apply_pending = False
+            self.pipeline_apply_finished.emit(False)

@@ -7,7 +7,6 @@ from typing import Optional
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QFileDialog,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -80,9 +79,13 @@ class LibrarySection(QWidget):
         self._progress_section = self._create_progress_section()
         layout.addWidget(self._progress_section)
 
-        folder_group = QGroupBox("대상 폴더")
-        folder_group.setObjectName("settingsGroup")
-        fg_layout = QVBoxLayout(folder_group)
+        folder_block = QWidget()
+        folder_block.setObjectName("pipelineFieldBlock")
+        fg_layout = QVBoxLayout(folder_block)
+        fg_layout.setContentsMargins(0, 0, 0, 0)
+        folder_label = QLabel("대상 폴더")
+        folder_label.setObjectName("formLabel")
+        fg_layout.addWidget(folder_label)
         self._folder_input = QLineEdit()
         self._folder_input.setReadOnly(True)
         self._folder_input.setPlaceholderText("폴더를 선택하세요")
@@ -91,11 +94,13 @@ class LibrarySection(QWidget):
         hint.setObjectName("formHint")
         hint.setWordWrap(True)
         fg_layout.addWidget(hint)
-        layout.addWidget(folder_group)
+        layout.addWidget(folder_block)
 
-    def _create_progress_section(self) -> QGroupBox:
-        group = QGroupBox()
+    def _create_progress_section(self) -> QWidget:
+        group = QWidget()
+        group.setObjectName("pipelineProgressBlock")
         layout = QVBoxLayout(group)
+        layout.setContentsMargins(12, 12, 12, 12)
         progress_header = QHBoxLayout()
         progress_title = QLabel("전체 스캔")
         progress_title.setObjectName("progressTitle")
@@ -109,6 +114,7 @@ class LibrarySection(QWidget):
         self._progress_bar.setRange(0, 100)
         self._progress_bar.setValue(0)
         self._progress_bar.setTextVisible(False)
+        self._progress_bar.setMaximumWidth(520)
         layout.addWidget(self._progress_bar)
         self._progress_info = QLabel("대기 중...")
         self._progress_info.setObjectName("progressInfo")
@@ -117,6 +123,16 @@ class LibrarySection(QWidget):
 
     def set_preview_status(self, text: str) -> None:
         self._preview_status.setText(f"빠른 미리보기: {text}")
+
+    @property
+    def scan_view_model(self) -> ScanViewModel:
+        return self._view_model
+
+    def request_full_scan(self) -> None:
+        self._on_start_scan()
+
+    def cancel_scan(self) -> None:
+        self._on_stop_scan()
 
     def set_scan_folder(self, folder: Path) -> None:
         self._scan_folder = folder

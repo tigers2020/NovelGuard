@@ -44,6 +44,52 @@ def get_stylesheet(mode: ThemeMode = ThemeMode.DARK) -> str:
         border-bottom: 1px solid {t.BORDER_PRIMARY};
     }}
 
+    QWidget#workContextBar,
+    QWidget#workCompactBar {{
+        background: transparent;
+    }}
+
+    QWidget#wizardFooter {{
+        background: transparent;
+        border-top: 1px solid {t.BORDER_PRIMARY};
+        padding-top: 8px;
+    }}
+
+    QWidget#workFileDock {{
+        background: {t.BG_CONTAINER};
+        border-top: 1px solid {t.BORDER_PRIMARY};
+    }}
+
+    QPushButton#workFileDockHeader {{
+        text-align: left;
+        padding: 8px 12px;
+        color: {t.TEXT_SECONDARY};
+        border: none;
+        background: transparent;
+    }}
+
+    QPushButton#workFileDockHeader:hover {{
+        color: {t.TEXT_PRIMARY};
+        background: {t.HOVER};
+    }}
+
+    QWidget#pipelineRunConfirmSheet {{
+        background: {t.BG_CONTAINER};
+        border: 1px solid {t.BORDER_PRIMARY};
+        border-radius: 8px;
+    }}
+
+    QPushButton#btnNeutral {{
+        background-color: transparent;
+        color: {t.TEXT_SECONDARY};
+        border: 1px solid {t.BORDER_PRIMARY};
+    }}
+
+    QPushButton#btnNeutral:hover {{
+        background-color: {t.HOVER};
+        color: {t.TEXT_PRIMARY};
+    }}
+
     QLabel#headerTitle {{
         font-size: 24px;
         font-weight: 700;
@@ -290,6 +336,74 @@ def get_stylesheet(mode: ThemeMode = ThemeMode.DARK) -> str:
         color: {t.TEXT_PRIMARY};
         font-family: Consolas, monospace;
         font-size: 12px;
+    }}
+
+    QWidget#pipelineStepper {{
+        background: transparent;
+    }}
+
+    QLabel#pipelineStepConnector {{
+        background-color: {t.BORDER_PRIMARY};
+        max-height: 2px;
+        min-height: 2px;
+    }}
+
+    QPushButton#pipelineStepCircle {{
+        background-color: {t.BG_INPUT};
+        color: {t.TEXT_SECONDARY};
+        border: 2px solid {t.BORDER_PRIMARY};
+        border-radius: 18px;
+        font-size: 14px;
+        font-weight: 700;
+    }}
+
+    QPushButton#pipelineStepCircle[active="true"] {{
+        background-color: {t.PRIMARY};
+        color: {on_primary};
+        border-color: {t.PRIMARY};
+    }}
+
+    QWidget#pipelineStepNode[stepState="done"] QPushButton#pipelineStepCircle {{
+        background-color: {t.COLOR_SUCCESS};
+        color: {on_primary};
+        border-color: {t.COLOR_SUCCESS};
+    }}
+
+    QWidget#pipelineStepNode[stepState="running"] QPushButton#pipelineStepCircle {{
+        background-color: {t.PRIMARY};
+        color: {on_primary};
+        border-color: {t.PRIMARY};
+    }}
+
+    QLabel#pipelineStepTitle {{
+        font-size: 14px;
+        font-weight: 600;
+        color: {t.TEXT_PRIMARY};
+        background: transparent;
+    }}
+
+    QLabel#pipelineStepStatus {{
+        font-size: 12px;
+        color: {t.TEXT_SECONDARY};
+        background: transparent;
+    }}
+
+    QWidget#pipelineStepStack {{
+        background-color: {t.BG_CARD};
+        border: 1px solid {t.BORDER_PRIMARY};
+        border-radius: 12px;
+    }}
+
+    QWidget#pipelineProgressBlock {{
+        background-color: {t.BG_INPUT};
+        border: none;
+        border-radius: 8px;
+        padding: 12px;
+    }}
+
+    QWidget#pipelineFieldBlock {{
+        background: transparent;
+        border: none;
     }}
 
     QGroupBox {{
