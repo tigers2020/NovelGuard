@@ -39,6 +39,11 @@ def get_stylesheet(mode: ThemeMode = ThemeMode.DARK) -> str:
         border-bottom: 1px solid {t.BORDER_PRIMARY};
     }}
 
+    QWidget#globalActionToolbar {{
+        background-color: {t.SURFACE_ELEVATED};
+        border-bottom: 1px solid {t.BORDER_PRIMARY};
+    }}
+
     QLabel#headerTitle {{
         font-size: 24px;
         font-weight: 700;

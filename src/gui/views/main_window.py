@@ -13,13 +13,17 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.settings.constants import SETTINGS_KEY_SCAN_FOLDER, Constants
+from app.settings.constants import SETTINGS_KEY_SCAN_FOLDER
 from application.utils.debug_logger import debug_step
 from application.utils.extensions import parse_extensions
 from gui.models.app_state import AppState
+from gui.services.work_stats import compute_work_stats
+from gui.view_models.work_view_model import WorkViewModel
 from gui.views.components.file_list_table import FileListTableWidget
+from gui.views.components.global_action_toolbar import GlobalActionToolbar
 from gui.views.components.header import HeaderWidget
 from gui.views.components.sidebar import SidebarWidget
+from gui.views.work.work_tab import WorkTab
 from gui.workers.preview_worker import PreviewWorker
 
 
@@ -94,6 +98,9 @@ class MainWindow(QMainWindow):
         self._header = HeaderWidget(self)
         main_layout.addWidget(self._header)
 
+        self._action_toolbar = GlobalActionToolbar(self)
+        main_layout.addWidget(self._action_toolbar)
+
         # 메인 컨텐츠 영역 (사이드바 + 컨텐츠 + 파일 리스트)
         content_widget = QWidget()
         content_layout = QHBoxLayout(content_widget)
@@ -127,58 +134,38 @@ class MainWindow(QMainWindow):
         self._setup_tabs()
 
     def _setup_tabs(self) -> None:
-        """탭 뷰 설정."""
-        # Placeholder 탭들 (나중에 실제 구현으로 교체)
-        from gui.views.tabs.duplicate_tab import DuplicateTab
-        from gui.views.tabs.encoding_tab import EncodingTab
-        from gui.views.tabs.integrity_tab import IntegrityTab
+        """탭 뷰 설정 (work · logs · settings)."""
         from gui.views.tabs.logs_tab import LogsTab
-        from gui.views.tabs.move_organize_tab import MoveOrganizeTab
-        from gui.views.tabs.scan_tab import ScanTab
         from gui.views.tabs.settings_tab import SettingsTab
-        from gui.views.tabs.small_file_tab import SmallFileTab
-        from gui.views.tabs.stats_tab import StatsTab
-        from gui.views.tabs.undo_tab import UndoTab
 
-        # ScanTab과 LogsTab에 deps 전달 (다른 탭은 추후 추가)
+        self._work_tab = WorkTab(
+            self,
+            job_manager=self._job_manager,
+            index_repository=self._index_repo,
+            log_sink=self._log_sink,
+            app_state=self._app_state,
+        )
+        self._work_view_model = WorkViewModel(
+            self._app_state,
+            job_manager=self._job_manager,
+            log_sink=self._log_sink,
+        )
+        self._work_tab.bind_work_view_model(self._work_view_model)
+
         tabs = {
-            "scan": ScanTab(self, job_manager=self._job_manager, log_sink=self._log_sink),
-            "duplicate": DuplicateTab(
-                self,
-                job_manager=self._job_manager,
-                index_repository=self._index_repo,
-                log_sink=self._log_sink,
-            ),
-            "move_organize": MoveOrganizeTab(
-                self,
-                job_manager=self._job_manager,
-                index_repository=self._index_repo,
-                log_sink=self._log_sink,
-            ),
-            "small": SmallFileTab(self),
-            "integrity": IntegrityTab(self),
-            "encoding": EncodingTab(self),
-            "stats": StatsTab(self, index_repo=self._index_repo, log_sink=self._log_sink),
+            "work": self._work_tab,
             "logs": LogsTab(self, log_sink=self._log_sink),
-            "undo": UndoTab(self),
             "settings": SettingsTab(self),
         }
 
         for tab_name, tab_widget in tabs.items():
             self._content_stack.addWidget(tab_widget)
-            # 탭 이름을 위젯에 저장
             tab_widget.setProperty("tab_name", tab_name)
 
-        # 기본 탭 표시
-        self._switch_tab("scan")
+        self._switch_tab("work")
 
-    def _get_scan_tab(self):
-        """ScanTab 위젯 반환."""
-        for i in range(self._content_stack.count()):
-            widget = self._content_stack.widget(i)
-            if widget and widget.property("tab_name") == "scan":
-                return widget
-        return None
+    def _get_work_tab(self) -> Optional[WorkTab]:
+        return getattr(self, "_work_tab", None)
 
     def _get_settings_tab(self):
         """SettingsTab 위젯 반환."""
@@ -193,10 +180,9 @@ class MainWindow(QMainWindow):
         # 사이드바 탭 변경 시그널
         self._sidebar.tab_changed.connect(self._switch_tab)
 
-        # ScanTab의 폴더 선택 시그널 연결 (_setup_tabs 후 호출되므로 안전)
-        scan_tab = self._get_scan_tab()
-        if scan_tab:
-            scan_tab.folder_selected.connect(self._on_folder_selected)
+        work_tab = self._get_work_tab()
+        if work_tab:
+            work_tab.library_section.folder_selected.connect(self._on_folder_selected)
 
         # FileDataStore 시그널 연결 (통계 자동 업데이트)
         file_data_store = self._app_state.file_data_store
@@ -204,23 +190,27 @@ class MainWindow(QMainWindow):
         file_data_store.files_cleared.connect(self._on_file_data_changed)
         file_data_store.files_removed.connect(self._on_file_data_changed)
         file_data_store.files_updated_batch.connect(self._on_file_data_changed)
+        file_data_store.files_added_batch.connect(self._on_work_summary_refresh)
+        file_data_store.files_cleared.connect(self._on_work_summary_refresh)
+        file_data_store.files_removed.connect(self._on_work_summary_refresh)
+        file_data_store.files_updated_batch.connect(self._on_work_summary_refresh)
 
         # 초기 통계 업데이트
         self._update_header_stats_from_store()
+        self._on_work_summary_refresh()
 
     def _restore_settings(self) -> None:
         """이전 설정 복원."""
         # 마지막 선택 폴더 복원
-        # _setup_tabs() 후에 호출되므로 ScanTab이 이미 생성되어 있음
         last_folder = self._settings.value(SETTINGS_KEY_SCAN_FOLDER, None)
         if last_folder:
             folder_path = Path(str(last_folder))
             if folder_path.exists() and folder_path.is_dir():
                 self._app_state.scan_folder = str(folder_path)
-                # ScanTab에도 전달
-                scan_tab = self._get_scan_tab()
-                if scan_tab:
-                    scan_tab.set_scan_folder(folder_path)
+                work_tab = self._get_work_tab()
+                if work_tab:
+                    work_tab.library_section.set_scan_folder(folder_path)
+                    work_tab.refresh_move_folder()
 
     def _auto_start_preview_scan(self) -> None:
         """자동 Preview 스캔 시작 (프로그램 시작 시).
@@ -235,18 +225,17 @@ class MainWindow(QMainWindow):
                 QTimer.singleShot(100, lambda: self._start_preview_scan(folder_path))
 
     def _on_folder_selected(self, folder: Path) -> None:
-        """폴더 선택 핸들러.
-
-        Args:
-            folder: 선택된 폴더 경로.
-        """
+        """폴더 선택 핸들러."""
         debug_step(self._log_sink, "on_folder_selected", {"folder": str(folder)})
-
-        # 폴더 저장
         self.save_scan_folder(folder)
-
-        # Preview 스캔 시작
+        work_tab = self._get_work_tab()
+        if work_tab:
+            work_tab.refresh_move_folder()
         self._start_preview_scan(folder)
+
+    def _on_work_summary_refresh(self, *args) -> None:
+        if hasattr(self, "_work_view_model"):
+            self._work_view_model.refresh()
 
     def _start_preview_scan(self, folder: Path) -> None:
         """Preview 스캔 시작.
@@ -255,6 +244,11 @@ class MainWindow(QMainWindow):
             folder: 스캔할 폴더.
         """
         debug_step(self._log_sink, "start_preview_scan", {"folder": str(folder)})
+        if hasattr(self, "_work_view_model"):
+            self._work_view_model.set_preview_running(True)
+        work_tab = self._get_work_tab()
+        if work_tab:
+            work_tab.library_section.set_preview_status("진행 중...")
 
         # 기존 워커가 있으면 취소
         if self._preview_worker and self._preview_worker.isRunning():
@@ -302,35 +296,34 @@ class MainWindow(QMainWindow):
         self._preview_worker.start()
 
     def _on_preview_completed(self, stats) -> None:
-        """Preview 스캔 완료 핸들러.
-
-        Args:
-            stats: PreviewStats 객체.
-        """
+        """Preview 스캔 완료 핸들러."""
         debug_step(
             self._log_sink,
             "on_preview_completed",
             {"estimated_total_files": stats.estimated_total_files},
         )
+        if hasattr(self, "_work_view_model"):
+            self._work_view_model.set_preview_running(False)
+        work_tab = self._get_work_tab()
+        if work_tab:
+            work_tab.library_section.set_preview_status(
+                f"약 {stats.estimated_total_files:,}개 파일 (추정)"
+            )
 
-        # 헤더 통계 업데이트
         self.update_header_stats(
             total_files=stats.estimated_total_files,
-            processed_files=0,
-            saved_gb=0.0,
             duplicate_groups=0,
-            total_size_gb=0.0,
+            saved_gb=0.0,
             integrity_issues=0,
-            duplicate_files=0,
-            small_files=0,
         )
 
     def _on_preview_error(self, error_message: str) -> None:
-        """Preview 스캔 오류 핸들러.
-
-        Args:
-            error_message: 오류 메시지.
-        """
+        """Preview 스캔 오류 핸들러."""
+        if hasattr(self, "_work_view_model"):
+            self._work_view_model.set_preview_running(False)
+        work_tab = self._get_work_tab()
+        if work_tab:
+            work_tab.library_section.set_preview_status("오류")
         # 에러 메시지 다이얼로그 표시
         msg_box = QMessageBox(self)
         msg_box.setIcon(QMessageBox.Icon.Warning)
@@ -363,79 +356,31 @@ class MainWindow(QMainWindow):
                 self._app_state.current_tab = tab_name
                 break
 
-    def _calculate_stats(self) -> tuple[int, int, float, int, float, int, int, int]:
-        """통계 계산.
-
-        Returns:
-            (total_files, processed_files, saved_gb, duplicate_groups,
-             total_size_gb, integrity_issues, duplicate_files, small_files) 튜플.
-        """
-        file_data_store = self._app_state.file_data_store
-        all_files = file_data_store.get_all_files()
-
-        # 총 파일 수
-        total_files = len(all_files)
-
-        # 처리 완료 (중복 탐지 완료된 파일 = duplicate_group_id가 None이 아닌 파일)
-        processed_files = sum(1 for f in all_files if f.duplicate_group_id is not None)
-
-        # 절감 용량 (중복 파일 중 제거 가능한 파일들의 크기 = is_canonical=False인 중복 파일들의 크기 합)
-        saved_bytes = sum(
-            f.size for f in all_files if f.duplicate_group_id is not None and not f.is_canonical
-        )
-        saved_gb = saved_bytes / Constants.BYTES_PER_GB  # GB 변환
-
-        # 중복 그룹 수 (고유한 duplicate_group_id의 개수)
-        duplicate_group_ids = {
-            f.duplicate_group_id for f in all_files if f.duplicate_group_id is not None
-        }
-        duplicate_groups = len(duplicate_group_ids)
-
-        # 총 용량 (모든 파일의 총 크기)
-        total_bytes = sum(f.size for f in all_files)
-        total_size_gb = total_bytes / Constants.BYTES_PER_GB  # GB 변환
-
-        # 무결성 이슈 파일 수 (ERROR 또는 WARN 심각도)
-        integrity_issues = sum(1 for f in all_files if f.integrity_severity in ("ERROR", "WARN"))
-
-        # 중복 파일 수 (제거 가능한 파일 수)
-        duplicate_files = sum(
-            1 for f in all_files if f.duplicate_group_id is not None and not f.is_canonical
-        )
-
-        # 작은 파일 수 (1KB 미만, 기본 임계값)
-        small_files = sum(1 for f in all_files if f.size < Constants.SMALL_FILE_THRESHOLD)
-
-        return (
-            total_files,
-            processed_files,
-            saved_gb,
-            duplicate_groups,
-            total_size_gb,
-            integrity_issues,
-            duplicate_files,
-            small_files,
-        )
-
     def _on_file_data_changed(self, *args) -> None:
         """FileDataStore 데이터 변경 핸들러."""
         self._update_header_stats_from_store()
 
     def _update_header_stats_from_store(self) -> None:
         """FileDataStore에서 통계를 계산하여 HeaderWidget 업데이트."""
-        stats = self._calculate_stats()
-        self.update_header_stats(*stats)
+        work_stats = compute_work_stats(self._app_state.file_data_store)
+        self.update_header_stats(
+            total_files=work_stats.total_files,
+            duplicate_groups=work_stats.duplicate_groups,
+            saved_gb=work_stats.saved_gb,
+            integrity_issues=work_stats.integrity_issues,
+        )
+        self._app_state.update_stats(
+            work_stats.total_files,
+            work_stats.processed_files,
+            work_stats.saved_gb,
+        )
 
     def update_header_stats(
         self,
         total_files: int,
-        processed_files: int,
-        saved_gb: float,
         duplicate_groups: int,
-        total_size_gb: float,
+        saved_gb: float,
         integrity_issues: int,
-        duplicate_files: int,
-        small_files: int,
     ) -> None:
         """헤더 통계 업데이트."""
         debug_step(
@@ -443,28 +388,18 @@ class MainWindow(QMainWindow):
             "update_header_stats",
             {
                 "total_files": total_files,
-                "processed_files": processed_files,
                 "saved_gb": saved_gb,
                 "duplicate_groups": duplicate_groups,
-                "total_size_gb": total_size_gb,
                 "integrity_issues": integrity_issues,
-                "duplicate_files": duplicate_files,
-                "small_files": small_files,
             },
         )
 
         self._header.update_stats(
             total_files,
-            processed_files,
-            saved_gb,
             duplicate_groups,
-            total_size_gb,
+            saved_gb,
             integrity_issues,
-            duplicate_files,
-            small_files,
         )
-        # AppState는 기존 3개만 저장 (호환성 유지)
-        self._app_state.update_stats(total_files, processed_files, saved_gb)
 
     def save_scan_folder(self, folder: Path) -> None:
         """스캔 폴더를 QSettings에 저장.

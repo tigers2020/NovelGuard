@@ -30,6 +30,7 @@ Older research and plans remain under [`documents/`](../../documents/README.md).
 - [2026-05-22-design-md-ui-rebrand-design.md](specs/2026-05-22-design-md-ui-rebrand-design.md) — DESIGN.md + Calm SaaS rebrand (approved)
 - [2026-05-22-layer-seams-and-composition-design.md](specs/2026-05-22-layer-seams-and-composition-design.md)
 - [2026-05-22-duplicate-detection-title-blocking-design.md](specs/2026-05-22-duplicate-detection-title-blocking-design.md) — title norm + blocking for updated anthologies (approved)
+- [2026-05-22-ui-work-hub-ia-design.md](specs/2026-05-22-ui-work-hub-ia-design.md) — single work screen, minimal nav, global toolbar (approved)
 
 ### Plans
 
@@ -37,3 +38,4 @@ Older research and plans remain under [`documents/`](../../documents/README.md).
 - [2026-05-22-design-md-ui-rebrand.md](plans/2026-05-22-design-md-ui-rebrand.md) — DESIGN.md UI rebrand (in progress)
 - [2026-05-22-layer-seams-and-composition.md](plans/2026-05-22-layer-seams-and-composition.md)
 - [2026-05-22-duplicate-detection-title-blocking.md](plans/2026-05-22-duplicate-detection-title-blocking.md) — title blocking (ready)
+- [2026-05-22-ui-work-hub-ia.md](plans/2026-05-22-ui-work-hub-ia.md) — work screen IA (implemented)

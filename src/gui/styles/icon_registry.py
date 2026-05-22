@@ -4,6 +4,7 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QStyle, QWidget
 
 _NAV_ICON_MAP: dict[str, str] = {
+    "work": "SP_DirHomeIcon",
     "scan": "SP_DirIcon",
     "duplicate": "SP_FileDialogDetailedView",
     "move_organize": "SP_DirOpenIcon",

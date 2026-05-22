@@ -19,7 +19,7 @@ class AppState:
     saved_size_gb: float = 0.0
 
     # 현재 선택된 탭
-    current_tab: str = "scan"
+    current_tab: str = "work"
 
     # 스캔 상태
     scan_folder: Optional[str] = None
