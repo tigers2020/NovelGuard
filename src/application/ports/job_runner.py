@@ -3,8 +3,10 @@
 from typing import Callable, Optional, Protocol
 
 from application.dto.duplicate_detection_request import DuplicateDetectionRequest
+from application.dto.integrity_check_request import IntegrityCheckRequest
 from application.dto.job_types import JobEvent, JobStatus
 from application.dto.scan_request import ScanRequest
+from application.dto.utf8_convert_request import Utf8ConvertRequest
 
 
 class IJobRunner(Protocol):
@@ -24,6 +26,14 @@ class IJobRunner(Protocol):
         Returns:
             Job ID.
         """
+        ...
+
+    def start_integrity_check(self, request: IntegrityCheckRequest) -> int:
+        """무결성 검사 작업 시작."""
+        ...
+
+    def start_utf8_convert(self, request: Utf8ConvertRequest) -> int:
+        """UTF-8 변환 작업 시작."""
         ...
 
     def start_duplicate_detection(self, request: DuplicateDetectionRequest) -> int:

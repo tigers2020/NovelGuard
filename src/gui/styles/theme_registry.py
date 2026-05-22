@@ -177,6 +177,11 @@ def get_stylesheet(mode: ThemeMode = ThemeMode.DARK) -> str:
         color: {on_primary};
     }}
 
+    QPushButton#btnPrimary:disabled {{
+        background-color: {t.BORDER_PRIMARY};
+        color: {t.TEXT_DISABLED};
+    }}
+
     QPushButton#btnSecondary {{
         background-color: transparent;
         color: {t.TEXT_PRIMARY};

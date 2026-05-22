@@ -7,24 +7,30 @@ from typing import TYPE_CHECKING, Optional, Union
 from PySide6.QtCore import QObject, Signal
 
 from application.dto.duplicate_detection_request import DuplicateDetectionRequest
+from application.dto.integrity_check_request import IntegrityCheckRequest
 from application.dto.job_types import JobEvent, JobProgress, JobStatus, JobType
 from application.dto.log_entry import LogEntry
 from application.dto.scan_request import ScanRequest
 from application.dto.scan_result import ScanResult
+from application.dto.utf8_convert_request import Utf8ConvertRequest
 from application.ports.file_scanner import FileScanner
 from application.ports.index_repository import IIndexRepository
 from application.ports.log_sink import ILogSink
+from application.use_cases.check_integrity import CheckIntegrityUseCase
+from application.use_cases.convert_files_to_utf8 import ConvertFilesToUtf8UseCase
 from application.use_cases.duplicate_detection.duplicate_detection_pipeline import (
     DuplicateDetectionPipeline,
 )
 from application.utils.debug_logger import debug_step
 from gui.workers.duplicate_detection_worker import DuplicateDetectionWorker
+from gui.workers.integrity_worker import IntegrityWorker
 from gui.workers.scan_worker import ScanWorker
+from gui.workers.utf8_convert_worker import Utf8ConvertWorker
 
 if TYPE_CHECKING:
     from gui.models.file_data_store import FileDataStore
 
-_Worker = Union[ScanWorker, DuplicateDetectionWorker]
+_Worker = Union[ScanWorker, DuplicateDetectionWorker, IntegrityWorker, Utf8ConvertWorker]
 
 
 class QtJobManager(QObject):
@@ -59,6 +65,8 @@ class QtJobManager(QObject):
         log_sink: Optional[ILogSink] = None,
         file_data_store: Optional["FileDataStore"] = None,
         duplicate_pipeline_factory: Callable[[], DuplicateDetectionPipeline] | None = None,
+        check_integrity_use_case: CheckIntegrityUseCase | None = None,
+        convert_utf8_use_case: ConvertFilesToUtf8UseCase | None = None,
         parent: Optional[QObject] = None,
     ) -> None:
         """Qt Job Manager 초기화.
@@ -78,6 +86,8 @@ class QtJobManager(QObject):
         self._log_sink = log_sink
         self._file_data_store = file_data_store
         self._duplicate_pipeline_factory = duplicate_pipeline_factory
+        self._check_integrity_use_case = check_integrity_use_case
+        self._convert_utf8_use_case = convert_utf8_use_case
 
         # Job 관리
         self._next_job_id = 1
@@ -203,6 +213,79 @@ class QtJobManager(QObject):
 
         debug_step(self._log_sink, "start_duplicate_detection_worker_started", {"job_id": job_id})
 
+        return job_id
+
+    def start_integrity_check(self, request: IntegrityCheckRequest) -> int:
+        """무결성 검사 작업 시작."""
+        if not self._check_integrity_use_case or not self._file_data_store:
+            raise RuntimeError("Integrity check is not configured")
+
+        job_id = self._next_job_id
+        self._next_job_id += 1
+
+        worker = IntegrityWorker(
+            request,
+            use_case=self._check_integrity_use_case,
+            file_data_store=self._file_data_store,
+            parent=self,
+        )
+        worker.integrity_completed.connect(
+            lambda results: self._on_integrity_completed(job_id, results)
+        )
+        worker.integrity_error.connect(lambda error: self._on_integrity_error(job_id, error))
+        worker.integrity_progress.connect(
+            lambda progress: self._on_integrity_progress(job_id, progress)
+        )
+
+        self._jobs[job_id] = worker
+        self._job_types[job_id] = JobType.INTEGRITY
+        self._job_status[job_id] = JobStatus.RUNNING
+
+        event = JobEvent(
+            job_id=job_id,
+            job_type=JobType.INTEGRITY,
+            event_type="started",
+            data={"request": request},
+        )
+        self._emit_event(event)
+        self.job_started.emit(job_id, JobType.INTEGRITY)
+        worker.start()
+        return job_id
+
+    def start_utf8_convert(self, request: Utf8ConvertRequest) -> int:
+        """UTF-8 변환 작업 시작."""
+        if not self._convert_utf8_use_case:
+            raise RuntimeError("UTF-8 conversion is not configured")
+
+        job_id = self._next_job_id
+        self._next_job_id += 1
+
+        worker = Utf8ConvertWorker(
+            request,
+            use_case=self._convert_utf8_use_case,
+            parent=self,
+        )
+        worker.convert_completed.connect(
+            lambda result: self._on_utf8_convert_completed(job_id, result)
+        )
+        worker.convert_error.connect(lambda error: self._on_utf8_convert_error(job_id, error))
+        worker.convert_progress.connect(
+            lambda progress: self._on_utf8_convert_progress(job_id, progress)
+        )
+
+        self._jobs[job_id] = worker
+        self._job_types[job_id] = JobType.ENCODING
+        self._job_status[job_id] = JobStatus.RUNNING
+
+        event = JobEvent(
+            job_id=job_id,
+            job_type=JobType.ENCODING,
+            event_type="started",
+            data={"request": request},
+        )
+        self._emit_event(event)
+        self.job_started.emit(job_id, JobType.ENCODING)
+        worker.start()
         return job_id
 
     def cancel(self, job_id: int) -> None:
@@ -403,6 +486,78 @@ class QtJobManager(QObject):
         event = JobEvent(
             job_id=job_id,
             job_type=JobType.DUPLICATE,
+            event_type="progress",
+            data={"progress": progress},
+        )
+        self._emit_event(event)
+        self.job_progress.emit(job_id, progress)
+
+    def _on_integrity_completed(self, job_id: int, result: list) -> None:
+        if job_id not in self._jobs:
+            return
+        self._job_status[job_id] = JobStatus.COMPLETED
+        event = JobEvent(
+            job_id=job_id,
+            job_type=JobType.INTEGRITY,
+            event_type="completed",
+            data={"result": result},
+        )
+        self._emit_event(event)
+        self.job_completed.emit(job_id, result)
+
+    def _on_integrity_error(self, job_id: int, error: str) -> None:
+        if job_id not in self._jobs:
+            return
+        self._job_status[job_id] = JobStatus.FAILED
+        event = JobEvent(
+            job_id=job_id,
+            job_type=JobType.INTEGRITY,
+            event_type="failed",
+            data={"error": error},
+        )
+        self._emit_event(event)
+        self.job_failed.emit(job_id, error)
+
+    def _on_integrity_progress(self, job_id: int, progress: JobProgress) -> None:
+        event = JobEvent(
+            job_id=job_id,
+            job_type=JobType.INTEGRITY,
+            event_type="progress",
+            data={"progress": progress},
+        )
+        self._emit_event(event)
+        self.job_progress.emit(job_id, progress)
+
+    def _on_utf8_convert_completed(self, job_id: int, result: object) -> None:
+        if job_id not in self._jobs:
+            return
+        self._job_status[job_id] = JobStatus.COMPLETED
+        event = JobEvent(
+            job_id=job_id,
+            job_type=JobType.ENCODING,
+            event_type="completed",
+            data={"result": result},
+        )
+        self._emit_event(event)
+        self.job_completed.emit(job_id, result)
+
+    def _on_utf8_convert_error(self, job_id: int, error: str) -> None:
+        if job_id not in self._jobs:
+            return
+        self._job_status[job_id] = JobStatus.FAILED
+        event = JobEvent(
+            job_id=job_id,
+            job_type=JobType.ENCODING,
+            event_type="failed",
+            data={"error": error},
+        )
+        self._emit_event(event)
+        self.job_failed.emit(job_id, error)
+
+    def _on_utf8_convert_progress(self, job_id: int, progress: JobProgress) -> None:
+        event = JobEvent(
+            job_id=job_id,
+            job_type=JobType.ENCODING,
             event_type="progress",
             data={"progress": progress},
         )

@@ -12,6 +12,10 @@ FinalizeSubstate = Literal[
     "apply_done",
     "integrity_running",
     "integrity_done",
+    "utf8_auto_running",
+    "utf8_auto_done",
+    "utf8_auto_skipped",
+    "finalize_done",
     "apply_failed",
 ]
 

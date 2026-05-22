@@ -8,6 +8,9 @@ from application.ports.file_data_store import IFileDataStore
 from application.ports.log_sink import ILogSink
 from application.utils.debug_logger import debug_step
 
+# Non-canonical duplicates are moved here; chosung organize must not touch this tree.
+DUPLICATE_FOLDER_NAME = "duplicate"
+
 
 @dataclass
 class MoveOperation:
@@ -66,7 +69,7 @@ class MoveDuplicateFilesUseCase:
         all_files = self._file_data_store.get_all_files()
 
         # 이동 대상 파일 필터링. 서브폴더 무시하고 root/duplicate 안에만 평평하게 넣음.
-        duplicate_dir = scan_folder / "duplicate"
+        duplicate_dir = scan_folder / DUPLICATE_FOLDER_NAME
         used_target_paths: set[Path] = set()
         move_operations: list[MoveOperation] = []
 

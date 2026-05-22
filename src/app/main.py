@@ -10,6 +10,8 @@ from PySide6.QtWidgets import QApplication
 from app.factories import create_duplicate_detection_pipeline
 from app.settings.constants import SETTINGS_KEY_UI_THEME
 from application.dto.log_entry import LogEntry
+from application.use_cases.check_integrity import CheckIntegrityUseCase
+from application.use_cases.convert_files_to_utf8 import ConvertFilesToUtf8UseCase
 from application.use_cases.duplicate_detection.duplicate_detection_pipeline import (
     DuplicateDetectionPipeline,
 )
@@ -20,6 +22,8 @@ from gui.styles.theme_apply import apply_theme_to_app
 from gui.styles.theme_mode import ThemeMode
 from gui.views.main_window import MainWindow
 from infrastructure.db.sqlite_index_repository import SQLiteIndexRepository
+from infrastructure.encoding.charset_normalizer_detector import CharsetNormalizerDetector
+from infrastructure.filesystem.file_content_reader import FileSystemContentReader
 from infrastructure.fs.scanner import FileSystemScanner
 from infrastructure.logging.in_memory_log_sink import InMemoryLogSink
 
@@ -67,12 +71,26 @@ def main() -> int:
             log_sink=log_sink,
         )
 
+    content_reader = FileSystemContentReader()
+    encoding_detector = CharsetNormalizerDetector()
+    check_integrity_uc = CheckIntegrityUseCase(
+        app_state.file_data_store,
+        content_reader,
+        encoding_detector,
+    )
+    convert_utf8_uc = ConvertFilesToUtf8UseCase(
+        app_state.file_data_store,
+        content_reader,
+    )
+
     job_manager = QtJobManager(
         scanner,
         index_repository=index_repo,
         log_sink=log_sink,
         file_data_store=app_state.file_data_store,
         duplicate_pipeline_factory=duplicate_pipeline_factory,
+        check_integrity_use_case=check_integrity_uc,
+        convert_utf8_use_case=convert_utf8_uc,
     )
 
     # 메인 윈도우 생성 및 표시 (의존성 주입)

@@ -29,7 +29,7 @@ After Work Hub IA (rev. 2), the app still reads as **“debug panel + table”**
 
 ## Non-goals
 
-- Implementing integrity / encoding / small-file **use cases** (UI + job hooks only; honest “미구현” when port missing).
+- Implementing integrity / encoding / small-file **use cases** in this spec (UI hooks only here; **integrity + UTF-8** → [2026-05-22-integrity-check-design.md](2026-05-22-integrity-check-design.md); small-file deferred).
 - Changing duplicate-detection, keeper policy, or move business rules.
 - Sidebar icon polish, separate log tab, file preview pane, duplicate side-by-side compare view.
 - Replacing DESIGN.md color system with ad-hoc hex; rebrand tokens remain normative.
@@ -501,6 +501,37 @@ Running: hide Primary, show `중지` only. Secondary Dry Run stays in step body.
 - **DuplicateSection:** Dry Run + tables (no detect/apply buttons).
 - **MoveSection:** move/copy options + Dry Run (no folder field, no run button).
 - **FinalizeSection:** status + hints (no apply button row).
+
+---
+
+## §9 Rev. 3.9 — Auto-only execution (approved 2026-05-22)
+
+> **Supersedes** §8 Rev. 3.3 step-only execution. **Retains** §8 slim sections + CompactBar.
+
+### User decisions
+
+| Topic | Choice |
+|-------|--------|
+| Execution | **Auto-only** — `전체 작업 실행` replaces per-step footer Primary |
+| Confirm | **One-shot** `PipelineRunConfirmSheet` before run (§7 policy) |
+| During run | **Prev/Next enabled** — browse step bodies while runner active |
+| During run | Primary hidden, **중지** only |
+| Section bodies | **Unchanged** from §8 (no duplicate CTAs in bodies) |
+
+### Footer
+
+| Control | Behavior |
+|---------|----------|
+| `전체 작업 실행` | Primary; opens confirm sheet |
+| `중지` | Visible while pipeline running |
+| `이전` / `다음` | Enabled during run for step browse (does not drive runner) |
+| Progress | `update_pipeline_progress` from `WorkPipelineRunner` |
+
+### Restored components
+
+- `pipeline_run_confirm_sheet.py`
+- `WorkTab` ↔ `WorkPipelineRunner` (`auto_run=True`)
+- `WizardFooter.run_pipeline_requested`
 
 ---
 

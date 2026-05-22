@@ -321,6 +321,15 @@ class FileDataStore(QObject):
                     {"changed_ids_count": len(changed_ids)},
                 )
 
+    def clear_integrity(self, file_id: int) -> None:
+        """Clear integrity issues for one file before re-check."""
+        file_data = self._files.get(file_id)
+        if not file_data:
+            return
+        file_data.integrity_issues.clear()
+        file_data.integrity_severity = None
+        self.file_updated.emit(file_data)
+
     def add_integrity_issue(self, file_id: int, message: str, severity: str) -> None:
         """무결성 이슈 추가.
 

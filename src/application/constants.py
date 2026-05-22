@@ -39,7 +39,10 @@ class Constants:
     TARGET_ENCODING: Final[str] = "UTF-8"
     LOG_FILE_ENCODING: Final[str] = "utf-8"
     MIN_ENCODING_CONFIDENCE: Final[float] = 0.5
+    INTEGRITY_ENCODING_MIN_CONFIDENCE: Final[float] = 0.7
     HIGH_ENCODING_CONFIDENCE: Final[float] = 0.9
+    INTEGRITY_SAMPLE_BYTES: Final[int] = SAMPLE_SIZE
+    UTF8_BACKUP_SUFFIX: Final[str] = ".novelguard.bak"
 
     # ============================================================================
     # 해시 관련 상수

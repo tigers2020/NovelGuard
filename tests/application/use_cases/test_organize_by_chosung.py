@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from application.use_cases.move_duplicate_files import DUPLICATE_FOLDER_NAME
 from application.use_cases.organize_by_chosung import (
     FOLDER_NAMES,
     OUTPUT_SUBFOLDER,
@@ -209,6 +210,28 @@ class TestOrganizeByChosungUseCase:
         assert result.moved_or_copied == 1
         assert (tmp_path / OUTPUT_SUBFOLDER / "ㄱ-ㄷ" / "가나다.txt").exists()
         assert not (tmp_path / OUTPUT_SUBFOLDER / "ㄱ-ㄷ" / "가나다 (1).txt").exists()
+
+    def test_execute_skips_duplicate_folder(self, tmp_path: Path):
+        """``duplicate/`` 아래 파일은 초성 정리 대상에서 제외 (대표만 정리)."""
+        (tmp_path / "가나다.txt").write_text("keeper")
+        dup_dir = tmp_path / DUPLICATE_FOLDER_NAME
+        dup_dir.mkdir()
+        (dup_dir / "나중복.txt").write_text("dup")
+        use_case = OrganizeByChosungUseCase()
+        result = use_case.execute(tmp_path, move=True, dry_run=False)
+        assert result.total_processed == 1
+        assert result.moved_or_copied == 1
+        assert (tmp_path / OUTPUT_SUBFOLDER / "ㄱ-ㄷ" / "가나다.txt").exists()
+        assert (dup_dir / "나중복.txt").exists()
+        assert not (tmp_path / OUTPUT_SUBFOLDER / "ㄱ-ㄷ" / "나중복.txt").exists()
+
+    def test_execute_dry_run_skips_duplicate_folder(self, tmp_path: Path):
+        (tmp_path / "가.txt").write_text("a")
+        dup_dir = tmp_path / DUPLICATE_FOLDER_NAME
+        dup_dir.mkdir()
+        (dup_dir / "나.txt").write_text("b")
+        result = OrganizeByChosungUseCase().execute(tmp_path, move=True, dry_run=True)
+        assert result.total_processed == 1
 
     def test_execute_collects_files_inside_chosung_subdirs(self, tmp_path: Path):
         """초성 구간 폴더(ㄱ-ㄷ 등) 안의 하위 폴더에 있는 파일도 수집·이동하고 빈 하위 폴더 제거."""

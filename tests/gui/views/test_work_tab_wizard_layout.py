@@ -8,7 +8,7 @@ def test_work_tab_has_footer_and_compact_bar(qapp) -> None:
     tab = WorkTab(app_state=AppState())
     assert hasattr(tab, "_footer")
     assert hasattr(tab, "_compact_bar")
-    assert "실행" in tab.footer._execute_btn.text()
+    assert tab.footer._run_btn.text() == "전체 작업 실행"
 
 
 def test_work_tab_splitter_and_dock_after_table(qapp) -> None:

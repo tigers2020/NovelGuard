@@ -1,8 +1,7 @@
 """Pre-flight counts for a full pipeline run (GUI aggregation only).
 
-Rev. 3.3: **not called from WorkTab** (``PipelineRunConfirmSheet`` removed).
-Kept for ``tests/gui/services/test_pipeline_run_preview.py`` and future
-one-shot confirm if auto-pipeline returns.
+Used by ``WorkTab`` before ``PipelineRunConfirmSheet`` (rev. 3.9 auto-only).
+Also covered by ``tests/gui/services/test_pipeline_run_preview.py``.
 """
 
 from __future__ import annotations
@@ -13,6 +12,7 @@ from typing import TYPE_CHECKING, Optional
 
 from application.use_cases.move_duplicate_files import MoveDuplicateFilesUseCase
 from application.use_cases.organize_by_chosung import OrganizeByChosungUseCase
+from application.utils.duplicate_json import find_latest_duplicate_summary
 from gui.models.file_data_store import FileDataStore
 
 if TYPE_CHECKING:
@@ -29,6 +29,8 @@ class PipelineRunPreview:
     duplicate_move_count: int
     organize_dry_run_total: int
     error_message: str | None = None
+    duplicate_groups_from_cache: bool = False
+    cached_detection_timestamp: str | None = None
 
 
 def _count_duplicate_groups(store: FileDataStore) -> int:
@@ -47,7 +49,19 @@ def compute_pipeline_run_preview(
     """Compute dry-run move counts for the run confirm sheet."""
     folder = scan_folder or store.scan_folder
     all_files = store.get_all_files()
-    duplicate_groups = _count_duplicate_groups(store)
+    store_groups = _count_duplicate_groups(store)
+    cached_summary = (
+        find_latest_duplicate_summary(folder) if folder is not None and folder.is_dir() else None
+    )
+
+    duplicate_groups = store_groups
+    groups_from_cache = False
+    cached_ts: str | None = None
+    if store_groups == 0 and cached_summary is not None:
+        duplicate_groups = cached_summary.total_groups
+        groups_from_cache = True
+        cached_ts = cached_summary.detection_timestamp
+
     dup_count = 0
     org_total = 0
     err: str | None = None
@@ -58,6 +72,8 @@ def compute_pipeline_run_preview(
             dup_count = len(ops)
         except Exception as exc:
             err = str(exc)
+        if dup_count == 0 and cached_summary is not None and store_groups == 0:
+            dup_count = cached_summary.duplicate_move_count
         try:
             org_result = OrganizeByChosungUseCase(log_sink=log_sink).execute(
                 root_path=folder,
@@ -75,4 +91,6 @@ def compute_pipeline_run_preview(
         duplicate_move_count=dup_count,
         organize_dry_run_total=org_total,
         error_message=err,
+        duplicate_groups_from_cache=groups_from_cache,
+        cached_detection_timestamp=cached_ts,
     )

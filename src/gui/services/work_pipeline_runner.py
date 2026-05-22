@@ -1,8 +1,7 @@
 """Sequential work pipeline orchestrator (GUI service layer).
 
-Rev. 3.3: **not wired from WorkTab** (step-only footer execution). Retained for
-``tests/gui/services/test_work_pipeline_runner.py`` and possible future
-auto-pipeline reintroduction behind an explicit product decision.
+Wired from ``WorkTab`` as the sole execution path (rev. 3.9 auto-only). Also covered by
+``tests/gui/services/test_work_pipeline_runner.py``.
 """
 
 from __future__ import annotations
@@ -75,6 +74,7 @@ class WorkPipelineRunner(QObject):
     def start(self, folder: Path, *, auto_run: bool = False) -> None:
         if self._library.scan_view_model.is_scanning:
             logger.warning("pipeline start ignored: scan already running")
+            self.finished.emit("failed")
             return
         self._cancelled = False
         self._auto_run = auto_run

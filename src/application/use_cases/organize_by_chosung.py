@@ -12,10 +12,14 @@ from pathlib import Path
 from typing import Optional
 
 from application.ports.log_sink import ILogSink
+from application.use_cases.move_duplicate_files import DUPLICATE_FOLDER_NAME
 from application.utils.debug_logger import debug_step
 
 # 정리 결과를 넣을 한 단계 하위 폴더명 (같은 루트에 섞이지 않도록)
 OUTPUT_SUBFOLDER = "정리"
+
+# Top-level folders under scan root that organize must never collect or delete.
+_RESERVED_TOP_LEVEL_FOLDERS = frozenset({OUTPUT_SUBFOLDER, DUPLICATE_FOLDER_NAME})
 
 # 19개 초성 (유니코드 한글 초성 순서)
 _CHOSUNG_19 = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"
@@ -96,8 +100,13 @@ class OrganizeByChosungUseCase:
     def __init__(self, log_sink: Optional[ILogSink] = None) -> None:
         self._log_sink = log_sink
 
+    @staticmethod
+    def _is_under_reserved_top_folder(rel: Path) -> bool:
+        """True when path is inside ``정리/`` or ``duplicate/`` (scan-root reserved trees)."""
+        return bool(rel.parts) and rel.parts[0] in _RESERVED_TOP_LEVEL_FOLDERS
+
     def _collect_all_files_recursive(self, root_path: Path) -> list[Path]:
-        """루트 아래 모든 파일을 재귀 수집. 출력 폴더(정리) 안은 제외."""
+        """루트 아래 모든 파일을 재귀 수집. ``정리/``, ``duplicate/`` 안은 제외."""
         collected: list[Path] = []
         for path in root_path.rglob("*"):
             if not path.is_file():
@@ -106,7 +115,7 @@ class OrganizeByChosungUseCase:
                 rel = path.relative_to(root_path)
             except ValueError:
                 continue
-            if rel.parts and rel.parts[0] == OUTPUT_SUBFOLDER:
+            if self._is_under_reserved_top_folder(rel):
                 continue
             collected.append(path)
         return collected
@@ -192,7 +201,7 @@ class OrganizeByChosungUseCase:
         return sum(1 for p in target_base.rglob("*") if p.is_file())
 
     def _is_dir_candidate_for_removal(self, root_path: Path, path: Path) -> bool:
-        """경로가 빈 폴더 삭제 후보인지 여부. 출력 폴더(정리) 및 그 직하위 초성 폴더는 제외."""
+        """경로가 빈 폴더 삭제 후보인지 여부. ``정리/``, ``duplicate/`` 트리는 제외."""
         if not path.is_dir():
             return False
         try:
@@ -200,6 +209,8 @@ class OrganizeByChosungUseCase:
         except ValueError:
             return False
         if not rel.parts:
+            return False
+        if rel.parts[0] == DUPLICATE_FOLDER_NAME:
             return False
         if rel.parts[0] != OUTPUT_SUBFOLDER:
             return True

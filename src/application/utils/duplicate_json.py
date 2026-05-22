@@ -2,6 +2,7 @@
 
 import json
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -181,6 +182,99 @@ def save_duplicate_result_to_json(
         error_msg = f"중복 탐지 결과 JSON 저장 중 예상치 못한 오류: {output_path} - {e}"
         logger.error(error_msg, exc_info=True)
         raise
+
+
+@dataclass(frozen=True)
+class DuplicateDetectionSummary:
+    """Lightweight stats from a saved duplicate_results_*.json detection_info block."""
+
+    total_groups: int
+    duplicate_move_count: int
+    detection_timestamp: Optional[str]
+    folder_path: str
+
+
+def _normalize_folder_key(path: str | Path) -> str:
+    try:
+        return str(Path(path).resolve()).casefold()
+    except OSError:
+        return str(path).casefold()
+
+
+def default_duplicate_save_dir() -> Path:
+    """Project ``SAVE/`` directory for duplicate JSON exports."""
+    return Path(__file__).resolve().parents[3] / "SAVE"
+
+
+def find_latest_duplicate_summary(
+    folder_path: Path,
+    *,
+    save_dir: Optional[Path] = None,
+) -> Optional[DuplicateDetectionSummary]:
+    """Return stats from the newest duplicate JSON for ``folder_path``, if any."""
+    root = save_dir or default_duplicate_save_dir()
+    if not root.is_dir():
+        return None
+
+    target_key = _normalize_folder_key(folder_path)
+    candidates: list[tuple[float, Path]] = []
+    for path in root.glob("duplicate_results_*.json"):
+        try:
+            candidates.append((_duplicate_json_sort_key(path), path))
+        except OSError:
+            continue
+    candidates.sort(key=lambda item: item[0], reverse=True)
+
+    for _, json_path in candidates:
+        summary = _read_duplicate_summary(json_path, target_key)
+        if summary is not None:
+            return summary
+    return None
+
+
+def _duplicate_json_sort_key(path: Path) -> float:
+    """Prefer filename timestamp, fall back to file mtime."""
+    mtime = path.stat().st_mtime
+    stem = path.stem
+    if stem.startswith("duplicate_results_"):
+        ts_text = stem.removeprefix("duplicate_results_")
+        try:
+            parsed = datetime.strptime(ts_text, "%Y%m%d_%H%M%S")
+            return max(mtime, parsed.timestamp())
+        except ValueError:
+            pass
+    return mtime
+
+
+def _read_duplicate_summary(
+    json_path: Path,
+    target_folder_key: str,
+) -> Optional[DuplicateDetectionSummary]:
+    try:
+        with open(json_path, encoding=Constants.DEFAULT_ENCODING) as handle:
+            payload = json.load(handle)
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        logger.debug("Skipping unreadable duplicate JSON: %s", json_path)
+        return None
+
+    info = payload.get("detection_info")
+    if not isinstance(info, dict):
+        return None
+
+    saved_folder = info.get("folder_path")
+    if not saved_folder or _normalize_folder_key(str(saved_folder)) != target_folder_key:
+        return None
+
+    total_groups = int(info.get("total_groups") or 0)
+    unique_in_groups = int(info.get("total_unique_files_in_groups") or 0)
+    move_count = max(0, unique_in_groups - total_groups)
+
+    return DuplicateDetectionSummary(
+        total_groups=total_groups,
+        duplicate_move_count=move_count,
+        detection_timestamp=info.get("detection_timestamp"),
+        folder_path=str(saved_folder),
+    )
 
 
 def generate_duplicate_json_filename(detection_timestamp: Optional[datetime] = None) -> str:

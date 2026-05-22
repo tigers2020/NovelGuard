@@ -18,6 +18,7 @@ from application.utils.debug_logger import debug_step
 from application.utils.extensions import parse_extensions
 from gui.models.app_state import AppState
 from gui.services.work_stats import compute_work_stats
+from gui.view_models.integrity_view_model import IntegrityViewModel
 from gui.view_models.work_view_model import WorkViewModel
 from gui.views.components.file_list_table import FileListTableWidget
 from gui.views.components.global_action_toolbar import GlobalActionToolbar
@@ -146,6 +147,15 @@ class MainWindow(QMainWindow):
             log_sink=self._log_sink,
         )
         self._work_tab.bind_work_view_model(self._work_view_model)
+        integrity_vm = IntegrityViewModel(
+            self._job_manager,
+            self._app_state.file_data_store,
+            parent=self,
+        )
+        self._work_tab.configure_finalize_integrity(
+            integrity_vm,
+            on_stats_refresh=self._refresh_work_stats_from_store,
+        )
         self._work_tab.bind_main_window(self)
         self._file_list_table = FileListTableWidget(self._app_state.file_data_store, self._work_tab)
         self._work_tab.set_file_list_table(self._file_list_table)
@@ -209,6 +219,7 @@ class MainWindow(QMainWindow):
                 if work_tab:
                     work_tab.library_section.set_scan_folder(folder_path)
                     work_tab.refresh_move_folder()
+                    work_tab.sync_folder_state()
 
     def _auto_start_preview_scan(self) -> None:
         """자동 Preview 스캔 시작 (프로그램 시작 시).
@@ -354,9 +365,16 @@ class MainWindow(QMainWindow):
                 self._app_state.current_tab = tab_name
                 break
 
+    def _refresh_work_stats_from_store(self) -> None:
+        """Refresh compact bar stats after integrity / convert."""
+        self._update_header_stats_from_store()
+
     def _on_file_data_changed(self, *args) -> None:
         """FileDataStore 데이터 변경 핸들러."""
         self._update_header_stats_from_store()
+        work_tab = self._get_work_tab()
+        if work_tab is not None:
+            work_tab.finalize_section.refresh_button_state()
 
     def _update_header_stats_from_store(self) -> None:
         """FileDataStore에서 통계를 계산하여 WorkTab CompactBar 갱신."""

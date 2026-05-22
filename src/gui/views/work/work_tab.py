@@ -1,7 +1,8 @@
-"""Single work surface: wizard shell + collapsible file dock (rev. 3.3)."""
+"""Single work surface: wizard shell + auto pipeline (rev. 3.9)."""
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import QSettings, Qt
@@ -15,10 +16,13 @@ from PySide6.QtWidgets import (
 
 from application.ports.index_repository import IIndexRepository
 from application.ports.log_sink import ILogSink
+from gui.services.pipeline_run_preview import compute_pipeline_run_preview
+from gui.services.work_pipeline_runner import WorkPipelineRunner
 from gui.services.work_stats import compute_work_stats
 from gui.view_models.work_pipeline_dto import STEP_ORDER, StepId
 from gui.view_models.work_pipeline_view_model import WorkPipelineViewModel
 from gui.view_models.work_view_model import WorkViewModel
+from gui.views.work.pipeline_run_confirm_sheet import PipelineRunConfirmSheet
 from gui.views.work.pipeline_stepper import PipelineStepper
 from gui.views.work.sections.duplicate_section import DuplicateSection
 from gui.views.work.sections.finalize_section import FinalizeSection
@@ -31,16 +35,9 @@ from gui.views.work.work_file_dock import WorkFileDock
 _SETTINGS_SPLITTER = "ui/work_wizard_splitter"
 _SETTINGS_DOCK_EXPANDED = "ui/work_file_dock_expanded"
 
-_STEP_LABELS = {
-    StepId.SCAN.value: "스캔",
-    StepId.DUPLICATE.value: "중복 정리",
-    StepId.MOVE.value: "이동 계획",
-    StepId.FINALIZE.value: "적용 · 검증",
-}
-
 
 class WorkTab(QWidget):
-    """Main work screen: compact bar, stepper, stacked steps, footer, file dock."""
+    """Main work screen: compact bar, stepper, stacked steps, auto-run footer, file dock."""
 
     def __init__(
         self,
@@ -56,7 +53,8 @@ class WorkTab(QWidget):
         self._log_sink = log_sink
         self._settings = QSettings()
         self._current_step_id = StepId.SCAN.value
-        self._duplicate_phase = "detect"
+        self._pending_run_folder: Path | None = None
+        self._pipeline_running = False
 
         root = QVBoxLayout(self)
         root.setContentsMargins(32, 24, 32, 24)
@@ -65,8 +63,9 @@ class WorkTab(QWidget):
         self._main_splitter = QSplitter(Qt.Orientation.Vertical)
         self._main_splitter.setObjectName("workWizardSplitter")
 
-        wizard_page = QWidget()
-        wizard_layout = QVBoxLayout(wizard_page)
+        self._wizard_column = QStackedWidget()
+        self._wizard_page = QWidget()
+        wizard_layout = QVBoxLayout(self._wizard_page)
         wizard_layout.setContentsMargins(0, 0, 0, 0)
         wizard_layout.setSpacing(16)
 
@@ -84,8 +83,12 @@ class WorkTab(QWidget):
         self._footer = WizardFooter()
         wizard_layout.addWidget(self._footer)
 
+        self._confirm_sheet = PipelineRunConfirmSheet()
+        self._wizard_column.addWidget(self._wizard_page)
+        self._wizard_column.addWidget(self._confirm_sheet)
+
         self._file_dock: Optional[WorkFileDock] = None
-        self._main_splitter.addWidget(wizard_page)
+        self._main_splitter.addWidget(self._wizard_column)
         root.addWidget(self._main_splitter, stretch=1)
 
         self._pipeline_vm = WorkPipelineViewModel(app_state) if app_state else None
@@ -117,6 +120,8 @@ class WorkTab(QWidget):
         self._register_step_page(StepId.FINALIZE.value, self._finalize_section_widget)
 
         self._work_vm: Optional[WorkViewModel] = None
+        self._pipeline_runner: Optional[WorkPipelineRunner] = None
+        self._main_window = None
 
         if app_state is not None:
             self._work_vm = WorkViewModel(app_state, job_manager=job_manager, log_sink=log_sink)
@@ -131,20 +136,12 @@ class WorkTab(QWidget):
         self._compact_bar.rescan_requested.connect(self._library_section_widget.request_full_scan)
         self._footer.prev_clicked.connect(self._on_prev_step)
         self._footer.next_clicked.connect(self._on_next_step)
-        self._footer.execute_step_requested.connect(self._on_execute_step)
-        self._footer.cancel_step_requested.connect(self._on_cancel_step)
-        self._library_section_widget.scan_completed.connect(self._on_scan_completed)
-        self._library_section_widget.folder_selected.connect(lambda _: self._refresh_footer())
-        lib_vm = self._library_section_widget.scan_view_model
-        lib_vm.progress_updated.connect(lambda *_: self._refresh_footer())
-        lib_vm.scan_error.connect(self._on_step_job_finished)
-        dup_vm = self._duplicate_section_widget.duplicate_view_model
-        dup_vm.duplicate_completed.connect(self._on_duplicate_detection_finished)
-        dup_vm.duplicate_error.connect(self._on_step_job_finished)
-        dup_vm.progress_updated.connect(lambda *_: self._refresh_footer())
-        self._duplicate_section_widget.pipeline_apply_finished.connect(
-            self._on_duplicate_apply_finished
-        )
+        self._footer.run_pipeline_requested.connect(self._on_run_pipeline_requested)
+        self._footer.cancel_pipeline_requested.connect(self._on_cancel_pipeline)
+        self._confirm_sheet.confirmed.connect(self._on_confirm_sheet_confirmed)
+        self._confirm_sheet.cancelled.connect(self._on_confirm_sheet_cancelled)
+        self._library_section_widget.folder_selected.connect(self._on_folder_selected)
+        self.sync_folder_state()
 
         self._main_splitter.splitterMoved.connect(self._save_splitter_state)
 
@@ -190,23 +187,54 @@ class WorkTab(QWidget):
     def library_section(self) -> LibrarySection:
         return self._library_section_widget
 
+    @property
+    def finalize_section(self) -> FinalizeSection:
+        return self._finalize_section_widget
+
+    def configure_finalize_integrity(self, integrity_vm, *, on_stats_refresh) -> None:
+        """Wire integrity view model into finalize step."""
+        self._finalize_section_widget.set_integrity_view_model(integrity_vm)
+        self._finalize_section_widget._on_stats_refresh = on_stats_refresh
+        self._finalize_section_widget.refresh_button_state()
+
     def bind_main_window(self, main_window) -> None:
-        """Reserved for future main-window hooks (rev. 3.3: no auto-pipeline)."""
-        _ = main_window
+        self._main_window = main_window
+        self._pipeline_runner = WorkPipelineRunner(
+            main_window=main_window,
+            library=self._library_section_widget,
+            duplicate=self._duplicate_section_widget,
+            move=self._move_section_widget,
+            finalize=self._finalize_section_widget,
+            parent=self,
+        )
+        self._pipeline_runner.progress_changed.connect(self._footer.update_pipeline_progress)
+        self._pipeline_runner.step_changed.connect(self.set_active_step)
+        self._pipeline_runner.flags_changed.connect(self._on_runner_flags_changed)
+        self._pipeline_runner.finished.connect(self._on_pipeline_finished)
 
     def bind_work_view_model(self, work_vm: WorkViewModel) -> None:
         self._work_vm = work_vm
         self._work_vm.summary_changed.connect(self._on_summary_changed)
         self._work_vm.refresh()
 
+    def sync_folder_state(self) -> None:
+        """Align library folder with AppState and refresh run button (after settings restore)."""
+        if self._app_state and self._app_state.scan_folder:
+            folder = Path(str(self._app_state.scan_folder))
+            if folder.is_dir() and self._library_section_widget.get_scan_folder() != folder:
+                self._library_section_widget.set_scan_folder(folder)
+        self._update_run_button_state()
+
     def set_active_step(self, step_id: str) -> None:
         self._current_step_id = step_id
         index = self._step_index_by_id.get(step_id, 0)
-        self._step_stack.setCurrentIndex(index)
-        self._stepper.set_active_step(step_id)
+        if self._pipeline_running:
+            self._wizard_column.setCurrentWidget(self._wizard_page)
+        if self._wizard_column.currentWidget() == self._wizard_page:
+            self._step_stack.setCurrentIndex(index)
+            self._stepper.set_active_step(step_id)
         self._update_footer_nav()
         self._refresh_pipeline_snapshot(active_step_id=step_id)
-        self._refresh_footer()
 
     def _update_footer_nav(self) -> None:
         step_ids = [s.value for s in STEP_ORDER]
@@ -216,6 +244,8 @@ class WorkTab(QWidget):
         self._footer.set_next_enabled(can_next)
 
     def _on_stepper_clicked(self, step_id: str) -> None:
+        if self._wizard_column.currentWidget() != self._wizard_page:
+            return
         self.set_active_step(step_id)
 
     def _on_prev_step(self) -> None:
@@ -232,29 +262,29 @@ class WorkTab(QWidget):
             if self._stepper.is_step_enabled(next_id):
                 self.set_active_step(next_id)
 
-    def _on_scan_completed(self) -> None:
-        self._completion_flags["scan_done"] = True
-        self._footer.set_step_running(False)
-        self._compact_bar.set_actions_enabled(True)
-        self._refresh_pipeline_snapshot()
-        self._refresh_footer()
-        if self._work_vm:
-            self._work_vm.refresh()
+    def _on_folder_selected(self, _folder: Path) -> None:
+        self._update_run_button_state()
+
+    def _update_run_button_state(self) -> None:
+        has_folder = self._library_section_widget.get_scan_folder() is not None
+        can_run = has_folder and not self._pipeline_running
+        self._footer.set_run_enabled(can_run)
+        if can_run:
+            self._footer.set_run_tooltip("")
+        else:
+            tip = "먼저 CompactBar에서 스캔할 폴더를 선택하세요."
+            if self._pipeline_running:
+                tip = "파이프라인 실행 중입니다."
+            self._footer.set_run_tooltip(tip)
 
     def _on_duplicate_groups_found(self) -> None:
         self._completion_flags["duplicate_done"] = True
-        self._duplicate_phase = "detect"
         self._refresh_pipeline_snapshot()
-        self._refresh_footer()
 
-    def _on_duplicate_apply_finished(self, success: bool) -> None:
-        self._footer.set_step_running(False)
-        self._compact_bar.set_actions_enabled(True)
-        if success:
-            self._completion_flags["duplicate_done"] = True
-            self._duplicate_phase = "detect"
-        self._refresh_pipeline_snapshot()
-        self._refresh_footer()
+    def _on_runner_flags_changed(self) -> None:
+        if self._pipeline_runner:
+            self._completion_flags.update(self._pipeline_runner.flags)
+            self._refresh_pipeline_snapshot()
 
     def _on_summary_changed(self, summary) -> None:
         size_gb = 0.0
@@ -266,7 +296,6 @@ class WorkTab(QWidget):
         self._compact_bar.update_summary(summary, total_size_gb=size_gb)
         if self._file_dock:
             self._file_dock.set_file_count(file_count)
-        self._refresh_footer()
 
     def _refresh_pipeline_snapshot(self, active_step_id: str | None = None) -> None:
         if not self._pipeline_vm:
@@ -286,156 +315,78 @@ class WorkTab(QWidget):
             self._stepper.set_step_state(step_id, state)
         self._update_footer_nav()
 
-    def _is_step_running(self) -> bool:
-        lib = self._library_section_widget
-        dup = self._duplicate_section_widget
-        if self._current_step_id == StepId.SCAN.value:
-            return lib.scan_view_model.is_scanning
-        if self._current_step_id == StepId.DUPLICATE.value:
-            return dup.duplicate_view_model.is_detecting or dup.is_apply_running()
-        return False
-
-    def _refresh_footer(self) -> None:
-        step_ids = [s.value for s in STEP_ORDER]
-        idx = step_ids.index(self._current_step_id)
-        step_no = idx + 1
-        label = _STEP_LABELS.get(self._current_step_id, "")
-        detail = self._footer_action_detail()
-        self._footer.set_summary(f"{step_no}/4 · {label} · {detail}")
-
-        if self._is_step_running():
-            self._footer.set_step_running(True)
-            self._footer.set_step_progress(detail)
-            return
-
-        self._footer.set_step_running(False)
-        execute_label, enabled = self._footer_execute_state()
-        self._footer.set_execute_label(execute_label)
-        self._footer.set_execute_enabled(enabled)
-
-    def _footer_action_detail(self) -> str:
-        if not self._library_section_widget.get_scan_folder():
-            return "폴더를 선택하세요"
-        if self._current_step_id == StepId.SCAN.value:
-            if self._completion_flags["scan_done"]:
-                return "마지막 스캔 결과 사용 가능"
-            return "스캔 대기"
-        if self._current_step_id == StepId.DUPLICATE.value:
-            if self._duplicate_phase == "apply":
-                return "중복 적용 대기"
-            if self._duplicate_section_widget.has_detection_results():
-                return "탐지 완료 · 적용 가능"
-            return "중복 탐지 대기"
-        if self._current_step_id == StepId.MOVE.value:
-            return "이동·복사 계획"
-        return "적용 및 무결성 검사"
-
-    def _footer_execute_state(self) -> tuple[str, bool]:
-        folder = self._library_section_widget.get_scan_folder()
-        if not folder:
-            return "현재 단계 실행", False
-
-        step = self._current_step_id
-        if step == StepId.SCAN.value:
-            return "스캔 실행", True
-        if step == StepId.DUPLICATE.value:
-            if not self._completion_flags["scan_done"]:
-                return "중복 탐지", False
-            if self._completion_flags["duplicate_done"]:
-                return "적용하기", False
-            if self._duplicate_phase == "apply":
-                return "적용하기", True
-            return "중복 탐지", True
-        if step == StepId.MOVE.value:
-            if not (
-                self._completion_flags["duplicate_done"]
-                or self._completion_flags["duplicate_skipped"]
-            ):
-                return "정리 실행", False
-            return "정리 실행", True
-        if step == StepId.FINALIZE.value:
-            if not (self._completion_flags["move_done"] or self._completion_flags["move_skipped"]):
-                return "적용·검증", False
-            return "적용·검증", True
-        return "현재 단계 실행", False
-
-    def _on_execute_step(self) -> None:
+    def _on_run_pipeline_requested(self) -> None:
         from PySide6.QtWidgets import QMessageBox
 
-        step = self._current_step_id
-        if step == StepId.SCAN.value:
-            if not self._library_section_widget.get_scan_folder():
-                QMessageBox.warning(self, "폴더 필요", "먼저 스캔할 폴더를 선택하세요.")
-                return
-            self._footer.set_step_running(True)
-            self._compact_bar.set_actions_enabled(False)
-            self._footer.set_step_progress("스캔 실행 중…")
-            self._library_section_widget.request_full_scan()
-            self._refresh_footer()
+        if not self._pipeline_runner:
+            QMessageBox.warning(self, "오류", "작업 파이프라인을 초기화하지 못했습니다.")
             return
-
-        if step == StepId.DUPLICATE.value:
-            dup = self._duplicate_section_widget
-            if self._duplicate_phase == "apply":
-                self._footer.set_step_running(True)
-                self._compact_bar.set_actions_enabled(False)
-                self._footer.set_step_progress("중복 적용 중…")
-                dup.apply_duplicates()
-            else:
-                self._footer.set_step_running(True)
-                self._compact_bar.set_actions_enabled(False)
-                self._footer.set_step_progress("중복 탐지 중…")
-                dup.start_detection()
-            self._refresh_footer()
+        if not self._app_state:
             return
-
-        if step == StepId.MOVE.value:
-            self._footer.set_step_running(True)
-            self._footer.set_step_progress("정리 실행 중…")
-            ok = self._move_section_widget.execute_organize()
-            self._footer.set_step_running(False)
-            if ok:
-                self._completion_flags["move_done"] = True
-                self._refresh_pipeline_snapshot()
-            self._refresh_footer()
+        folder = self._library_section_widget.get_scan_folder()
+        if not folder:
+            QMessageBox.warning(self, "폴더 필요", "먼저 CompactBar에서 스캔할 폴더를 선택하세요.")
             return
+        if self._library_section_widget.scan_view_model.is_scanning:
+            QMessageBox.warning(
+                self,
+                "스캔 진행 중",
+                "이미 전체 스캔이 실행 중입니다. 완료 후 다시 시도하세요.",
+            )
+            return
+        preview = compute_pipeline_run_preview(
+            self._app_state.file_data_store,
+            scan_folder=folder,
+            log_sink=self._log_sink,
+        )
+        self._pending_run_folder = folder
+        self._confirm_sheet.set_preview(preview)
+        self._wizard_column.setCurrentWidget(self._confirm_sheet)
 
-        if step == StepId.FINALIZE.value:
-            self._footer.set_step_running(True)
-            self._footer.set_step_progress("적용·검증 중…")
-            self._finalize_section_widget.run_apply_and_integrity_auto(self)
-            self._footer.set_step_running(False)
-            self._refresh_footer()
+    def _on_confirm_sheet_confirmed(self) -> None:
+        from PySide6.QtWidgets import QMessageBox
 
-    def _on_step_job_finished(self, _message: str = "") -> None:
-        self._footer.set_step_running(False)
+        if not self._pipeline_runner or self._pending_run_folder is None:
+            return
+        if self._library_section_widget.scan_view_model.is_scanning:
+            QMessageBox.warning(
+                self,
+                "스캔 진행 중",
+                "이미 전체 스캔이 실행 중입니다. 완료 후 다시 시도하세요.",
+            )
+            self._pending_run_folder = None
+            self._wizard_column.setCurrentWidget(self._wizard_page)
+            return
+        self._wizard_column.setCurrentWidget(self._wizard_page)
+        self._pipeline_running = True
+        self._footer.set_pipeline_running(True)
+        self._compact_bar.set_actions_enabled(False)
+        self._update_run_button_state()
+        self._pipeline_runner.start(self._pending_run_folder, auto_run=True)
+        self._pending_run_folder = None
+
+    def _on_confirm_sheet_cancelled(self) -> None:
+        self._pending_run_folder = None
+        self._wizard_column.setCurrentWidget(self._wizard_page)
+
+    def _on_cancel_pipeline(self) -> None:
+        if self._pipeline_runner:
+            self._pipeline_runner.cancel()
+
+    def _on_pipeline_finished(self, status: str) -> None:
+        self._pipeline_running = False
+        self._footer.set_pipeline_running(False)
+        self._footer.update_pipeline_progress(None)
         self._compact_bar.set_actions_enabled(True)
-        self._refresh_footer()
-
-    def _on_duplicate_detection_finished(self, results: list) -> None:
-        self._footer.set_step_running(False)
-        self._compact_bar.set_actions_enabled(True)
-        if not results:
-            self._completion_flags["duplicate_skipped"] = True
-            self._completion_flags["duplicate_done"] = True
-            self._duplicate_phase = "detect"
-        else:
-            self._duplicate_phase = "apply"
+        self._wizard_column.setCurrentWidget(self._wizard_page)
+        if status == "completed":
+            self._completion_flags["scan_done"] = True
+            if self._pipeline_runner:
+                self._completion_flags.update(self._pipeline_runner.flags)
         self._refresh_pipeline_snapshot()
-        self._refresh_footer()
-
-    def _on_cancel_step(self) -> None:
-        if self._current_step_id == StepId.SCAN.value:
-            self._library_section_widget.cancel_scan()
-        elif self._current_step_id == StepId.DUPLICATE.value:
-            dup = self._duplicate_section_widget
-            if dup.duplicate_view_model.is_detecting:
-                dup.duplicate_view_model.stop_duplicate_detection()
-            else:
-                dup.cancel_apply()
-        self._footer.set_step_running(False)
-        self._compact_bar.set_actions_enabled(True)
-        self._refresh_footer()
+        self._update_run_button_state()
+        if self._work_vm:
+            self._work_vm.refresh()
 
     def expand_file_dock(self) -> None:
         if self._file_dock:
