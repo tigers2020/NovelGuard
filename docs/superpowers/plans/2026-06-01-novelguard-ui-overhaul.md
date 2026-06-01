@@ -10,6 +10,18 @@
 
 **Spec:** [2026-06-01-novelguard-ui-overhaul-design.md](../specs/2026-06-01-novelguard-ui-overhaul-design.md) (approved)
 
+## Implementation status
+
+| PR | Status | Branch |
+|----|--------|--------|
+| PR-0 … PR-9 | **Done** | `feat/web-ui-overhaul` |
+
+**Verification (last run):** `cd web && npm run build` PASS · `python scripts/verify_phase_completion.py` PASS
+
+**Run:** `run.bat` (desktop) · `cd web && npm run dev` (browser mock)
+
+Plan scope freeze holds — no PR-10 without new spec/plan cycle.
+
 **Test policy:** Do not add new `tests/**` files unless user says `TEST_ALLOWED`. Verify with `npm run build`, `npm run lint` (if configured), manual smoke, and `python scripts/verify_phase_completion.py` when Python files change.
 
 ---

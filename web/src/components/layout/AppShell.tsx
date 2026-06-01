@@ -14,7 +14,7 @@ export function AppShell({
   commandBar: ReactNode;
 }) {
   return (
-    <div className="grid h-screen min-h-screen grid-rows-[auto_1fr_auto_auto] overflow-hidden bg-background text-on-surface">
+    <div className="grid h-full min-h-full grid-rows-[auto_1fr_auto_auto] overflow-hidden bg-background text-on-surface">
       {header}
       <div className="grid min-h-0 grid-cols-[14rem_1fr]">
         {sidebar}

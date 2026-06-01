@@ -13,18 +13,19 @@
 
 ```
 NovelGuard/
-├── AGENTS.md
-├── src/main.py          # 최소 진입점
-├── tests/               # 스캐폴드 테스트
-├── scripts/verify_phase_completion.py
-└── docs/                # 새 설계·플랜 문서용
+├── web/                 # React + Tailwind UI (v1)
+├── src/app/             # pywebview host + bridge stub
+├── run.bat              # desktop launcher (Windows)
+└── docs/superpowers/    # approved spec + plan
 ```
 
 ## 실행
 
-```bash
-python src/main.py
-```
+**Desktop (Windows):** `run.bat` or `novelguard-webview` after `pip install -e ".[gui]"` and `cd web && npm run build`
+
+**Browser dev:** `cd web && npm run dev` (mock bridge)
+
+**Python scaffold:** `python src/main.py`
 
 ## 검증
 

@@ -1,5 +1,23 @@
 @import "tailwindcss";
 
+/* Shell floor — matches pywebview min_size in src/app/webview_main.py */
+html,
+body,
+#root {
+  min-width: 1100px;
+  min-height: 640px;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+#root {
+  height: 100%;
+}
+
 @theme {
   --color-background: #121212;
   --color-surface: #1e1e1e;
