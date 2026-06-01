@@ -15,4 +15,5 @@ PYWEBVIEW_API_METHODS: tuple[str, ...] = (
     "get_move_preview",
     "apply_resolved_actions",
     "discard_move_preview",
+    "update_review_decisions",
 )

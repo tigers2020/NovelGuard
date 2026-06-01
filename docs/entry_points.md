@@ -45,7 +45,7 @@ novelguard-webview
 # or: python src/app/webview_main.py  (with PYTHONPATH=src)
 ```
 
-React loads `createPywebviewBridge()` when `window.pywebview.api` is present; methods are snake_case on the Python `BridgeApi` class (`src/app/bridge_api.py`).
+React loads `createPywebviewBridge()` when `window.pywebview.api` is present; methods are snake_case on the Python `BridgeApi` class (`src/app/bridge_api.py`). PR-17 adds `update_review_decisions` for persisted review status (approve/exclude/setKeeper/markConflict/reset).
 
 ## Verification
 

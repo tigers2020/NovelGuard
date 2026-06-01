@@ -8,6 +8,10 @@ import type {
   DiscardMovePreviewRequest,
   MovePreviewResult,
 } from "../types/movePreview";
+import type {
+  UpdateReviewDecisionsRequest,
+  UpdateReviewDecisionsResult,
+} from "../types/reviewDecisions";
 import type { SelectionScope } from "../types/selection";
 import type { WorkMode } from "../types/snapshot";
 import { BridgeCallError } from "./bridgeErrors";
@@ -98,6 +102,10 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
     discardMovePreview: (request: DiscardMovePreviewRequest) =>
       callBridge(() => call(api, "discard_move_preview", request).then(() => undefined), {
         method: "discard_move_preview",
+      }),
+    updateReviewDecisions: (request: UpdateReviewDecisionsRequest) =>
+      callBridge(() => call<UpdateReviewDecisionsResult>(api, "update_review_decisions", request), {
+        method: "update_review_decisions",
       }),
   };
 }

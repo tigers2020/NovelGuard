@@ -86,6 +86,7 @@ def test_pywebview_api_methods_match_locked_contract() -> None:
         "get_move_preview",
         "apply_resolved_actions",
         "discard_move_preview",
+        "update_review_decisions",
     ]
     assert list(PYWEBVIEW_API_METHODS) == locked
 
@@ -323,6 +324,36 @@ def _scan_until_idle(api: BridgeApi) -> dict:
         time.sleep(0.05)
         snap = api.get_snapshot()
     return snap
+
+
+def test_update_review_decisions_approve_persists(tmp_path: Path) -> None:
+    payload = "same story content\n"
+    (tmp_path / "copy_a.txt").write_text(payload, encoding="utf-8")
+    (tmp_path / "copy_b.txt").write_text(payload, encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    page = api.query_review_rows({"viewMode": "all", "limit": 50})
+    file_row = next(row for row in page["rows"] if row.get("rowKind") == "file")
+    assert file_row.get("status") == "unreviewed"
+
+    result = api.update_review_decisions(
+        {
+            "selection": {"type": "explicit_rows", "rowIds": [file_row["id"]]},
+            "command": "approve",
+        }
+    )
+    assert result["updatedCount"] == 1
+    assert result["libraryRevision"] >= 1
+
+    snap = api.get_snapshot()
+    assert snap["work"]["resolve"]["approvedCount"] >= 1
+
+    page_after = api.query_review_rows({"viewMode": "all", "limit": 50})
+    approved_row = next(row for row in page_after["rows"] if row["id"] == file_row["id"])
+    assert approved_row["status"] == "approved"
 
 
 def test_query_review_rows_exact_duplicate_pair(tmp_path: Path) -> None:

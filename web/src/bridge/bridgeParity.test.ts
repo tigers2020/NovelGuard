@@ -33,6 +33,7 @@ describe("bridge parity", () => {
     expect(PYWEBVIEW_API_METHODS).toContain("get_snapshot");
     expect(PYWEBVIEW_API_METHODS).toContain("query_quality_rows");
     expect(PYWEBVIEW_API_METHODS).toContain("discard_move_preview");
+    expect(PYWEBVIEW_API_METHODS).toContain("update_review_decisions");
     expect(PYWEBVIEW_API_METHODS.length).toBe(NOVEL_GUARD_BRIDGE_METHODS.length);
   });
 

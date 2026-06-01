@@ -17,6 +17,8 @@ from application.quality_query import query_quality_page
 from application.quality_rows_builder import build_quality_rows
 from application.review_query import query_review_page
 from application.review_rows_builder import build_review_rows
+from application.review_snapshot_counts import file_row_status_counts
+from application.review_state_merge import rebuild_rows_with_review_state
 from domain.duplicate_exact import find_exact_duplicate_groups
 from domain.models import FileRecord
 
@@ -51,6 +53,8 @@ class LibrarySession:
         self._review_rows_cache: list[dict[str, Any]] = []
         self._duplicate_group_count = 0
         self._queue_count = 0
+        self._approved_count = 0
+        self._conflict_count = 0
         self._files_by_id: dict[str, FileRecord] = {}
         self._quality_rows_cache: list[dict[str, Any]] = []
         self._integrity_issue_count = 0
@@ -81,6 +85,7 @@ class LibrarySession:
         with self._lock:
             self._index.replace_files(folder, [])
             self._index.replace_quality_issues(folder, [])
+            self._index.clear_review_state(folder)
             self._library_revision += 1
             self._scan_state = "ready"
             self._scan_last_run = None
@@ -138,6 +143,8 @@ class LibrarySession:
                 has_pending_apply=self._has_pending_apply,
                 duplicate_group_count=self._duplicate_group_count,
                 queue_count=self._queue_count,
+                approved_count=self._approved_count,
+                conflict_count=self._conflict_count,
                 integrity_issue_count=self._integrity_issue_count,
                 encoding_issue_count=self._encoding_issue_count,
                 small_file_anomaly_count=self._small_file_anomaly_count,
@@ -234,6 +241,30 @@ class LibrarySession:
         with self._lock:
             self._library_revision += 1
 
+    def update_review_decisions(
+        self,
+        selection: dict[str, Any],
+        command: str,
+        *,
+        keeper_file_id: str | None = None,
+    ) -> dict[str, Any]:
+        from application.review_decisions import UpdateReviewDecisionsUseCase
+
+        with self._lock:
+            use_case = UpdateReviewDecisionsUseCase(self, self._index)
+            updated = use_case.execute(
+                selection,
+                command,
+                keeper_file_id=keeper_file_id,
+            )
+            if updated > 0:
+                self._rebuild_review_index(list(self._files_by_id.values()))
+                self._library_revision += 1
+            return {
+                "updatedCount": updated,
+                "libraryRevision": self._library_revision,
+            }
+
     def set_apply_in_progress(self, value: bool) -> None:
         with self._lock:
             self._apply_in_progress = value
@@ -270,6 +301,8 @@ class LibrarySession:
         self._review_rows_cache = []
         self._duplicate_group_count = 0
         self._queue_count = 0
+        self._approved_count = 0
+        self._conflict_count = 0
         self._files_by_id = {}
         self._clear_quality_cache()
 
@@ -283,9 +316,23 @@ class LibrarySession:
     def _rebuild_review_index(self, files: list[FileRecord]) -> None:
         self._files_by_id = {f.id: f for f in files}
         groups = find_exact_duplicate_groups(files)
-        self._review_rows_cache = build_review_rows(groups, self._files_by_id)
+        folder = self._index.folder_path
+        if folder:
+            valid_group_ids = {g.group_id for g in groups}
+            valid_file_ids = {f.id for f in files}
+            self._index.prune_review_state(folder, valid_group_ids, valid_file_ids)
+            stored = self._index.load_review_state(folder)
+            self._review_rows_cache = rebuild_rows_with_review_state(files, stored)
+        else:
+            self._review_rows_cache = build_review_rows(groups, self._files_by_id)
         self._duplicate_group_count = len(groups)
-        self._queue_count = len(self._review_rows_cache)
+        self._refresh_resolve_counts()
+
+    def _refresh_resolve_counts(self) -> None:
+        queue, approved, conflict = file_row_status_counts(self._review_rows_cache)
+        self._queue_count = queue
+        self._approved_count = approved
+        self._conflict_count = conflict
 
     def _rebuild_quality_index(self, folder: str, files: list[FileRecord]) -> None:
         issues = analyze_quality(folder, files)

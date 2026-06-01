@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SortingState } from "@tanstack/react-table";
-import { useBridge, useSnapshot } from "../../app/providers/snapshotHooks";
+import { useBridge, useRefreshSnapshot, useSnapshot } from "../../app/providers/snapshotHooks";
 import type { ReviewRow, ReviewRowsQuery, ReviewViewMode } from "../../types/review";
 import type { SelectionScope } from "../../types/selection";
 import { StatChip } from "../../components/ui/StatChip";
@@ -22,6 +22,7 @@ function loadColumnSizing(): Record<string, number> {
 
 export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: (selection: SelectionScope) => void }) {
   const bridge = useBridge();
+  const refreshSnapshot = useRefreshSnapshot();
   const snapshot = useSnapshot();
   const resolve = snapshot.work.resolve;
 
@@ -107,10 +108,30 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
     );
   };
 
-  const selection: SelectionScope =
+  const explicitSelection = useMemo<SelectionScope>(
+    () => ({ type: "explicit_rows", rowIds: explicitIds }),
+    [explicitIds],
+  );
+
+  const previewSelection: SelectionScope =
     explicitIds.length > 0
-      ? { type: "explicit_rows", rowIds: explicitIds }
+      ? explicitSelection
       : { type: "current_query", query: currentQuery, excludeRowIds: [] };
+
+  const runBatchCommand = useCallback(
+    async (command: "approve" | "exclude") => {
+      if (explicitIds.length === 0) return;
+      try {
+        setQueryError(null);
+        await bridge.updateReviewDecisions({ selection: explicitSelection, command });
+        await refreshSnapshot();
+        await loadPage(null, false);
+      } catch (err) {
+        setQueryError(err instanceof Error ? err.message : "Review update failed");
+      }
+    },
+    [bridge, explicitIds, explicitSelection, loadPage, refreshSnapshot],
+  );
 
   const selectionLabel =
     explicitIds.length > 0
@@ -182,7 +203,10 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
       <BatchActionBar
         selectionLabel={selectionLabel}
         filteredCount={filteredCount}
-        onPreview={() => onOpenPreview(selection)}
+        explicitCount={explicitIds.length}
+        onApprove={() => void runBatchCommand("approve")}
+        onExclude={() => void runBatchCommand("exclude")}
+        onPreview={() => onOpenPreview(previewSelection)}
       />
     </main>
   );

@@ -5,6 +5,6 @@
 3. **Plan** — `plans/YYYY-MM-DD-<topic>.md` → human approval
 4. **Implement** — `executing-plans` / TDD per [AGENTS.md](../../AGENTS.md)
 
-**Current program status:** [Master roadmap](./roadmap/000-2026-06-01-novelguard-master-roadmap.md) — PR-0..15 **Done**; **next:** PR-16 Resolve UI apply outcome.
+**Current program status:** [Master roadmap](./roadmap/000-2026-06-01-novelguard-master-roadmap.md) — PR-0..17 **Done**; **next:** PR-18 duplicate group detail.
 
 Historical specs and plans from before the full reset were removed with the codebase.
