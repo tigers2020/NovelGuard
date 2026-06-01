@@ -154,8 +154,12 @@ export function ApplySubflowDialog({
       className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
+      data-testid="apply-subflow-dialog"
     >
-      <div className="w-full max-w-2xl rounded-md border border-outline bg-surface p-5">
+      <div
+        className="relative z-[101] w-full max-w-2xl rounded-md border border-outline bg-surface p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h2 className="text-lg font-bold text-on-surface">이동 계획 적용</h2>
         <p className="mt-1 text-sm text-on-surface-variant">
           dry-run → confirm → apply. Progress는 GlobalCommandBar만 표시합니다.
