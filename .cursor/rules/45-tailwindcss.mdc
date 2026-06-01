@@ -12,7 +12,7 @@ Best practices for using Tailwind CSS v4 utility classes effectively.
 
 **Note**: Tailwind CSS v4 (released January 2025) uses a CSS-first configuration approach. If you need v3 compatibility, `tailwind.config.js` is still supported.
 
-**NovelGuard bridge:** When styling web surfaces (docs sites, Canvas, future web UI), map semantic colors to tokens in [DESIGN.md](mdc:DESIGN.md). Do not invent ad-hoc hex — use `@theme` variables derived from the Calm SaaS palette. Follow **UX & UI principles** in DESIGN.md (layout, Morville criteria, dry-run safety).
+**NovelGuard bridge:** The product UI is **React + Tailwind v4** under `web/` (see [DESIGN.md](mdc:DESIGN.md)). Map semantic colors to `@theme` in `web/src/styles/globals.css` from DESIGN.md — no ad-hoc hex. Follow **UX & UI principles** in DESIGN.md (layout, Morville criteria, dry-run safety, component variants).
 
 ## Core Principles
 
@@ -256,7 +256,7 @@ Prefer utility classes in JSX over `@apply` when possible.
 
 ### Tailwind v4: CSS-First Configuration
 
-Extend `@theme` in `globals.css` — see **NovelGuard @theme** above. Keep in sync with [DESIGN.md](mdc:DESIGN.md) front matter; run `python scripts/sync_design_tokens.py --check` when Qt tokens change.
+Extend `@theme` in `web/src/styles/globals.css` — see **NovelGuard @theme** above. Token changes start in [DESIGN.md](mdc:DESIGN.md), then `globals.css`; keep both in sync in the same PR.
 
 ### Tailwind v3 Config (Still Supported)
 
@@ -324,4 +324,4 @@ npm install @tailwindcss/forms @tailwindcss/typography @tailwindcss/aspect-ratio
 5. **Leverage @apply Sparingly**: Prefer utility classes in JSX
 6. **Enable Dark Mode**: NovelGuard dark is default; plan light overrides explicitly
 7. **Use Plugins**: Official plugins for forms, typography, etc.
-8. **Qt vs Web**: PySide6 QSS uses generated Python tokens — do not mix Tailwind into `src/gui/**/*.py`
+8. **React only for UI**: Tailwind classes belong in `web/**/*.{tsx,css}` — not in Python `src/` except static asset paths

@@ -10,7 +10,7 @@ Persona Dialogue: 요청을 `[시몬]`이 나누고, 레이어 담당이 한두 
 | 도미닉 | `src/domain/` |
 | 유리 | `src/application/` |
 | 아다 | `src/infrastructure/` |
-| 지나 | `src/gui/` (UI) |
+| 지나 | `web/` (React + Tailwind UI) |
 | 테스 | `tests/` |
 | 렉스 | 검증 파이프라인 |
 

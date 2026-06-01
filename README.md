@@ -13,18 +13,19 @@
 
 ```
 NovelGuard/
-├── AGENTS.md
-├── src/main.py          # 최소 진입점
-├── tests/               # 스캐폴드 테스트
-├── scripts/verify_phase_completion.py
-└── docs/                # 새 설계·플랜 문서용
+├── web/                 # React + Tailwind UI (v1)
+├── src/app/             # pywebview host + bridge stub
+├── run.bat              # desktop launcher (Windows)
+└── docs/superpowers/    # approved spec + plan
 ```
 
 ## 실행
 
-```bash
-python src/main.py
-```
+**Desktop (Windows):** `run.bat` or `novelguard-webview` after `pip install -e ".[gui]"` and `cd web && npm run build`
+
+**Browser dev:** `cd web && npm run dev` (mock bridge)
+
+**Python scaffold:** `python src/main.py`
 
 ## 검증
 
@@ -41,6 +42,6 @@ python scripts/verify_phase_completion.py
 
 1. `docs/superpowers/specs/`에 새 설계 작성 → 승인
 2. `docs/superpowers/plans/`에 구현 플랜 작성 → 승인
-3. `src/` 레이어(domain / application / infrastructure / gui)부터 재구축
+3. `src/` 백엔드 레이어 + `web/` React UI ([DESIGN.md](DESIGN.md)) 재구축
 
 정본 정책: [AGENTS.md](AGENTS.md)

@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+/* Shell floor — matches pywebview min_size in src/app/webview_main.py */
+html,
+body,
+#root {
+  min-width: 1100px;
+  min-height: 640px;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+#root {
+  height: 100%;
+}
+
+@theme {
+  --color-background: #121212;
+  --color-surface: #1e1e1e;
+  --color-surface-elevated: #242424;
+  --color-on-surface: #eaeaea;
+  --color-on-surface-variant: #bdbdbd;
+  --color-muted: #8a8a8a;
+  --color-primary: #bb86fc;
+  --color-secondary: #81d4fa;
+  --color-outline: #2c2c2c;
+  --color-hover: #2a2a2a;
+  --color-error: #cf6679;
+  --color-success: #80cbc4;
+  --font-family-sans: "Pretendard", "Noto Sans KR", "Segoe UI", sans-serif;
+}

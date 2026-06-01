@@ -1,9 +1,16 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "novelguard"
 version = "0.1.0"
 description = "NovelGuard — fresh scaffold (rebuild from scratch)"
 requires-python = ">=3.12"
 dependencies = []
+
+[project.scripts]
+novelguard-webview = "app.webview_main:main"
 
 [project.optional-dependencies]
 dev = [
@@ -12,6 +19,12 @@ dev = [
     "mypy>=1.10.0",
     "black>=24.0.0",
 ]
+gui = [
+    "pywebview>=5.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

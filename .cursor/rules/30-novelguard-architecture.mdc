@@ -17,7 +17,7 @@ Full detail: [docs/current_architecture.md](mdc:docs/current_architecture.md).
 | domain | `src/domain/` | 도미닉 | Pure rules, value objects, policies |
 | application | `src/application/` | 유리 | Use cases, DTOs, ports |
 | infrastructure | `src/infrastructure/` | 아다 | DB, FS, hashing; map to DTOs |
-| gui | `src/gui/` | 지나 | PySide6 UI; no infra details |
+| ui (gui) | `web/` | 지나 | React + Tailwind UI; calls application via API/ports only |
 | app | `src/app/` | 시몬 | Composition / wiring |
 | tests | `tests/` | 테스 | unit / integration / golden |
 
@@ -26,7 +26,7 @@ Full detail: [docs/current_architecture.md](mdc:docs/current_architecture.md).
 - `domain` imports no other project layers.
 - `application` depends on `domain` and `application.ports` only.
 - `infrastructure` implements ports; hides external libraries.
-- `gui` depends on use cases or application DTOs, not concrete infrastructure.
+- `web/` (UI) depends on application DTOs/API contracts, not concrete infrastructure.
 - `app` wires infrastructure, GUI, and use cases.
 
 ## Ports

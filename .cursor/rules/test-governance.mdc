@@ -1,0 +1,82 @@
+---
+description: Prevent uncontrolled test-file creation and weak self-passing tests.
+alwaysApply: true
+---
+
+# Test Governance Rule
+
+## Hard rule
+
+Do not create new test files unless the user explicitly authorizes test creation.
+
+Explicit authorization must use one of these phrases:
+
+- `TEST_ALLOWED`
+- `create tests`
+- `add regression test`
+- `write a test for this bug`
+
+If authorization is absent, you may only:
+
+- inspect existing tests
+- run existing tests
+- explain what test would be needed
+- modify production code
+- update documentation
+
+## Existing tests first
+
+Before proposing or creating any new test file:
+
+1. Search for existing relevant tests.
+2. Prefer editing the smallest existing test.
+3. Do not create duplicate test coverage.
+4. Do not create broad snapshot/golden tests unless explicitly requested.
+
+## Forbidden behavior
+
+Never do the following without explicit approval:
+
+- create `test_*.py`, `*_test.py`, `*.spec.*`, `*.test.*`
+- create new `tests/` subdirectories
+- create fake/mock-heavy tests that only prove the mock works
+- relax assertions to make tests pass
+- update golden files just because output changed
+- skip, xfail, delete, or weaken failing tests
+- add tests for implementation details instead of contract behavior
+- create more than one new test file for a single task
+
+## If a test seems necessary
+
+Stop and report:
+
+```text
+Test creation required but not authorized.
+
+Reason:
+- ...
+
+Proposed minimal test:
+- file:
+- behavior:
+- why existing tests are insufficient:
+```
+
+Then wait for explicit approval.
+
+## Allowed exception
+
+If the user explicitly says `TEST_ALLOWED`, create the minimum test necessary.
+
+Maximum default allowance:
+
+- 1 new test file
+- 1 focused regression case
+- no golden/snapshot update unless separately approved
+
+## Git guard
+
+New test files in staged commits are blocked by `scripts/guard_new_tests.py` (pre-commit hook).
+Override only after explicit user approval: `ALLOW_NEW_TESTS=1` (Unix) or `$env:ALLOW_NEW_TESTS="1"` (PowerShell).
+
+See [AGENTS.md](mdc:AGENTS.md) Test Creation Policy.

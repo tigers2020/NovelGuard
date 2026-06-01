@@ -1,0 +1,15 @@
+{
+  "name": "novelguard",
+  "private": true,
+  "description": "Root npm shortcuts — implementations live in web/",
+  "scripts": {
+    "dev": "npm run dev --prefix web",
+    "build": "npm run build --prefix web",
+    "lint": "npm run lint --prefix web",
+    "preview": "npm run preview --prefix web",
+    "test": "npm run test --prefix web",
+    "test:contracts": "npm run test:contracts --prefix web",
+    "test:e2e": "npm run test:e2e --prefix web",
+    "test:e2e:ui": "npm run test:e2e:ui --prefix web"
+  }
+}
