@@ -32,6 +32,7 @@ export const validAppSnapshot: AppSnapshot = {
       conflictCount: 0,
       approvedCount: 0,
       hasPendingApply: false,
+      libraryRevision: 0,
     },
     quality: {
       integrityIssueCount: 0,

@@ -32,6 +32,12 @@ class InvalidSelectionScopeError(ValueError):
     pass
 
 
+class PreviewApplyError(ValueError):
+    def __init__(self, reason: str, message: str | None = None) -> None:
+        self.reason = reason
+        super().__init__(message or reason)
+
+
 def validate_app_snapshot(snapshot: Any) -> None:
     if not isinstance(snapshot, dict):
         raise SnapshotContractError("AppSnapshot must be a dict")
@@ -50,6 +56,12 @@ def validate_app_snapshot(snapshot: Any) -> None:
     for forbidden in FORBIDDEN_SNAPSHOT_ARRAY_KEYS:
         if forbidden in snapshot and isinstance(snapshot[forbidden], list):
             raise SnapshotContractError(f"AppSnapshot must not contain array field: {forbidden}")
+    work = snapshot.get("work")
+    if not isinstance(work, dict):
+        raise SnapshotContractError("AppSnapshot.work must be a dict")
+    resolve = work.get("resolve")
+    if not isinstance(resolve, dict) or not isinstance(resolve.get("libraryRevision"), int):
+        raise SnapshotContractError("ResolveSnapshot.libraryRevision must be a number")
 
 
 def clamp_query_limit(query: dict[str, Any]) -> int:
@@ -76,8 +88,22 @@ def validate_quality_rows_page(page: Any) -> None:
 
 
 def validate_move_preview(payload: Any) -> None:
-    if not isinstance(payload, dict) or not isinstance(payload.get("rows"), list):
-        raise PageContractError("Move preview must include rows array")
+    if not isinstance(payload, dict):
+        raise PageContractError("Move preview must be a dict")
+    for key in (
+        "previewToken",
+        "libraryRevision",
+        "selectionFingerprint",
+        "hasPendingApply",
+        "rows",
+        "summary",
+    ):
+        if key not in payload:
+            raise PageContractError(f"Move preview missing {key}")
+    if not isinstance(payload.get("rows"), list):
+        raise PageContractError("Move preview rows must be an array")
+    if payload.get("hasPendingApply") is not True:
+        raise PageContractError("Move preview hasPendingApply must be true")
 
 
 def validate_selection_scope(selection: Any) -> None:

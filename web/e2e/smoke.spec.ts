@@ -76,6 +76,29 @@ test.describe("NovelGuard smoke", () => {
     await expect(statusHeader).toContainText(/[▲▼]/);
   });
 
+  test("closing apply dialog discards pending preview", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("work-mode-tab-resolve").click();
+    await page.getByTestId("batch-preview-open").click();
+    await page.getByTestId("apply-preview-run").click();
+    await expect(page.getByTestId("apply-confirm-run")).toBeVisible();
+    await page.getByRole("button", { name: "취소" }).click();
+    await expect(page.getByTestId("apply-confirm-run")).toHaveCount(0);
+  });
+
+  test("library revision bump shows stale banner", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("work-mode-tab-resolve").click();
+    await page.getByTestId("batch-preview-open").click();
+    await page.getByTestId("apply-preview-run").click();
+    await expect(page.getByTestId("apply-confirm-run")).toBeVisible();
+    await page.evaluate(() => {
+      (window as unknown as { __NOVELGUARD_TEST_BUMP_REVISION__?: () => void }).__NOVELGUARD_TEST_BUMP_REVISION__?.();
+    });
+    await expect(page.getByTestId("apply-stale-banner")).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId("apply-confirm-run")).toHaveCount(0);
+  });
+
   test("pywebview host without api shows unavailable", async ({ page }) => {
     await page.addInitScript(() => {
       (window as unknown as { pywebview?: { api?: unknown } }).pywebview = {};

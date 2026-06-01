@@ -31,6 +31,7 @@ VALID_SNAPSHOT: dict[str, Any] = {
             "conflictCount": 0,
             "approvedCount": 0,
             "hasPendingApply": False,
+            "libraryRevision": 0,
         },
         "quality": {
             "integrityIssueCount": 0,

@@ -124,8 +124,10 @@ function AppContent() {
       )}
 
       <ApplySubflowDialog
+        key={applyOpen ? "apply-open" : "apply-closed"}
         open={applyOpen}
         selection={applySelection}
+        snapshotLibraryRevision={snapshot.work.resolve.libraryRevision}
         onClose={() => {
           setApplyOpen(false);
           setApplySelection(null);

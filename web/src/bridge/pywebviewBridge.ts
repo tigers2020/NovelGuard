@@ -2,6 +2,11 @@ import type { NovelGuardBridge } from "./NovelGuardBridge";
 import type { AppSnapshot } from "../types/snapshot";
 import type { ReviewRowsPage, ReviewRowsQuery } from "../types/review";
 import type { QualityIssueDetail, QualityRowsPage, QualityRowsQuery } from "../types/quality";
+import type {
+  ApplyResolvedActionsRequest,
+  DiscardMovePreviewRequest,
+  MovePreviewResult,
+} from "../types/movePreview";
 import type { SelectionScope } from "../types/selection";
 import type { WorkMode } from "../types/snapshot";
 import { BridgeCallError } from "./bridgeErrors";
@@ -80,12 +85,16 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
         method: "get_quality_issue_detail",
       }),
     getMovePreview: (selection: SelectionScope) =>
-      callBridge(() => call<{ rows: unknown[] }>(api, "get_move_preview", selection), {
+      callBridge(() => call<MovePreviewResult>(api, "get_move_preview", selection), {
         method: "get_move_preview",
       }),
-    applyResolvedActions: (selection: SelectionScope) =>
-      callBridge(() => call(api, "apply_resolved_actions", selection).then(() => undefined), {
+    applyResolvedActions: (request: ApplyResolvedActionsRequest) =>
+      callBridge(() => call(api, "apply_resolved_actions", request).then(() => undefined), {
         method: "apply_resolved_actions",
+      }),
+    discardMovePreview: (request: DiscardMovePreviewRequest) =>
+      callBridge(() => call(api, "discard_move_preview", request).then(() => undefined), {
+        method: "discard_move_preview",
       }),
   };
 }
