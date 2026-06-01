@@ -132,3 +132,14 @@ Plan: `docs/superpowers/plans/006-2026-06-01-pr14b-exact-duplicate-sqlite.md`
 - `query_review_rows` returns real exact-duplicate rows (`type: "exact"`).
 - `filters.types` with only `near` / `relation` / `move_only` → empty valid page.
 - Review row ids: `group:<group_id>`, `file:<group_id>:<file_id>`.
+
+## Quality rows (PR-14c)
+
+Plan: `docs/superpowers/plans/007-2026-06-01-pr14c-quality-analyzer-and-rows.md`
+
+- Scan runs detect-only quality analysis (empty / tiny / invalid UTF-8 / read error).
+- Issues persisted in SQLite `quality_issues` table (folder-scoped replace on scan).
+- `query_quality_rows` returns real `QualityRow` pages; unknown `issueType` → empty valid page.
+- Quality row ids: `quality:<issue_id>`.
+- Snapshot `work.quality.*` and `fileListSummary.issueCount` reflect detected issues.
+- No UI/mockBridge changes; no repair/finalize apply.
