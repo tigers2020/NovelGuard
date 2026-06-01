@@ -38,6 +38,19 @@ class PreviewApplyError(ValueError):
         super().__init__(message or reason)
 
 
+class ApplyFailedError(ValueError):
+    def __init__(
+        self,
+        reason: str,
+        message: str | None = None,
+        *,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        self.reason = reason
+        self.details = details or {}
+        super().__init__(message or reason)
+
+
 def validate_app_snapshot(snapshot: Any) -> None:
     if not isinstance(snapshot, dict):
         raise SnapshotContractError("AppSnapshot must be a dict")
