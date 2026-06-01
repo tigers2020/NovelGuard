@@ -222,9 +222,11 @@ library.integrityIssues = integrityIssueCount
 
 | Item | Status |
 |------|--------|
-| PR-14c Tasks 1–6 | **Done** |
+| PR-14c Tasks 1–6 | **Done — CLOSED** |
 
 **Verification (2026-06-01):** `pytest` 36/36 · `verify_phase_completion.py` 5/5 PASS
+
+**Commits:** `1dc86e4` (docs), `52101c4` (app)
 
 ---
 
