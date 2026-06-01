@@ -473,18 +473,21 @@ def test_query_quality_rows_limit_capped_at_200(tmp_path: Path) -> None:
 
 
 def test_get_quality_issue_detail_from_cache(tmp_path: Path) -> None:
-    (tmp_path / "empty.txt").write_bytes(b"")
+    target_name = "empty_issue_fixture.txt"
+    (tmp_path / target_name).write_bytes(b"")
     session = create_library_session(MemoryLibraryIndex())
     session.select_folder(str(tmp_path))
     api = BridgeApi(session)
     api.start_scan()
     _scan_until_idle(api)
     page = api.query_quality_rows({"issueType": "small_file", "limit": 10})
-    assert page["rows"]
-    row_id = page["rows"][0]["id"]
-    detail = api.get_quality_issue_detail(row_id)
-    assert detail["id"] == row_id
-    assert detail["name"] == "empty.txt"
+    row = next((r for r in page["rows"] if r["name"] == target_name), None)
+    assert (
+        row is not None
+    ), f"expected small_file row for {target_name}, got {[r['name'] for r in page['rows']]}"
+    detail = api.get_quality_issue_detail(row["id"])
+    assert detail["id"] == row["id"]
+    assert detail["name"] == target_name
 
 
 def test_query_quality_rows_unknown_issue_type_empty(tmp_path: Path) -> None:
