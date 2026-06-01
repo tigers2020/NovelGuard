@@ -24,8 +24,9 @@ def main() -> int:
         return 1
 
     from app.bridge_api import BridgeApi
+    from app.session_factory import create_library_session
 
-    api = BridgeApi()
+    api = BridgeApi(create_library_session())
     # Use file path (not file:// URI alone) so relative ./assets/* from Vite build resolve.
     webview.create_window(
         "NovelGuard",

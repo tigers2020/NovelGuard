@@ -104,3 +104,21 @@ Bridge methods (TS camelCase / Python snake_case):
 `AppSnapshot.work.resolve.libraryRevision` is required for library stale detection in the UI.
 
 E2E hook (mock only): `window.__NOVELGUARD_TEST_BUMP_REVISION__()` bumps revision for stale-banner smoke.
+
+## Real library session (PR-14a)
+
+Spec: `docs/superpowers/specs/002-2026-06-01-novelguard-greenfield-library-session-design.md`
+
+| Surface | PR-14a behavior |
+|---------|----------------|
+| Browser `npm run dev` | Still **`mockBridge`** (synthetic data) |
+| Desktop `novelguard-webview` / `BridgeApi` | **`LibrarySession`** — real folder scan, in-memory index |
+
+Commands:
+
+- `select_folder` / `selectFolder` — native folder picker (tkinter); tests inject path via `LibrarySession.select_folder(path)`
+- `start_scan` / `startScan` — background walk of `.txt` and `.md` under the selected folder
+- `get_snapshot` — real `fileCount` / `totalBytes`; duplicate counts stay **0** until PR-14b
+- `query_review_rows` / `query_quality_rows` — valid **empty** pages in 14a
+
+No filesystem move/delete. Preview apply remains PR-13 no-op.
