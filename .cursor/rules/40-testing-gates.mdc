@@ -16,12 +16,13 @@ alwaysApply: false
 |---------|---------|
 | Full gate (recommended) | `python scripts/verify_phase_completion.py` |
 | Tests only | `pytest` |
-| Lint | `ruff check .` |
+| Python lint | `ruff check .` |
+| Web lint | `npm run lint` (repo root or `cd web`) |
 | Types | `mypy src` |
 | Format check (CI-style) | `black --check .` |
 | Format apply (local) | `black .` |
 
-Order in verify script: `pytest` → `ruff check .` → `mypy src` → `black --check .` (fail-fast).
+Order in verify script: `pytest` → `ruff check .` → `mypy src` → `black --check .` → `npm run lint` (fail-fast). Web lint needs Node/npm and `npm install` in `web/` (or `npm run lint` from repo root after deps are installed).
 
 ## Practice
 

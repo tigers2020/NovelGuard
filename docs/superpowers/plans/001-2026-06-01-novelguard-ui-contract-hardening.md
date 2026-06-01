@@ -22,6 +22,16 @@ Tests are limited to schema/parity/SelectionScope validation and do not expand U
 
 **Non-goals (PR-10):** Playwright, E2E, new UI, layout redesign, perf benchmark, preview-token/stale-apply invariants, repair/finalize, pywebview silent-fallback UX redesign.
 
+## Implementation status
+
+| Item | Status | Branch |
+|------|--------|--------|
+| PR-10 (Tasks 1–11) | **Done** | `feat/web-ui-overhaul` |
+
+**Verification (2026-06-01):** `cd web && npm run build` PASS · `npm run test:contracts` 25/25 PASS · `pytest tests/test_bridge_contract.py` 12/12 PASS · `python scripts/verify_phase_completion.py` PASS
+
+Plan scope freeze holds — PR-11+ handled in `002-2026-06-01-novelguard-ui-e2e-smoke.md`.
+
 ---
 
 ## File map
@@ -1070,11 +1080,12 @@ git commit -m "[docs] PR-10 contract audit verification notes"
 
 ```bash
 cd web
+npm run lint
 npm run build
 npm run test:contracts
 ```
 
-Expected: build PASS; all Vitest PASS.
+Expected: lint PASS; build PASS; all Vitest PASS.
 
 - [ ] **Step 2: Python gate**
 

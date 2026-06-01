@@ -57,6 +57,25 @@ test.describe("NovelGuard smoke", () => {
     await expect(page.getByTestId("apply-confirm-run")).toHaveCount(0);
   });
 
+  test("review column chooser toggles encoding column", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("work-mode-tab-resolve").click();
+    await expect(page.getByTestId("resolve-review-grid")).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId("grid-column-chooser").locator("summary").click();
+    await page.getByTestId("column-toggle-encoding").check();
+    await expect(page.getByTestId("resolve-grid-header-encoding")).toBeVisible();
+  });
+
+  test("review grid header sort triggers sorted fetch", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("work-mode-tab-resolve").click();
+    await expect(page.getByTestId("resolve-review-grid")).toBeVisible({ timeout: 15_000 });
+    const statusHeader = page.getByTestId("resolve-grid-header-status");
+    await statusHeader.scrollIntoViewIfNeeded();
+    await statusHeader.click();
+    await expect(statusHeader).toContainText(/[▲▼]/);
+  });
+
   test("pywebview host without api shows unavailable", async ({ page }) => {
     await page.addInitScript(() => {
       (window as unknown as { pywebview?: { api?: unknown } }).pywebview = {};

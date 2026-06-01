@@ -1,7 +1,8 @@
-"""Verification pipeline: pytest → ruff → mypy → black (fail-fast)."""
+"""Verification pipeline: pytest → ruff → mypy → black → npm lint (fail-fast)."""
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -21,11 +22,17 @@ def main() -> None:
     project_root = Path(__file__).resolve().parent.parent
     root = str(project_root)
 
+    npm = shutil.which("npm")
+    if npm is None:
+        print("ERROR: npm not found on PATH; required for web lint step.")
+        sys.exit(1)
+
     steps: list[tuple[list[str], str]] = [
-        ([sys.executable, "-m", "pytest"], "1/4 python -m pytest"),
-        ([sys.executable, "-m", "ruff", "check", "."], "2/4 python -m ruff check ."),
-        ([sys.executable, "-m", "mypy", "src"], "3/4 python -m mypy src"),
-        ([sys.executable, "-m", "black", "--check", "."], "4/4 python -m black --check ."),
+        ([sys.executable, "-m", "pytest"], "1/5 python -m pytest"),
+        ([sys.executable, "-m", "ruff", "check", "."], "2/5 python -m ruff check ."),
+        ([sys.executable, "-m", "mypy", "src"], "3/5 python -m mypy src"),
+        ([sys.executable, "-m", "black", "--check", "."], "4/5 python -m black --check ."),
+        ([npm, "run", "lint"], "5/5 npm run lint"),
     ]
 
     print("\nNovelGuard verification pipeline (fail-fast)")

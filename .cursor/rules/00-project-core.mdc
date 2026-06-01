@@ -21,7 +21,7 @@ alwaysApply: true
 1. Scope: which workflow step is this?
 2. Layer: domain / application / infrastructure / gui?
 3. Impact: tests, ports/DTOs, DB, UI, doc approval?
-4. Verification: can `pytest` → `ruff` → `mypy` → `black` be reported?
+4. Verification: can `pytest` → `ruff` → `mypy` → `black` → `npm run lint` be reported?
 
 ## References
 

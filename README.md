@@ -31,8 +31,11 @@ NovelGuard/
 
 ```bash
 pip install -e ".[dev]"
+cd web && npm install
 python scripts/verify_phase_completion.py
 ```
+
+`verify_phase_completion.py` runs pytest → ruff → mypy → black → `npm run lint`.
 
 ## 잠긴 폴더
 

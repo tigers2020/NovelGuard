@@ -123,7 +123,7 @@ Details: `.cursor/rules/20-persona-dialogue.mdc`, `persona/README.md`.
 
 ## Verification
 
-**One-shot (recommended):** `python scripts/verify_phase_completion.py` — `pytest` → `ruff check .` → `mypy src` → `black --check .`
+**One-shot (recommended):** `python scripts/verify_phase_completion.py` — `pytest` → `ruff check .` → `mypy src` → `black --check .` → `npm run lint` (requires Node/npm and `web/` deps installed)
 
 **Run app:** `python src/main.py`
 

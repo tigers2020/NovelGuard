@@ -1,4 +1,4 @@
-# NovelGuard — default test suite + static checks (matches scripts/verify_phase_completion.py)
+# NovelGuard — default test suite + static checks (matches scripts/verify_phase_completion.py + npm lint)
 name: CI
 
 on:
@@ -32,3 +32,17 @@ jobs:
 
       - name: black (check only)
         run: python -m black --check .
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci
+        working-directory: web
+
+      - name: npm lint (web)
+        run: npm run lint

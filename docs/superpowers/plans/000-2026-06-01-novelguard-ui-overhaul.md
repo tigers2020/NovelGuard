@@ -15,14 +15,17 @@
 | PR | Status | Branch |
 |----|--------|--------|
 | PR-0 … PR-9 | **Done** | `feat/web-ui-overhaul` |
+| PR-10 | **Done** | see `001-2026-06-01-novelguard-ui-contract-hardening.md` |
+| PR-11 | **Done** | see `002-2026-06-01-novelguard-ui-e2e-smoke.md` |
+| PR-12 | **Done** | see `003-2026-06-01-novelguard-ui-grid-perf.md` |
 
-**Verification (last run):** `cd web && npm run build` PASS · `python scripts/verify_phase_completion.py` PASS
+**Verification (2026-06-01):** `cd web && npm run build` PASS · `npm run test:contracts` · `npm run test:perf` · `npm run test:e2e` 9/9 · `python scripts/verify_phase_completion.py` PASS
 
-**Run:** `run.bat` (desktop) · `cd web && npm run dev` (browser mock)
+**Run:** `run.bat` (desktop) · `cd web && npm run dev` (browser mock) · E2E: `cd web && npm run test:e2e` · Perf: `cd web && npm run test:perf`
 
-Plan scope freeze holds — no PR-10 without new spec/plan cycle.
+Plan scope freeze holds — PR-13..14 require new spec/plan cycle.
 
-**Test policy:** Do not add new `tests/**` files unless user says `TEST_ALLOWED`. Verify with `npm run build`, `npm run lint` (if configured), manual smoke, and `python scripts/verify_phase_completion.py` when Python files change.
+**Test policy:** Do not add new `tests/**` files unless user says `TEST_ALLOWED`. Verify with `npm run lint`, `npm run build`, manual smoke, and `python scripts/verify_phase_completion.py` (includes lint) when Python files change.
 
 ---
 

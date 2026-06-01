@@ -33,6 +33,7 @@ export interface ReviewRow {
   integrity?: string;
   hasChildren: boolean;
   groupId?: string;
+  path?: string;
 }
 
 export interface ReviewRowsPage {
