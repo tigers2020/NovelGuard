@@ -171,12 +171,24 @@ class LibrarySession:
             return {"groupId": group_id, "members": members}
 
     def get_quality_issue_detail(self, issue_id: str) -> dict[str, Any]:
-        return {
-            "id": issue_id,
-            "issueType": "integrity",
-            "name": "sample",
-            "integrity": "Read error",
-        }
+        with self._lock:
+            row = next((r for r in self._quality_rows_cache if r.get("id") == issue_id), None)
+            if row is None:
+                return {
+                    "id": issue_id,
+                    "issueType": "integrity",
+                    "name": "Unknown",
+                    "integrity": "Unknown",
+                }
+            return {
+                "id": row["id"],
+                "issueType": row["issueType"],
+                "name": row["name"],
+                "path": row.get("path"),
+                "encoding": row.get("encoding"),
+                "integrity": row["integrity"],
+                "evidence": {"severity": row.get("severity")},
+            }
 
     def library_revision(self) -> int:
         with self._lock:
