@@ -31,6 +31,19 @@ test.describe("NovelGuard smoke", () => {
     await openResolveWorkspace(page);
   });
 
+  test("quality query failure shows error and retry", async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as unknown as { __NOVELGUARD_TEST_BRIDGE_FAIL__?: string }).__NOVELGUARD_TEST_BRIDGE_FAIL__ =
+        "queryQualityRows";
+    });
+    await page.goto("/");
+    await page.getByTestId("work-mode-tab-quality").click();
+    await expect(page.getByTestId("quality-workspace")).toBeVisible();
+    await expect(page.getByTestId("quality-query-error")).toBeVisible();
+    await page.getByTestId("quality-query-retry").click();
+    await expect(page.getByTestId("quality-query-error")).toBeVisible();
+  });
+
   test("query failure shows error and retry", async ({ page }) => {
     await page.addInitScript(() => {
       (window as unknown as { __NOVELGUARD_TEST_BRIDGE_FAIL__?: string }).__NOVELGUARD_TEST_BRIDGE_FAIL__ =
