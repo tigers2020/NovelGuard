@@ -24,6 +24,16 @@ Limit: web/e2e/*.spec.ts only; no new Python test files unless fixing regression
 
 **Non-goals (PR-11):** Performance benchmark (PR-12), preview-token/stale-apply invariants (PR-13), packaging/webview_main prod path (PR-14), new Work screens, AG Grid, FileDock, repair/finalize, changing contract validators from PR-10.
 
+## Implementation status
+
+| Item | Status | Branch |
+|------|--------|--------|
+| PR-11 (Tasks 1–11) | **Done** | `feat/web-ui-overhaul` |
+
+**Verification (2026-06-01):** `cd web && npm run build` PASS · `npm run test:contracts` 25/25 PASS · `npm run test:e2e` 7/7 PASS · `python scripts/verify_phase_completion.py` PASS
+
+Plan scope freeze holds — PR-12..14 require new spec/plan cycle.
+
 ---
 
 ## File map

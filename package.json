@@ -10,6 +10,8 @@
     "test": "npm run test --prefix web",
     "test:contracts": "npm run test:contracts --prefix web",
     "test:e2e": "npm run test:e2e --prefix web",
-    "test:e2e:ui": "npm run test:e2e:ui --prefix web"
+    "test:e2e:ui": "npm run test:e2e:ui --prefix web",
+    "test:perf": "npm run test:perf --prefix web",
+    "bench:grid": "npm run bench:grid --prefix web"
   }
 }

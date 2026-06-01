@@ -51,7 +51,14 @@ React loads `createPywebviewBridge()` when `window.pywebview.api` is present; me
 
 ```bash
 pip install -e ".[dev]"
+cd web && npm install
 python scripts/verify_phase_completion.py
+```
+
+Runs `pytest` → `ruff` → `mypy` → `black --check` → `npm run lint` (fail-fast). For web-only checks without the Python gate:
+
+```bash
+npm run lint
 cd web && npm run build
 ```
 
@@ -72,6 +79,12 @@ npm run test:e2e
 
 Uses Vite dev server (`playwright.config.ts` `webServer`). Injects `__NOVELGUARD_TEST_BRIDGE_FAIL__` for failure-path smoke tests.
 
-## Deferred: TanStack Table (PR-12)
+## Grid perf (PR-12)
 
-v1 review/quality grids use **TanStack Virtual** + CSS grid columns only. **TanStack Table** (sorting, column resize, header APIs) is deferred to **PR-12** per `docs/superpowers/plans/2026-06-01-novelguard-ui-overhaul.md` and `docs/superpowers/plans/2026-06-01-novelguard-ui-e2e-smoke.md` non-goals.
+```bash
+cd web
+npm run test:perf
+npm run bench:grid
+```
+
+`test:perf` gates DOM virtualization bounds and filter+paginate latency. Resolve grid uses TanStack Table + Virtual; optional columns via **열 선택** chooser.

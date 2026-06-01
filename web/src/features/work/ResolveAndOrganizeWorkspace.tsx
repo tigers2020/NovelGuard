@@ -1,12 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { SortingState, VisibilityState } from "@tanstack/react-table";
 import { useBridge, useSnapshot } from "../../app/providers/snapshotHooks";
 import type { ReviewRow, ReviewRowsQuery, ReviewViewMode } from "../../types/review";
 import type { SelectionScope } from "../../types/selection";
+import { ColumnChooser } from "../../components/grid/ColumnChooser";
 import { StatChip } from "../../components/ui/StatChip";
 import { FacetPanel } from "./resolve/FacetPanel";
 import { VirtualizedReviewGrid } from "./resolve/VirtualizedReviewGrid";
+import {
+  REVIEW_GRID_STORAGE_KEY,
+  defaultReviewColumnVisibility,
+  optionalReviewColumnKeys,
+} from "./resolve/reviewGridColumns";
 import { DetailPanel } from "./resolve/DetailPanel";
 import { BatchActionBar } from "./resolve/BatchActionBar";
+
+function loadColumnVisibility(): VisibilityState {
+  try {
+    const raw = localStorage.getItem(REVIEW_GRID_STORAGE_KEY);
+    return raw
+      ? { ...defaultReviewColumnVisibility, ...JSON.parse(raw) }
+      : defaultReviewColumnVisibility;
+  } catch {
+    return defaultReviewColumnVisibility;
+  }
+}
 
 export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: (selection: SelectionScope) => void }) {
   const bridge = useBridge();
@@ -23,16 +41,21 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
   const [selectedRow, setSelectedRow] = useState<ReviewRow | null>(null);
   const [explicitIds, setExplicitIds] = useState<string[]>([]);
   const [queryError, setQueryError] = useState<string | null>(null);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(loadColumnVisibility);
 
-  const currentQuery = useMemo<ReviewRowsQuery>(
-    () => ({
+  const currentQuery = useMemo<ReviewRowsQuery>(() => {
+    const primary = sorting[0];
+    return {
       viewMode,
       filters: { search: search || undefined },
       cursor: null,
       limit: 100,
-    }),
-    [viewMode, search],
-  );
+      sort: primary
+        ? { field: primary.id, direction: primary.desc ? "desc" : "asc" }
+        : undefined,
+    };
+  }, [viewMode, search, sorting]);
 
   const loadPage = useCallback(
     async (cursor: string | null, append: boolean) => {
@@ -105,11 +128,24 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
       <div className="shrink-0 border-b border-outline p-4">
         <p className="text-xs font-semibold text-secondary">Resolve & Organize</p>
         <h1 className="text-xl font-bold text-on-surface">중복 검토와 이동 정리를 한 큐에서 처리</h1>
-        <div className="mt-4 grid gap-2 sm:grid-cols-4">
-          <StatChip label="Queue" value={resolve.queueCount} tone="warn" />
-          <StatChip label="Groups" value={resolve.groupCount} />
-          <StatChip label="Conflicts" value={resolve.conflictCount} tone="danger" />
-          <StatChip label="Approved" value={resolve.approvedCount} tone="good" />
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+          <div className="grid gap-2 sm:grid-cols-4">
+            <StatChip label="Queue" value={resolve.queueCount} tone="warn" />
+            <StatChip label="Groups" value={resolve.groupCount} />
+            <StatChip label="Conflicts" value={resolve.conflictCount} tone="danger" />
+            <StatChip label="Approved" value={resolve.approvedCount} tone="good" />
+          </div>
+          <ColumnChooser
+            visibility={columnVisibility}
+            optionalKeys={optionalReviewColumnKeys}
+            onChange={(key, visible) => {
+              setColumnVisibility((prev) => {
+                const next = { ...prev, [key]: visible };
+                localStorage.setItem(REVIEW_GRID_STORAGE_KEY, JSON.stringify(next));
+                return next;
+              });
+            }}
+          />
         </div>
         <input
           value={search}
@@ -144,6 +180,10 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
           onSelectRow={toggleSelect}
           onNearEnd={handleNearEnd}
           loadingMore={loadingMore}
+          sorting={sorting}
+          onSortingChange={setSorting}
+          columnVisibility={columnVisibility}
+          onColumnVisibilityChange={setColumnVisibility}
         />
         <DetailPanel selectedRow={selectedRow} />
       </div>

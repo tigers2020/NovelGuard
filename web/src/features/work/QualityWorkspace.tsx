@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useBridge, useSnapshot } from "../../app/providers/snapshotHooks";
 import type { QualityIssueDetail, QualityIssueType, QualityRow } from "../../types/quality";
 import { StatChip } from "../../components/ui/StatChip";
@@ -17,6 +17,9 @@ export function QualityWorkspace() {
 
   const [issueType, setIssueType] = useState<QualityIssueType>("integrity");
   const [rows, setRows] = useState<QualityRow[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [queryError, setQueryError] = useState<string | null>(null);
   const [selected, setSelected] = useState<QualityRow | null>(null);
   const [detail, setDetail] = useState<QualityIssueDetail | null>(null);
 
@@ -31,14 +34,47 @@ export function QualityWorkspace() {
     [bridge],
   );
 
+  const loadPage = useCallback(
+    async (cursor: string | null, append: boolean) => {
+      if (append) setLoadingMore(true);
+      try {
+        setQueryError(null);
+        const page = await bridge.queryQualityRows({ issueType, cursor, limit: 100 });
+        setNextCursor(page.pageInfo.nextCursor);
+        setRows((prev) => (append ? [...prev, ...page.rows] : page.rows));
+        if (!append) {
+          const first = page.rows[0] ?? null;
+          setSelected(first);
+          loadDetail(first);
+        }
+      } catch (err) {
+        setQueryError(err instanceof Error ? err.message : "Failed to load quality rows");
+        if (!append) {
+          setRows([]);
+          setNextCursor(null);
+        }
+      } finally {
+        setLoadingMore(false);
+      }
+    },
+    [bridge, issueType, loadDetail],
+  );
+
   useEffect(() => {
-    void bridge.queryQualityRows({ issueType, cursor: null, limit: 100 }).then((page) => {
-      setRows(page.rows);
-      const first = page.rows[0] ?? null;
-      setSelected(first);
-      loadDetail(first);
+    const frame = requestAnimationFrame(() => {
+      void loadPage(null, false);
     });
-  }, [bridge, issueType, loadDetail]);
+    return () => cancelAnimationFrame(frame);
+  }, [loadPage]);
+
+  const loadingMoreRef = useRef(false);
+  const handleNearEnd = () => {
+    if (!nextCursor || loadingMore || loadingMoreRef.current) return;
+    loadingMoreRef.current = true;
+    void loadPage(nextCursor, true).finally(() => {
+      loadingMoreRef.current = false;
+    });
+  };
 
   const handleSelect = (row: QualityRow) => {
     setSelected(row);
@@ -71,6 +107,11 @@ export function QualityWorkspace() {
             </button>
           ))}
         </div>
+        {queryError && (
+          <p className="mt-2 text-sm text-error" data-testid="quality-query-error">
+            {queryError}
+          </p>
+        )}
       </section>
 
       <div className="mt-4 grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_280px]">
@@ -78,6 +119,8 @@ export function QualityWorkspace() {
           rows={rows}
           selectedId={selected?.id ?? null}
           onSelect={handleSelect}
+          onNearEnd={handleNearEnd}
+          loadingMore={loadingMore}
         />
         <aside className="overflow-y-auto rounded-md border border-outline bg-surface p-4 text-sm">
           <p className="font-semibold text-on-surface">Issue detail</p>
@@ -99,13 +142,6 @@ export function QualityWorkspace() {
           ) : (
             <p className="mt-2 text-muted">행을 선택하세요.</p>
           )}
-          <button
-            type="button"
-            disabled
-            className="mt-4 w-full rounded-md border border-outline px-3 py-2 text-sm text-muted"
-          >
-            v1: repair not available
-          </button>
         </aside>
       </div>
     </main>

@@ -14,6 +14,7 @@ import {
   filterReviewRows,
   getAllReviewRows,
   paginateRows,
+  sortReviewRows,
   summarizeReviewRows,
 } from "./mockData";
 
@@ -124,8 +125,9 @@ export const mockBridge: NovelGuardBridge = {
   async queryReviewRows(query) {
     const limit = clampQueryLimit(query);
     const filtered = filterReviewRows(getAllReviewRows(), query);
-    const { slice, nextCursor, hasMore } = paginateRows(filtered, query.cursor, limit);
-    const summary = summarizeReviewRows(filtered);
+    const sorted = sortReviewRows(filtered, query.sort);
+    const { slice, nextCursor, hasMore } = paginateRows(sorted, query.cursor, limit);
+    const summary = summarizeReviewRows(sorted);
 
     const page = {
       rows: slice,
@@ -133,7 +135,7 @@ export const mockBridge: NovelGuardBridge = {
         cursor: query.cursor ?? null,
         nextCursor,
         hasMore,
-        totalFiltered: filtered.length,
+        totalFiltered: sorted.length,
       },
       summary: {
         ...summary,

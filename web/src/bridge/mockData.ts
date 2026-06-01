@@ -22,6 +22,9 @@ const INTEGRITIES = ["OK", "Encoding warning", "Missing newline", "Read error"];
 let cachedRows: ReviewRow[] | null = null;
 
 export function getAllReviewRows(count = 1284): ReviewRow[] {
+  if (cachedRows && cachedRows.length !== count) {
+    cachedRows = null;
+  }
   if (cachedRows) return cachedRows;
 
   cachedRows = Array.from({ length: count }, (_, index) => {
@@ -46,10 +49,26 @@ export function getAllReviewRows(count = 1284): ReviewRow[] {
       integrity,
       hasChildren: index % 4 === 0,
       groupId,
+      path: `/library/raw/${index + 1}/${FILE_NAMES[index % FILE_NAMES.length]}`,
     };
   });
 
   return cachedRows;
+}
+
+export function sortReviewRows(rows: ReviewRow[], sort?: ReviewRowsQuery["sort"]): ReviewRow[] {
+  if (!sort?.field) return rows;
+  const dir = sort.direction === "desc" ? -1 : 1;
+  const field = sort.field as keyof ReviewRow;
+  return [...rows].sort((a, b) => {
+    const av = a[field];
+    const bv = b[field];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+    return String(av).localeCompare(String(bv), "ko") * dir;
+  });
 }
 
 export function filterReviewRows(rows: ReviewRow[], query: ReviewRowsQuery): ReviewRow[] {
