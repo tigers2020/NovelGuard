@@ -550,3 +550,4 @@ Reference: mock `ReviewGrid` in `Sample/MockUp/MockUp.jsx` (educational only; ma
 | 2026-06-01 | Initial spec from brainstorming; supersedes 4-card WorkSurface design |
 | 2026-06-01 | Gate review: `ReviewRowsPage`/`ReviewRow`, `SelectionScope`, quality queries, grid criteria, GlobalCommandBar preflight; status → approved |
 | 2026-06-01 | Fix duplicate `AppSnapshot` TypeScript block (single declaration) |
+| 2026-06-01 | PR-10 contract audit: validators + tests; forbidden snapshot arrays enforced |

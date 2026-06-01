@@ -1,6 +1,5 @@
-import { useEffect, useState } from "react";
-import { useBridge } from "../../app/providers/SnapshotProvider";
-import { useSnapshot } from "../../app/providers/SnapshotProvider";
+import { useCallback, useEffect, useState } from "react";
+import { useBridge, useSnapshot } from "../../app/providers/snapshotHooks";
 import type { QualityIssueDetail, QualityIssueType, QualityRow } from "../../types/quality";
 import { StatChip } from "../../components/ui/StatChip";
 import { QualityIssueGrid } from "./quality/QualityIssueGrid";
@@ -21,20 +20,30 @@ export function QualityWorkspace() {
   const [selected, setSelected] = useState<QualityRow | null>(null);
   const [detail, setDetail] = useState<QualityIssueDetail | null>(null);
 
+  const loadDetail = useCallback(
+    (row: QualityRow | null) => {
+      if (!row) {
+        setDetail(null);
+        return;
+      }
+      void bridge.getQualityIssueDetail(row.id).then(setDetail);
+    },
+    [bridge],
+  );
+
   useEffect(() => {
     void bridge.queryQualityRows({ issueType, cursor: null, limit: 100 }).then((page) => {
       setRows(page.rows);
-      setSelected(page.rows[0] ?? null);
+      const first = page.rows[0] ?? null;
+      setSelected(first);
+      loadDetail(first);
     });
-  }, [bridge, issueType]);
+  }, [bridge, issueType, loadDetail]);
 
-  useEffect(() => {
-    if (!selected) {
-      setDetail(null);
-      return;
-    }
-    void bridge.getQualityIssueDetail(selected.id).then(setDetail);
-  }, [bridge, selected]);
+  const handleSelect = (row: QualityRow) => {
+    setSelected(row);
+    loadDetail(row);
+  };
 
   return (
     <main className="flex h-full min-h-0 flex-col overflow-hidden bg-background p-5">
@@ -68,7 +77,7 @@ export function QualityWorkspace() {
         <QualityIssueGrid
           rows={rows}
           selectedId={selected?.id ?? null}
-          onSelect={setSelected}
+          onSelect={handleSelect}
         />
         <aside className="overflow-y-auto rounded-md border border-outline bg-surface p-4 text-sm">
           <p className="font-semibold text-on-surface">Issue detail</p>

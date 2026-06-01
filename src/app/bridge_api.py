@@ -5,6 +5,15 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from app.bridge_contract import (
+    clamp_query_limit,
+    validate_app_snapshot,
+    validate_move_preview,
+    validate_quality_rows_page,
+    validate_review_rows_page,
+    validate_selection_scope,
+)
+
 
 class BridgeApi:
     """Expose methods to ``window.pywebview.api`` (snake_case)."""
@@ -14,7 +23,7 @@ class BridgeApi:
         self._folder = "D:/Novels/Library/raw"
 
     def get_snapshot(self) -> dict[str, Any]:
-        return {
+        payload = {
             "route": "work",
             "theme": "dark",
             "locale": "ko-KR",
@@ -57,6 +66,8 @@ class BridgeApi:
                 "selectedCount": 0,
             },
         }
+        validate_app_snapshot(payload)
+        return payload
 
     def set_work_mode(self, mode: str) -> None:
         self._active_mode = mode
@@ -71,7 +82,8 @@ class BridgeApi:
         return None
 
     def query_review_rows(self, query: dict[str, Any]) -> dict[str, Any]:
-        _ = query
+        limit = clamp_query_limit(query)
+        _ = limit
         rows = [
             {
                 "id": "row-1",
@@ -86,7 +98,7 @@ class BridgeApi:
                 "hasChildren": False,
             }
         ]
-        return {
+        payload = {
             "rows": rows,
             "pageInfo": {
                 "cursor": None,
@@ -101,10 +113,12 @@ class BridgeApi:
                 "approvedCount": 0,
             },
         }
+        validate_review_rows_page(payload)
+        return payload
 
     def query_quality_rows(self, query: dict[str, Any]) -> dict[str, Any]:
-        _ = query
-        return {
+        _ = clamp_query_limit(query)
+        payload = {
             "rows": [],
             "pageInfo": {
                 "cursor": None,
@@ -114,6 +128,8 @@ class BridgeApi:
             },
             "summary": {"issueCount": 0, "warningCount": 0, "errorCount": 0},
         }
+        validate_quality_rows_page(payload)
+        return payload
 
     def get_duplicate_group_detail(self, group_id: str) -> dict[str, Any]:
         return {"groupId": group_id}
@@ -127,10 +143,13 @@ class BridgeApi:
         }
 
     def get_move_preview(self, selection: dict[str, Any]) -> dict[str, Any]:
-        return {"rows": [{"selection": selection}]}
+        validate_selection_scope(selection)
+        payload = {"rows": [{"selection": selection}]}
+        validate_move_preview(payload)
+        return payload
 
     def apply_resolved_actions(self, selection: dict[str, Any]) -> None:
-        _ = selection
+        validate_selection_scope(selection)
 
     def query_review_rows_json(self, query_json: str) -> str:
         """Optional helper if JS passes JSON string."""

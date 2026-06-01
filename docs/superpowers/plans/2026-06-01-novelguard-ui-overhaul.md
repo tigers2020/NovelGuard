@@ -626,7 +626,8 @@ Expected: window opens, strip + Resolve grid load from Python stub.
 | SelectionScope | PR-6 |
 | GlobalCommandBar single progress | PR-2, PR-7 |
 | Preflight full pipeline | PR-2, PR-7 |
-| TanStack Virtual + Table | PR-5 |
+| TanStack Virtual | PR-5 |
+| TanStack Table (column tooling) | **PR-12** (deferred; Virtual-only grids in PR-5..11) |
 | DESIGN.md tokens | PR-0 |
 | pywebview js_api | PR-9 |
 | FileSummaryStrip CTA | PR-2 |

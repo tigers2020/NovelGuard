@@ -21,6 +21,7 @@ export function AppSidebar({
           <button
             key={item.id}
             type="button"
+            data-testid={`nav-${item.id}`}
             onClick={() => onRouteChange(item.id)}
             className={`flex w-full items-center rounded-md px-3 py-2.5 text-left text-sm font-semibold transition ${
               route === item.id

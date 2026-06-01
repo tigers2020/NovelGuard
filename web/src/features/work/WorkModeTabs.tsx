@@ -20,6 +20,7 @@ export function WorkModeTabs({
           <button
             key={tab.id}
             type="button"
+            data-testid={`work-mode-tab-${tab.id}`}
             onClick={() => onModeChange(tab.id)}
             className={`rounded-sm px-4 py-2 text-sm font-semibold transition ${
               mode === tab.id

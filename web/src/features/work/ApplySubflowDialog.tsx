@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { SelectionScope } from "../../types/selection";
-import { useBridge } from "../../app/providers/SnapshotProvider";
+import { useBridge } from "../../app/providers/snapshotHooks";
 
 type Step = "preview" | "confirm" | "apply";
 
@@ -16,16 +16,22 @@ export function ApplySubflowDialog({
   const bridge = useBridge();
   const [step, setStep] = useState<Step>("preview");
   const [previewCount, setPreviewCount] = useState(0);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [applyError, setApplyError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   if (!open || !selection) return null;
 
   const runPreview = async () => {
     setBusy(true);
+    setPreviewError(null);
     try {
       const result = await bridge.getMovePreview(selection);
       setPreviewCount(result.rows.length);
       setStep("confirm");
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : "Preview failed");
+      setStep("preview");
     } finally {
       setBusy(false);
     }
@@ -33,11 +39,16 @@ export function ApplySubflowDialog({
 
   const runApply = async () => {
     setBusy(true);
+    setApplyError(null);
     try {
       await bridge.applyResolvedActions(selection);
       onClose();
       setStep("preview");
       setPreviewCount(0);
+      setPreviewError(null);
+      setApplyError(null);
+    } catch (err) {
+      setApplyError(err instanceof Error ? err.message : "Apply failed");
     } finally {
       setBusy(false);
     }
@@ -75,7 +86,19 @@ export function ApplySubflowDialog({
           ))}
         </ol>
 
-        {step === "confirm" && (
+        {previewError && (
+          <p className="mt-3 text-sm text-error" data-testid="apply-preview-error" role="alert">
+            {previewError}
+          </p>
+        )}
+
+        {applyError && (
+          <p className="mt-3 text-sm text-error" data-testid="apply-apply-error" role="alert">
+            {applyError}
+          </p>
+        )}
+
+        {step === "confirm" && !previewError && (
           <p className="mt-4 text-sm text-on-surface">
             미리보기 대상: <strong>{previewCount}</strong> rows
           </p>
@@ -93,16 +116,18 @@ export function ApplySubflowDialog({
             <button
               type="button"
               disabled={busy}
+              data-testid="apply-preview-run"
               onClick={() => void runPreview()}
               className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-background"
             >
               미리보기
             </button>
           )}
-          {step === "confirm" && (
+          {step === "confirm" && !previewError && previewCount > 0 && (
             <button
               type="button"
               disabled={busy}
+              data-testid="apply-confirm-run"
               onClick={() => void runApply()}
               className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-background"
             >

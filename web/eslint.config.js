@@ -19,4 +19,14 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    files: [
+      'src/features/work/resolve/VirtualizedReviewGrid.tsx',
+      'src/features/work/quality/QualityIssueGrid.tsx',
+    ],
+    rules: {
+      // TanStack Virtual useVirtualizer — known React Compiler incompatibility; v1 grids (Table → PR-12).
+      'react-hooks/incompatible-library': 'off',
+    },
+  },
 ])

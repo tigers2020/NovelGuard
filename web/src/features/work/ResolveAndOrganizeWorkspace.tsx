@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useBridge } from "../../app/providers/SnapshotProvider";
-import { useSnapshot } from "../../app/providers/SnapshotProvider";
+import { useBridge, useSnapshot } from "../../app/providers/snapshotHooks";
 import type { ReviewRow, ReviewRowsQuery, ReviewViewMode } from "../../types/review";
 import type { SelectionScope } from "../../types/selection";
 import { StatChip } from "../../components/ui/StatChip";
@@ -23,6 +22,7 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
   const [loadingMore, setLoadingMore] = useState(false);
   const [selectedRow, setSelectedRow] = useState<ReviewRow | null>(null);
   const [explicitIds, setExplicitIds] = useState<string[]>([]);
+  const [queryError, setQueryError] = useState<string | null>(null);
 
   const currentQuery = useMemo<ReviewRowsQuery>(
     () => ({
@@ -36,9 +36,13 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
 
   const loadPage = useCallback(
     async (cursor: string | null, append: boolean) => {
+      if (!append) {
+        setExplicitIds([]);
+      }
       if (append) setLoadingMore(true);
       else setLoading(true);
       try {
+        setQueryError(null);
         const page = await bridge.queryReviewRows({
           ...currentQuery,
           cursor,
@@ -49,6 +53,12 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
         if (!append && page.rows.length > 0) {
           setSelectedRow(page.rows[0]);
         }
+      } catch (err) {
+        setQueryError(err instanceof Error ? err.message : "Failed to load rows");
+        if (!append) {
+          setRows([]);
+          setFilteredCount(0);
+        }
       } finally {
         setLoading(false);
         setLoadingMore(false);
@@ -58,8 +68,10 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
   );
 
   useEffect(() => {
-    setExplicitIds([]);
-    void loadPage(null, false);
+    const frame = requestAnimationFrame(() => {
+      void loadPage(null, false);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [loadPage]);
 
   const loadingMoreRef = useRef(false);
@@ -89,7 +101,7 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
       : `${filteredCount} in current filter`;
 
   return (
-    <main className="flex h-full min-h-0 flex-col bg-background">
+    <main className="flex h-full min-h-0 flex-col bg-background" data-testid="resolve-workspace">
       <div className="shrink-0 border-b border-outline p-4">
         <p className="text-xs font-semibold text-secondary">Resolve & Organize</p>
         <h1 className="text-xl font-bold text-on-surface">중복 검토와 이동 정리를 한 큐에서 처리</h1>
@@ -105,7 +117,23 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
           placeholder="파일명, keeper, target, type 검색"
           className="mt-4 w-full rounded-md border border-outline bg-surface px-3 py-2 text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary"
         />
-        {loading && <p className="mt-2 text-xs text-muted">Loading rows…</p>}
+        {loading && !queryError && <p className="mt-2 text-xs text-muted">Loading rows…</p>}
+        {queryError && (
+          <div
+            className="mt-2 flex items-center justify-between rounded-md border border-error/40 bg-error/10 px-3 py-2 text-sm text-error"
+            data-testid="resolve-query-error"
+          >
+            <span>{queryError}</span>
+            <button
+              type="button"
+              data-testid="resolve-query-retry"
+              className="rounded-md border border-outline px-2 py-1 text-xs font-semibold text-on-surface"
+              onClick={() => void loadPage(null, false)}
+            >
+              Retry
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex min-h-0 flex-1">

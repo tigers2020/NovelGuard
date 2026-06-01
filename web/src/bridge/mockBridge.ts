@@ -1,7 +1,14 @@
 import type { NovelGuardBridge } from "./NovelGuardBridge";
 import type { AppSnapshot, WorkMode } from "../types/snapshot";
+import type { ReviewRowsQuery } from "../types/review";
 import type { SelectionScope } from "../types/selection";
-import { EmptySelectionError } from "../types/selection";
+import { validateSelectionScope } from "../types/selection";
+import { validateAppSnapshot } from "../contracts/snapshotContract";
+import {
+  clampQualityQueryLimit,
+  validateQualityRowsPage,
+} from "../contracts/qualityPageContract";
+import { clampQueryLimit, validateReviewRowsPage } from "../contracts/reviewPageContract";
 import {
   buildQualityRows,
   filterReviewRows,
@@ -71,22 +78,31 @@ function buildSnapshot(): AppSnapshot {
   };
 }
 
+function countCurrentQuery(query: ReviewRowsQuery, excludeRowIds: string[]): number {
+  return filterReviewRows(getAllReviewRows(), query).filter((row) => !excludeRowIds.includes(row.id))
+    .length;
+}
+
 function resolveSelectionIds(selection: SelectionScope): string[] {
+  validateSelectionScope(selection, (query, excludeRowIds) =>
+    countCurrentQuery(query, excludeRowIds),
+  );
+
   if (selection.type === "explicit_rows") {
-    if (selection.rowIds.length === 0) throw new EmptySelectionError();
     return selection.rowIds;
   }
 
   const filtered = filterReviewRows(getAllReviewRows(), selection.query).filter(
     (row) => !selection.excludeRowIds.includes(row.id),
   );
-  if (filtered.length === 0) throw new EmptySelectionError();
   return filtered.map((row) => row.id);
 }
 
 export const mockBridge: NovelGuardBridge = {
   async getSnapshot() {
-    return buildSnapshot();
+    const snapshot = buildSnapshot();
+    validateAppSnapshot(snapshot);
+    return snapshot;
   },
 
   async selectFolder() {
@@ -106,12 +122,12 @@ export const mockBridge: NovelGuardBridge = {
   },
 
   async queryReviewRows(query) {
-    const limit = Math.min(query.limit ?? 100, 200);
+    const limit = clampQueryLimit(query);
     const filtered = filterReviewRows(getAllReviewRows(), query);
     const { slice, nextCursor, hasMore } = paginateRows(filtered, query.cursor, limit);
     const summary = summarizeReviewRows(filtered);
 
-    return {
+    const page = {
       rows: slice,
       pageInfo: {
         cursor: query.cursor ?? null,
@@ -124,6 +140,8 @@ export const mockBridge: NovelGuardBridge = {
         selectedCount: state.selectedCount,
       },
     };
+    validateReviewRowsPage(page);
+    return page;
   },
 
   async queryQualityRows(query) {
@@ -134,10 +152,10 @@ export const mockBridge: NovelGuardBridge = {
       if (search && !row.name.toLowerCase().includes(search)) return false;
       return true;
     });
-    const limit = Math.min(query.limit ?? 100, 200);
+    const limit = clampQualityQueryLimit(query);
     const { slice, nextCursor, hasMore } = paginateRows(filtered, query.cursor, limit);
 
-    return {
+    const page = {
       rows: slice,
       pageInfo: {
         cursor: query.cursor ?? null,
@@ -151,6 +169,8 @@ export const mockBridge: NovelGuardBridge = {
         errorCount: filtered.filter((r) => r.severity === "error").length,
       },
     };
+    validateQualityRowsPage(page);
+    return page;
   },
 
   async getDuplicateGroupDetail(groupId) {

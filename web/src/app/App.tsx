@@ -1,5 +1,11 @@
 import { useState, type ReactNode } from "react";
-import { SnapshotProvider, useBridge, useSnapshot } from "./providers/SnapshotProvider";
+import { SnapshotProvider } from "./providers/SnapshotProvider";
+import {
+  useBridge,
+  useBridgeHealth,
+  useConnectionLabel,
+  useSnapshot,
+} from "./providers/snapshotHooks";
 import { AppShell } from "../components/layout/AppShell";
 import { AppHeader } from "../components/layout/AppHeader";
 import { AppSidebar } from "../components/layout/AppSidebar";
@@ -15,6 +21,8 @@ import type { SelectionScope } from "../types/selection";
 function AppContent() {
   const snapshot = useSnapshot();
   const bridge = useBridge();
+  const bridgeHealth = useBridgeHealth();
+  const connectionLabel = useConnectionLabel();
   const [route, setRoute] = useState<AppSnapshot["route"]>("work");
   const [preflightOpen, setPreflightOpen] = useState(false);
   const [pipelineOpen, setPipelineOpen] = useState(false);
@@ -51,7 +59,9 @@ function AppContent() {
   return (
     <>
       <AppShell
-        header={<AppHeader route={route} connection={snapshot.connection} />}
+        header={
+          <AppHeader route={route} connection={connectionLabel} health={bridgeHealth} />
+        }
         sidebar={<AppSidebar route={route} onRouteChange={setRoute} />}
         strip={
           <FileSummaryStrip library={snapshot.library} onOpenResolve={() => void handleOpenResolve()} />

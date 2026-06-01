@@ -4,61 +4,92 @@ import type { ReviewRowsPage, ReviewRowsQuery } from "../types/review";
 import type { QualityIssueDetail, QualityRowsPage, QualityRowsQuery } from "../types/quality";
 import type { SelectionScope } from "../types/selection";
 import type { WorkMode } from "../types/snapshot";
-import { mockBridge } from "./mockBridge";
+import { BridgeCallError } from "./bridgeErrors";
+import { callBridge } from "./callBridge";
 
 type PyApi = Record<string, (...args: unknown[]) => Promise<unknown>>;
 
-function getApi(): PyApi | null {
-  if (typeof window === "undefined") return null;
-  const w = window as unknown as { pywebview?: { api?: PyApi } };
-  return w.pywebview?.api ?? null;
-}
+export type PywebviewState = "none" | "ready" | "broken";
 
 function call<T>(api: PyApi, method: string, ...args: unknown[]): Promise<T> {
   const fn = api[method];
   if (!fn) {
-    return Promise.reject(new Error(`pywebview api missing: ${method}`));
+    return Promise.reject(
+      new BridgeCallError(`pywebview api missing: ${method}`, {
+        code: "missing_method",
+        method,
+      }),
+    );
   }
   return fn(...args) as Promise<T>;
 }
 
-/** Maps Python js_api (snake_case) to NovelGuardBridge. Falls back to mock per method if missing. */
-export function createPywebviewBridge(): NovelGuardBridge {
-  const api = getApi();
-  if (!api) return mockBridge;
+export function getPywebviewState(): PywebviewState {
+  if (typeof window === "undefined") {
+    return "none";
+  }
+  const w = window as unknown as { pywebview?: { api?: PyApi } };
+  if (!w.pywebview) {
+    return "none";
+  }
+  if (!w.pywebview.api) {
+    return "broken";
+  }
+  return "ready";
+}
 
+export function getPywebviewApi(): PyApi | null {
+  if (getPywebviewState() !== "ready") {
+    return null;
+  }
+  const w = window as unknown as { pywebview?: { api?: PyApi } };
+  return w.pywebview?.api ?? null;
+}
+
+/** Maps Python js_api (snake_case) to NovelGuardBridge. Does not fall back to mockBridge. */
+export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
   return {
     getSnapshot: () =>
-      call<AppSnapshot>(api, "get_snapshot").catch(() => mockBridge.getSnapshot()),
-    selectFolder: () => call(api, "select_folder").then(() => undefined).catch(() => mockBridge.selectFolder()),
+      callBridge(() => call<AppSnapshot>(api, "get_snapshot"), { method: "get_snapshot" }),
+    selectFolder: () =>
+      callBridge(() => call(api, "select_folder").then(() => undefined), { method: "select_folder" }),
     startScan: (options) =>
-      call(api, "start_scan", options).then(() => undefined).catch(() => mockBridge.startScan(options)),
-    cancelRun: () => call(api, "cancel_run").then(() => undefined).catch(() => mockBridge.cancelRun()),
+      callBridge(() => call(api, "start_scan", options).then(() => undefined), {
+        method: "start_scan",
+      }),
+    cancelRun: () =>
+      callBridge(() => call(api, "cancel_run").then(() => undefined), { method: "cancel_run" }),
     setWorkMode: (mode: WorkMode) =>
-      call(api, "set_work_mode", mode).then(() => undefined).catch(() => mockBridge.setWorkMode(mode)),
+      callBridge(() => call(api, "set_work_mode", mode).then(() => undefined), {
+        method: "set_work_mode",
+      }),
     queryReviewRows: (query: ReviewRowsQuery) =>
-      call<ReviewRowsPage>(api, "query_review_rows", query).catch(() => mockBridge.queryReviewRows(query)),
+      callBridge(() => call<ReviewRowsPage>(api, "query_review_rows", query), {
+        method: "query_review_rows",
+      }),
     queryQualityRows: (query: QualityRowsQuery) =>
-      call<QualityRowsPage>(api, "query_quality_rows", query).catch(() => mockBridge.queryQualityRows(query)),
+      callBridge(() => call<QualityRowsPage>(api, "query_quality_rows", query), {
+        method: "query_quality_rows",
+      }),
     getDuplicateGroupDetail: (groupId: string) =>
-      call<Record<string, unknown>>(api, "get_duplicate_group_detail", groupId).catch(() =>
-        mockBridge.getDuplicateGroupDetail(groupId),
-      ),
+      callBridge(() => call<Record<string, unknown>>(api, "get_duplicate_group_detail", groupId), {
+        method: "get_duplicate_group_detail",
+      }),
     getQualityIssueDetail: (issueId: string) =>
-      call<QualityIssueDetail>(api, "get_quality_issue_detail", issueId).catch(() =>
-        mockBridge.getQualityIssueDetail(issueId),
-      ),
+      callBridge(() => call<QualityIssueDetail>(api, "get_quality_issue_detail", issueId), {
+        method: "get_quality_issue_detail",
+      }),
     getMovePreview: (selection: SelectionScope) =>
-      call<{ rows: unknown[] }>(api, "get_move_preview", selection).catch(() =>
-        mockBridge.getMovePreview(selection),
-      ),
+      callBridge(() => call<{ rows: unknown[] }>(api, "get_move_preview", selection), {
+        method: "get_move_preview",
+      }),
     applyResolvedActions: (selection: SelectionScope) =>
-      call(api, "apply_resolved_actions", selection).then(() => undefined).catch(() =>
-        mockBridge.applyResolvedActions(selection),
-      ),
+      callBridge(() => call(api, "apply_resolved_actions", selection).then(() => undefined), {
+        method: "apply_resolved_actions",
+      }),
   };
 }
 
 export function isPywebviewHost(): boolean {
-  return getApi() !== null;
+  return getPywebviewState() === "ready";
 }
