@@ -22,11 +22,18 @@ from app.selection_fingerprint import selection_fingerprint
 from app.session_factory import create_library_session
 from application.library_session import LibrarySession
 from application.quality_analyzer import analyze_quality
+from domain.apply_models import PreviewOperation
+from domain.apply_path_policy import (
+    build_move_duplicate_dest_relative,
+    resolve_under_library_root,
+    validate_move_operation,
+)
 from domain.duplicate_exact import find_exact_duplicate_groups
 from domain.models import FileRecord, make_file_id
 from domain.quality import make_issue_id
 from infrastructure import filesystem_scanner
 from infrastructure.content_hasher import hash_file
+from infrastructure.local_filesystem_apply import LocalFilesystemApplyAdapter
 from infrastructure.memory_library_index import MemoryLibraryIndex
 from infrastructure.sqlite_library_index import SqliteLibraryIndex
 from tests.fixtures.bridge_contract_fixtures import VALID_SNAPSHOT
@@ -536,3 +543,109 @@ def test_sqlite_quality_issues_folder_scoped(tmp_path: Path) -> None:
     index.replace_files(folder_b, [])
     index.replace_quality_issues(folder_b, [])
     assert index.quality_issues() == []
+
+
+def _move_op(
+    *,
+    source: str = "a/keep.txt",
+    dest: str = "duplicate/a/keep.txt",
+) -> PreviewOperation:
+    return PreviewOperation(
+        row_id="file:g1:f1",
+        action="move_duplicate",
+        source_path=source,
+        dest_path=dest,
+        source_file_id="f1",
+        source_size=10,
+        source_content_hash="abc",
+    )
+
+
+def test_apply_path_policy_blocks_path_traversal(tmp_path: Path) -> None:
+    root = tmp_path / "lib"
+    root.mkdir()
+    result = validate_move_operation(
+        root,
+        _move_op(source="../outside.txt", dest="duplicate/outside.txt"),
+        destination_exists=False,
+    )
+    assert not result.allowed
+    assert result.reason == "path_traversal"
+
+
+def test_apply_path_policy_blocks_absolute_dest(tmp_path: Path) -> None:
+    root = tmp_path / "lib"
+    root.mkdir()
+    (root / "src.txt").write_text("x", encoding="utf-8")
+    result = validate_move_operation(
+        root,
+        _move_op(source="src.txt", dest="/absolute/dup.txt"),
+        destination_exists=False,
+    )
+    assert not result.allowed
+    assert result.reason in ("absolute_path", "path_traversal", "invalid_target")
+
+
+def test_apply_path_policy_blocks_destination_exists(tmp_path: Path) -> None:
+    root = tmp_path / "lib"
+    (root / "duplicate").mkdir(parents=True)
+    (root / "duplicate" / "dup.txt").write_text("exists", encoding="utf-8")
+    (root / "src.txt").write_text("src", encoding="utf-8")
+    result = validate_move_operation(
+        root,
+        _move_op(source="src.txt", dest="duplicate/dup.txt"),
+        destination_exists=True,
+    )
+    assert not result.allowed
+    assert result.reason == "destination_exists"
+
+
+def test_apply_path_policy_allows_valid_move(tmp_path: Path) -> None:
+    root = tmp_path / "lib"
+    root.mkdir()
+    (root / "src.txt").write_text("src", encoding="utf-8")
+    dest_rel = build_move_duplicate_dest_relative("duplicate", "src.txt")
+    result = validate_move_operation(
+        root,
+        _move_op(source="src.txt", dest=dest_rel),
+        destination_exists=False,
+    )
+    assert result.allowed
+    assert result.reason is None
+
+
+def test_filesystem_apply_moves_file(tmp_path: Path) -> None:
+    root = tmp_path / "lib"
+    root.mkdir()
+    src = root / "src.txt"
+    src.write_text("payload", encoding="utf-8")
+    dest = root / "duplicate" / "src.txt"
+    adapter = LocalFilesystemApplyAdapter()
+    assert adapter.move_file(src, dest).outcome == "ok"
+    assert dest.read_text(encoding="utf-8") == "payload"
+    assert not src.exists()
+
+
+def test_filesystem_apply_move_rejects_existing_destination(tmp_path: Path) -> None:
+    root = tmp_path / "lib"
+    (root / "duplicate").mkdir(parents=True)
+    (root / "duplicate" / "taken.txt").write_text("taken", encoding="utf-8")
+    src = root / "src.txt"
+    src.write_text("src", encoding="utf-8")
+    dest = root / "duplicate" / "taken.txt"
+    adapter = LocalFilesystemApplyAdapter()
+    result = adapter.move_file(src, dest)
+    assert result.outcome == "error"
+    assert result.error is not None
+    assert "destination exists" in result.error
+    assert src.exists()
+    assert dest.read_text(encoding="utf-8") == "taken"
+
+
+def test_filesystem_apply_ensure_parent_dir(tmp_path: Path) -> None:
+    root = tmp_path / "lib"
+    root.mkdir()
+    dest = root / "nested" / "dir" / "file.txt"
+    adapter = LocalFilesystemApplyAdapter()
+    assert adapter.ensure_parent_dir(dest).outcome == "ok"
+    assert (root / "nested" / "dir").is_dir()
