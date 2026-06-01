@@ -1,0 +1,104 @@
+import { useEffect, useState } from "react";
+import { useBridge } from "../../app/providers/SnapshotProvider";
+import { useSnapshot } from "../../app/providers/SnapshotProvider";
+import type { QualityIssueDetail, QualityIssueType, QualityRow } from "../../types/quality";
+import { StatChip } from "../../components/ui/StatChip";
+import { QualityIssueGrid } from "./quality/QualityIssueGrid";
+
+const issueTabs: { id: QualityIssueType; label: string }[] = [
+  { id: "integrity", label: "무결성" },
+  { id: "encoding", label: "인코딩" },
+  { id: "small_file", label: "소형 파일" },
+];
+
+export function QualityWorkspace() {
+  const bridge = useBridge();
+  const snapshot = useSnapshot();
+  const quality = snapshot.work.quality;
+
+  const [issueType, setIssueType] = useState<QualityIssueType>("integrity");
+  const [rows, setRows] = useState<QualityRow[]>([]);
+  const [selected, setSelected] = useState<QualityRow | null>(null);
+  const [detail, setDetail] = useState<QualityIssueDetail | null>(null);
+
+  useEffect(() => {
+    void bridge.queryQualityRows({ issueType, cursor: null, limit: 100 }).then((page) => {
+      setRows(page.rows);
+      setSelected(page.rows[0] ?? null);
+    });
+  }, [bridge, issueType]);
+
+  useEffect(() => {
+    if (!selected) {
+      setDetail(null);
+      return;
+    }
+    void bridge.getQualityIssueDetail(selected.id).then(setDetail);
+  }, [bridge, selected]);
+
+  return (
+    <main className="flex h-full min-h-0 flex-col overflow-hidden bg-background p-5">
+      <section className="shrink-0 rounded-md border border-outline bg-surface p-5">
+        <h1 className="text-xl font-bold text-on-surface">품질 · 무결성</h1>
+        <p className="mt-1 text-sm text-on-surface-variant">v1: read-only issue list · repair stub</p>
+        <div className="mt-4 grid gap-2 sm:grid-cols-3">
+          <StatChip label="Integrity" value={quality.integrityIssueCount} tone="danger" />
+          <StatChip label="Encoding" value={quality.encodingIssueCount} tone="warn" />
+          <StatChip label="Small files" value={quality.smallFileAnomalyCount} />
+        </div>
+        <div className="mt-4 flex gap-2">
+          {issueTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setIssueType(tab.id)}
+              className={`rounded-md px-3 py-2 text-sm font-semibold ${
+                issueType === tab.id
+                  ? "bg-primary text-background"
+                  : "border border-outline text-on-surface-variant hover:bg-hover"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <div className="mt-4 grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_280px]">
+        <QualityIssueGrid
+          rows={rows}
+          selectedId={selected?.id ?? null}
+          onSelect={setSelected}
+        />
+        <aside className="overflow-y-auto rounded-md border border-outline bg-surface p-4 text-sm">
+          <p className="font-semibold text-on-surface">Issue detail</p>
+          {detail ? (
+            <dl className="mt-3 space-y-2">
+              <div>
+                <dt className="text-muted">Name</dt>
+                <dd>{detail.name}</dd>
+              </div>
+              <div>
+                <dt className="text-muted">Path</dt>
+                <dd className="break-all">{detail.path}</dd>
+              </div>
+              <div>
+                <dt className="text-muted">Suggested</dt>
+                <dd>{selected?.suggestedAction}</dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="mt-2 text-muted">행을 선택하세요.</p>
+          )}
+          <button
+            type="button"
+            disabled
+            className="mt-4 w-full rounded-md border border-outline px-3 py-2 text-sm text-muted"
+          >
+            v1: repair not available
+          </button>
+        </aside>
+      </div>
+    </main>
+  );
+}

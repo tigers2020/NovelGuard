@@ -41,6 +41,6 @@ python scripts/verify_phase_completion.py
 
 1. `docs/superpowers/specs/`에 새 설계 작성 → 승인
 2. `docs/superpowers/plans/`에 구현 플랜 작성 → 승인
-3. `src/` 레이어(domain / application / infrastructure / gui)부터 재구축
+3. `src/` 백엔드 레이어 + `web/` React UI ([DESIGN.md](DESIGN.md)) 재구축
 
 정본 정책: [AGENTS.md](AGENTS.md)

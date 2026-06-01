@@ -27,7 +27,7 @@ After implementation: `[테스]` tests → `[렉스]` runs `pytest` → `ruff ch
 | 도미닉 | [dominic.md](mdc:persona/dominic.md) | `src/domain/` |
 | 유리 | [yuri.md](mdc:persona/yuri.md) | `src/application/` |
 | 아다 | [ada.md](mdc:persona/ada.md) | `src/infrastructure/` |
-| 지나 | [gina-gui.md](mdc:persona/gina-gui.md) | `src/gui/` |
+| 지나 | [gina-gui.md](mdc:persona/gina-gui.md) | `web/` |
 | 테스 | [tess.md](mdc:persona/tess.md) | `tests/` |
 | 렉스 | [rex.md](mdc:persona/rex.md) | Verification pipeline |
 

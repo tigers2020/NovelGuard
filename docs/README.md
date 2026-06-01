@@ -4,6 +4,7 @@
 
 | 용도 | 경로 |
 |------|------|
+| 디자인 토큰 · UX/UI 가이드 | [DESIGN.md](../DESIGN.md) (저장소 루트) |
 | 설계 스펙 (신규) | `superpowers/specs/` |
 | 구현 플랜 (신규) | `superpowers/plans/` |
 | 워크플로 인덱스 | `superpowers/README.md` |
