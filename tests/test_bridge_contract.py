@@ -19,10 +19,17 @@ from app.bridge_contract import (
 from app.selection_fingerprint import selection_fingerprint
 from app.session_factory import create_library_session
 from application.library_session import LibrarySession
+from domain.duplicate_exact import find_exact_duplicate_groups
 from domain.models import FileRecord, make_file_id
 from infrastructure import filesystem_scanner
+from infrastructure.content_hasher import hash_file
 from infrastructure.memory_library_index import MemoryLibraryIndex
+from infrastructure.sqlite_library_index import SqliteLibraryIndex
 from tests.fixtures.bridge_contract_fixtures import VALID_SNAPSHOT
+
+
+def _memory_api() -> BridgeApi:
+    return BridgeApi(create_library_session(MemoryLibraryIndex()))
 
 
 @pytest.mark.parametrize(
@@ -54,19 +61,19 @@ def test_clamp_query_limit_max_200() -> None:
 
 
 def test_bridge_api_get_snapshot_valid() -> None:
-    api = BridgeApi()
+    api = _memory_api()
     snap = api.get_snapshot()
     validate_app_snapshot(snap)
 
 
 def test_bridge_api_query_review_rows_valid() -> None:
-    api = BridgeApi()
+    api = _memory_api()
     page = api.query_review_rows({"viewMode": "action", "limit": 50})
     assert len(page["rows"]) <= 200
 
 
 def test_bridge_api_get_move_preview_requires_selection() -> None:
-    api = BridgeApi()
+    api = _memory_api()
     preview = api.get_move_preview({"type": "explicit_rows", "rowIds": ["row-1"]})
     assert "rows" in preview
     assert preview["hasPendingApply"] is True
@@ -84,7 +91,7 @@ def test_selection_fingerprint_explicit_rows_stable() -> None:
 
 
 def test_apply_missing_token_raises() -> None:
-    api = BridgeApi()
+    api = _memory_api()
     with pytest.raises(PreviewApplyError) as exc:
         api.apply_resolved_actions(
             {"selection": {"type": "explicit_rows", "rowIds": ["row-1"]}, "previewToken": ""}
@@ -93,7 +100,7 @@ def test_apply_missing_token_raises() -> None:
 
 
 def test_apply_after_discard_raises_no_pending() -> None:
-    api = BridgeApi()
+    api = _memory_api()
     sel = {"type": "explicit_rows", "rowIds": ["row-1"]}
     preview = api.get_move_preview(sel)
     api.discard_move_preview({"previewToken": preview["previewToken"]})
@@ -103,7 +110,7 @@ def test_apply_after_discard_raises_no_pending() -> None:
 
 
 def test_discard_idempotent_on_mismatch() -> None:
-    api = BridgeApi()
+    api = _memory_api()
     api.get_move_preview({"type": "explicit_rows", "rowIds": ["row-1"]})
     api.discard_move_preview({"previewToken": "unknown-token"})
     snap = api.get_snapshot()
@@ -136,7 +143,7 @@ def test_scan_folder_finds_txt_and_md(tmp_path: Path) -> None:
 
 
 def test_query_review_rows_empty_valid_14a() -> None:
-    api = BridgeApi()
+    api = _memory_api()
     page = api.query_review_rows({"viewMode": "action", "limit": 50})
     assert page["rows"] == []
     validate_review_rows_page(page)
@@ -145,7 +152,7 @@ def test_query_review_rows_empty_valid_14a() -> None:
 def test_bridge_api_scan_populates_file_count(tmp_path: Path) -> None:
     (tmp_path / "one.txt").write_text("a", encoding="utf-8")
     (tmp_path / "two.txt").write_text("b", encoding="utf-8")
-    session = create_library_session()
+    session = create_library_session(MemoryLibraryIndex())
     session.select_folder(str(tmp_path))
     api = BridgeApi(session)
     rev_before = api.get_snapshot()["work"]["resolve"]["libraryRevision"]
@@ -219,3 +226,107 @@ def test_cancel_scan_discards_partial(monkeypatch: pytest.MonkeyPatch, tmp_path:
     assert cancel_flag["hit"] is True
     assert snap["library"]["fileCount"] == 1
     assert snap["work"]["resolve"]["libraryRevision"] == rev_before_cancel == rev_after_first
+
+
+def test_hash_file_hello_golden(tmp_path: Path) -> None:
+    path = tmp_path / "hello.txt"
+    path.write_text("hello", encoding="utf-8")
+    assert hash_file(path) == "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+
+
+def test_find_exact_duplicate_groups_keeper_by_size() -> None:
+    content = "a" * 64
+    keeper = FileRecord(
+        id=make_file_id("z_keeper.txt", 50, 1),
+        relative_path="z_keeper.txt",
+        name="z_keeper.txt",
+        size_bytes=50,
+        modified_at_ns=1,
+        extension=".txt",
+        content_sha256=content,
+    )
+    other = FileRecord(
+        id=make_file_id("a_other.txt", 50, 2),
+        relative_path="a_other.txt",
+        name="a_other.txt",
+        size_bytes=50,
+        modified_at_ns=2,
+        extension=".txt",
+        content_sha256=content,
+    )
+    groups = find_exact_duplicate_groups([keeper, other])
+    assert len(groups) == 1
+    assert groups[0].keeper_id == keeper.id
+
+
+def test_sqlite_library_index_round_trip(tmp_path: Path) -> None:
+    db = tmp_path / "library.db"
+    index = SqliteLibraryIndex(db)
+    folder = str(tmp_path / "lib")
+    record = FileRecord(
+        id=make_file_id("a.txt", 5, 1),
+        relative_path="a.txt",
+        name="a.txt",
+        size_bytes=5,
+        modified_at_ns=1,
+        extension=".txt",
+        content_sha256="abc",
+    )
+    index.replace_files(folder, [record])
+    loaded = index.files()
+    assert len(loaded) == 1
+    assert loaded[0].content_sha256 == "abc"
+    assert index.folder_path == folder
+
+
+def _scan_until_idle(api: BridgeApi) -> dict:
+    deadline = time.monotonic() + 5.0
+    snap = api.get_snapshot()
+    while snap["work"]["scan"]["state"] == "running" and time.monotonic() < deadline:
+        time.sleep(0.05)
+        snap = api.get_snapshot()
+    return snap
+
+
+def test_query_review_rows_exact_duplicate_pair(tmp_path: Path) -> None:
+    payload = "same story content\n"
+    (tmp_path / "copy_a.txt").write_text(payload, encoding="utf-8")
+    (tmp_path / "copy_b.txt").write_text(payload, encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = BridgeApi(session)
+    api.start_scan()
+    snap = _scan_until_idle(api)
+    assert snap["work"]["scan"]["state"] == "success"
+    page = api.query_review_rows({"viewMode": "all", "limit": 50})
+    validate_review_rows_page(page)
+    assert len(page["rows"]) >= 3
+    assert all(row["type"] == "exact" for row in page["rows"])
+    assert any(row["rowKind"] == "group" for row in page["rows"])
+
+
+def test_snapshot_duplicate_group_count(tmp_path: Path) -> None:
+    text = "duplicate me"
+    (tmp_path / "one.txt").write_text(text, encoding="utf-8")
+    (tmp_path / "two.txt").write_text(text, encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = BridgeApi(session)
+    api.start_scan()
+    snap = _scan_until_idle(api)
+    assert snap["work"]["resolve"]["groupCount"] >= 1
+    assert snap["library"]["duplicateGroups"] >= 1
+
+
+def test_query_review_rows_near_filter_empty(tmp_path: Path) -> None:
+    text = "duplicate me"
+    (tmp_path / "one.txt").write_text(text, encoding="utf-8")
+    (tmp_path / "two.txt").write_text(text, encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = BridgeApi(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    page = api.query_review_rows({"viewMode": "all", "limit": 50, "filters": {"types": ["near"]}})
+    assert page["rows"] == []
+    validate_review_rows_page(page)

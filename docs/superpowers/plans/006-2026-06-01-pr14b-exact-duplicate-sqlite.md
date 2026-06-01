@@ -279,6 +279,16 @@ CREATE INDEX idx_files_folder ON files(folder_path);
 
 ---
 
+## Implementation status
+
+| Item | Status |
+|------|--------|
+| PR-14b Tasks 1–7 | **Done** |
+
+**Verification (2026-06-01):** `pytest` 28/28 · `verify_phase_completion.py` 5/5 PASS
+
+---
+
 ## Execution handoff
 
 After PR-14b merges, proceed to **PR-14c** quality analyzer plan.

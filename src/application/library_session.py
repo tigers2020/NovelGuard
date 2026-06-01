@@ -1,4 +1,4 @@
-"""Library orchestration for pywebview bridge (PR-14a)."""
+"""Library orchestration for pywebview bridge (PR-14a/14b)."""
 
 from __future__ import annotations
 
@@ -9,11 +9,16 @@ from typing import Any
 from application.dto_mapper import (
     build_snapshot,
     empty_quality_page,
-    empty_review_page,
     scan_timestamp,
 )
 from application.ports.library_index import LibraryIndexPort
+from application.review_query import query_review_page
+from application.review_rows_builder import build_review_rows
+from domain.duplicate_exact import find_exact_duplicate_groups
 from domain.models import FileRecord
+
+_MAX_QUERY_LIMIT = 200
+_DEFAULT_QUERY_LIMIT = 100
 
 
 class LibrarySession:
@@ -40,6 +45,10 @@ class LibrarySession:
         self._backup_files: list[FileRecord] | None = None
         self._backup_folder: str | None = None
         self._has_pending_apply = False
+        self._review_rows_cache: list[dict[str, Any]] = []
+        self._duplicate_group_count = 0
+        self._queue_count = 0
+        self._files_by_id: dict[str, FileRecord] = {}
 
     def select_folder(self, path: str | None = None) -> None:
         folder = path
@@ -71,6 +80,7 @@ class LibrarySession:
             self._pipeline_cancellable = False
             self._backup_files = None
             self._backup_folder = None
+            self._clear_review_cache()
 
     def start_scan(self, options: dict[str, Any] | None = None) -> None:
         _ = options
@@ -116,12 +126,14 @@ class LibrarySession:
                 scan_state=self._scan_state,
                 scan_last_run=self._scan_last_run,
                 has_pending_apply=self._has_pending_apply,
+                duplicate_group_count=self._duplicate_group_count,
+                queue_count=self._queue_count,
             )
 
     def query_review_rows(self, query: dict[str, Any]) -> dict[str, Any]:
-        _ = query
         with self._lock:
-            return empty_review_page()
+            limit = _clamp_query_limit(query)
+            return query_review_page(self._review_rows_cache, query, limit=limit)
 
     def query_quality_rows(self, query: dict[str, Any]) -> dict[str, Any]:
         _ = query
@@ -129,7 +141,22 @@ class LibrarySession:
             return empty_quality_page()
 
     def get_duplicate_group_detail(self, group_id: str) -> dict[str, Any]:
-        return {"groupId": group_id}
+        with self._lock:
+            groups = find_exact_duplicate_groups(list(self._files_by_id.values()))
+            target = next((g for g in groups if g.group_id == group_id), None)
+            if not target:
+                return {"groupId": group_id, "members": []}
+            members = [
+                {
+                    "id": mid,
+                    "name": self._files_by_id[mid].name,
+                    "path": self._files_by_id[mid].relative_path,
+                    "isKeeper": mid == target.keeper_id,
+                }
+                for mid in target.member_ids
+                if mid in self._files_by_id
+            ]
+            return {"groupId": group_id, "members": members}
 
     def get_quality_issue_detail(self, issue_id: str) -> dict[str, Any]:
         return {
@@ -151,6 +178,19 @@ class LibrarySession:
         with self._lock:
             files = self._index.files()
             return files[0].id if files else None
+
+    def _clear_review_cache(self) -> None:
+        self._review_rows_cache = []
+        self._duplicate_group_count = 0
+        self._queue_count = 0
+        self._files_by_id = {}
+
+    def _rebuild_review_index(self, files: list[FileRecord]) -> None:
+        self._files_by_id = {f.id: f for f in files}
+        groups = find_exact_duplicate_groups(files)
+        self._review_rows_cache = build_review_rows(groups, self._files_by_id)
+        self._duplicate_group_count = len(groups)
+        self._queue_count = len(self._review_rows_cache)
 
     def _run_scan(self, folder: str) -> None:
         collected: list[FileRecord] = []
@@ -197,6 +237,7 @@ class LibrarySession:
                 return
 
             self._index.replace_files(folder, collected)
+            self._rebuild_review_index(collected)
             self._scan_state = "success"
             self._scan_last_run = scan_timestamp()
             self._library_revision += 1
@@ -209,14 +250,27 @@ class LibrarySession:
     def _restore_backup_after_cancel(self, folder: str) -> None:
         if self._backup_files is not None and self._backup_folder:
             self._index.replace_files(self._backup_folder, self._backup_files)
+            self._rebuild_review_index(self._backup_files)
         else:
             self._index.replace_files(folder, [])
+            self._clear_review_cache()
 
     def _restore_backup_after_failed_scan(self, folder: str) -> None:
         if self._backup_files is not None and self._backup_folder:
             self._index.replace_files(self._backup_folder, self._backup_files)
+            self._rebuild_review_index(self._backup_files)
             self._scan_state = "success"
             self._pipeline_label = "대기 중"
         else:
             self._index.replace_files(folder, [])
+            self._clear_review_cache()
             self._scan_state = "error"
+
+
+def _clamp_query_limit(query: dict[str, Any]) -> int:
+    raw = query.get("limit", _DEFAULT_QUERY_LIMIT)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = _DEFAULT_QUERY_LIMIT
+    return min(max(1, value), _MAX_QUERY_LIMIT)

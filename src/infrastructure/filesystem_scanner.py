@@ -10,6 +10,7 @@ DEFAULT_EXTENSIONS = {".txt", ".md"}
 ProgressCallback = Callable[[int, str], None]
 CancelCheck = Callable[[], bool]
 RecordSink = Callable[[FileRecord], None]
+ContentHashFn = Callable[[Path], str]
 
 
 def _relative_posix(root: Path, path: Path) -> str:
@@ -23,6 +24,7 @@ def scan_folder(
     cancel_check: CancelCheck,
     out: RecordSink,
     extensions: set[str] | None = None,
+    content_hash_fn: ContentHashFn | None = None,
 ) -> None:
     root = Path(folder_path).resolve()
     if not root.is_dir():
@@ -48,6 +50,7 @@ def scan_folder(
         st = path.stat()
         rel = _relative_posix(root, path)
         modified_at_ns = getattr(st, "st_mtime_ns", int(st.st_mtime * 1_000_000_000))
+        content_sha256 = content_hash_fn(path) if content_hash_fn is not None else None
         record = FileRecord(
             id=make_file_id(rel, st.st_size, modified_at_ns),
             relative_path=rel,
@@ -55,7 +58,7 @@ def scan_folder(
             size_bytes=st.st_size,
             modified_at_ns=modified_at_ns,
             extension=path.suffix.lower(),
-            content_sha256=None,
+            content_sha256=content_sha256,
         )
         out(record)
         pct = int((i + 1) * 100 / total)

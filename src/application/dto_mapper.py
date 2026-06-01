@@ -55,6 +55,8 @@ def build_snapshot(
     scan_state: str,
     scan_last_run: str | None,
     has_pending_apply: bool,
+    duplicate_group_count: int = 0,
+    queue_count: int = 0,
     connection: str = "Library session (Python)",
 ) -> dict[str, Any]:
     return {
@@ -66,7 +68,7 @@ def build_snapshot(
             "folderPath": folder_path,
             "fileCount": file_count,
             "totalBytes": total_bytes,
-            "duplicateGroups": 0,
+            "duplicateGroups": duplicate_group_count,
             "integrityIssues": 0,
             "lastRun": scan_last_run,
             "scanOptions": [".txt", ".md", "하위 폴더 포함"],
@@ -81,8 +83,8 @@ def build_snapshot(
             "activeMode": active_mode,
             "scan": {"state": scan_state, "lastRun": scan_last_run},
             "resolve": {
-                "queueCount": 0,
-                "groupCount": 0,
+                "queueCount": queue_count,
+                "groupCount": duplicate_group_count,
                 "conflictCount": 0,
                 "approvedCount": 0,
                 "hasPendingApply": has_pending_apply,

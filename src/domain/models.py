@@ -7,6 +7,13 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)
+class DuplicateGroup:
+    group_id: str
+    member_ids: tuple[str, ...]
+    keeper_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class FileRecord:
     id: str
     relative_path: str

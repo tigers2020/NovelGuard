@@ -122,3 +122,13 @@ Commands:
 - `query_review_rows` / `query_quality_rows` — valid **empty** pages in 14a
 
 No filesystem move/delete. Preview apply remains PR-13 no-op.
+
+## Exact duplicates (PR-14b)
+
+Plan: `docs/superpowers/plans/006-2026-06-01-pr14b-exact-duplicate-sqlite.md`
+
+- Scan computes streaming SHA-256 (`content_sha256` on each file).
+- Default index: SQLite at `~/.novelguard/library.db` (tests inject `tmp_path` DB).
+- `query_review_rows` returns real exact-duplicate rows (`type: "exact"`).
+- `filters.types` with only `near` / `relation` / `move_only` → empty valid page.
+- Review row ids: `group:<group_id>`, `file:<group_id>:<file_id>`.
