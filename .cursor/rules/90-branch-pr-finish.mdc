@@ -1,0 +1,19 @@
+---
+description: Branch completion and PR workflow
+globs: []
+alwaysApply: false
+---
+
+# Branch Finish Rules
+
+When implementation is complete, use Superpowers `finishing-a-development-branch`.
+
+1. Verify working tree (`git status`).
+2. Run the agreed verification gate (`python scripts/verify_phase_completion.py` or equivalent).
+3. Report branch name, base, commits ahead/behind, and test results.
+4. Present **exactly** these options:
+   - Merge locally
+   - Push and create PR
+   - Keep branch as-is
+   - Discard work
+5. Never force-delete branches or discard work without explicit user confirmation.

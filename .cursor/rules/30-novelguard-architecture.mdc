@@ -1,0 +1,48 @@
+---
+description: NovelGuard layer boundaries, ports, and domain terms
+globs:
+  - "src/**"
+  - "tests/**"
+alwaysApply: false
+---
+
+# NovelGuard Architecture
+
+Full detail: [docs/current_architecture.md](mdc:docs/current_architecture.md).
+
+## Layers
+
+| Layer | Path | Owner persona | Principle |
+|-------|------|---------------|-----------|
+| domain | `src/domain/` | 도미닉 | Pure rules, value objects, policies |
+| application | `src/application/` | 유리 | Use cases, DTOs, ports |
+| infrastructure | `src/infrastructure/` | 아다 | DB, FS, hashing; map to DTOs |
+| gui | `src/gui/` | 지나 | PySide6 UI; no infra details |
+| app | `src/app/` | 시몬 | Composition / wiring |
+| tests | `tests/` | 테스 | unit / integration / golden |
+
+## Dependency direction
+
+- `domain` imports no other project layers.
+- `application` depends on `domain` and `application.ports` only.
+- `infrastructure` implements ports; hides external libraries.
+- `gui` depends on use cases or application DTOs, not concrete infrastructure.
+- `app` wires infrastructure, GUI, and use cases.
+
+## Ports
+
+- Ports live in `src/application/ports/`.
+- Use cases depend on port protocols, not concrete classes.
+- Port change → 유리; infra implementation → 아다; domain rules → 도미닉.
+
+## Domain terms
+
+- **FileEntry:** scanned file immutable facts (path, size, mtime, extension).
+- **FilenameParseResult:** parsed title, range, tags from filename.
+- **DuplicateGroupResult:** group verdict (file_ids, keeper, confidence, evidence).
+
+## DON'T
+
+- No I/O, UI, DB, or external API in `domain`.
+- No concrete infrastructure imports in `application`.
+- No business policy in `infrastructure`.

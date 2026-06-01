@@ -1,0 +1,327 @@
+---
+description: Tailwind CSS v4 utility-first styling — responsive design, dark mode, theme tokens
+globs:
+  - "**/*.{tsx,jsx,css,html,vue,svelte}"
+  - "**/*.canvas.tsx"
+alwaysApply: false
+---
+
+# Tailwind CSS v4 Development Guidelines
+
+Best practices for using Tailwind CSS v4 utility classes effectively.
+
+**Note**: Tailwind CSS v4 (released January 2025) uses a CSS-first configuration approach. If you need v3 compatibility, `tailwind.config.js` is still supported.
+
+**NovelGuard bridge:** When styling web surfaces (docs sites, Canvas, future web UI), map semantic colors to tokens in [DESIGN.md](mdc:DESIGN.md). Do not invent ad-hoc hex — use `@theme` variables derived from the Calm SaaS palette. Follow **UX & UI principles** in DESIGN.md (layout, Morville criteria, dry-run safety).
+
+## Core Principles
+
+1. **Utility-First**: Use utility classes instead of custom CSS
+2. **Mobile-First**: Design for mobile, then scale up with responsive modifiers
+3. **Component Extraction**: Extract repeated patterns into components
+4. **Consistent Spacing**: Use Tailwind's spacing scale
+5. **Custom Configuration**: Extend the default theme for brand consistency
+
+## NovelGuard @theme (from DESIGN.md)
+
+```css
+@import "tailwindcss";
+
+@theme {
+    /* Dark (default) — see DESIGN.md colors */
+    --color-background: #121212;
+    --color-surface: #1e1e1e;
+    --color-surface-elevated: #242424;
+    --color-on-surface: #eaeaea;
+    --color-on-surface-variant: #bdbdbd;
+    --color-muted: #8a8a8a;
+    --color-primary: #bb86fc;
+    --color-secondary: #81d4fa;
+    --color-selection: #3700b3;
+    --color-outline: #2c2c2c;
+    --color-hover: #2a2a2a;
+    --color-error: #cf6679;
+    --color-success: #80cbc4;
+
+    /* Light — see DESIGN.md colors-light */
+    --color-background-light: #fafafa;
+    --color-surface-light: #ffffff;
+    --color-primary-light: #6750a4;
+
+    /* Typography — Pretendard per DESIGN.md */
+    --font-family-sans: "Pretendard", "Noto Sans KR", "Segoe UI", sans-serif;
+    --font-family-mono: Consolas, monospace;
+
+    /* Radii — DESIGN.md rounded */
+    --radius-sm: 6px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+
+    /* Spacing — DESIGN.md spacing */
+    --spacing-sm: 8px;
+    --spacing-md: 16px;
+    --spacing-lg: 24px;
+}
+```
+
+Usage: `bg-background`, `bg-surface`, `text-on-surface`, `text-primary`, `rounded-md`, etc.
+
+## Basic Utilities
+
+### Layout
+
+```tsx
+// Flexbox
+<div className="flex items-center justify-between gap-4">
+  <div className="flex-1">Content</div>
+  <div className="flex-shrink-0">Sidebar</div>
+</div>
+
+// Grid
+<div className="grid grid-cols-3 gap-4">
+  <div>1</div>
+  <div>2</div>
+  <div>3</div>
+</div>
+
+// Positioning
+<div className="relative">
+  <div className="absolute top-0 right-0">Badge</div>
+</div>
+```
+
+### Spacing
+
+```tsx
+<div className="p-4 m-2" />
+<div className="px-6 py-4" />
+<div className="mt-8 mb-4" />
+<div className="space-y-4">
+  <div>Item 1</div>
+  <div>Item 2</div>
+</div>
+```
+
+### Typography
+
+```tsx
+<h1 className="text-4xl font-bold text-on-surface">Heading</h1>
+<p className="text-base font-normal text-on-surface-variant leading-relaxed">
+  Paragraph text with comfortable line height.
+</p>
+<span className="text-sm font-medium text-primary">Label</span>
+```
+
+### Colors
+
+```tsx
+<p className="text-on-surface dark:text-on-surface">Text</p>
+<div className="bg-primary hover:bg-primary/90">Button</div>
+<div className="border border-outline">Box</div>
+```
+
+## Responsive Design
+
+### Breakpoints
+
+```tsx
+<div className="w-full md:w-1/2 lg:w-1/3" />
+<h1 className="text-2xl md:text-4xl lg:text-6xl" />
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" />
+```
+
+### Container
+
+```tsx
+<div className="container mx-auto px-4" />
+<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" />
+```
+
+## Component Patterns
+
+### Button
+
+```tsx
+<button className="rounded-sm bg-primary px-4 py-2 font-medium text-background transition-colors hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+  Click me
+</button>
+
+<button className="rounded-sm border border-outline px-4 py-2 hover:bg-hover">
+  Secondary
+</button>
+```
+
+### Card
+
+```tsx
+<div className="overflow-hidden rounded-md bg-surface shadow-md">
+  <div className="p-6">
+    <h2 className="mb-2 text-xl font-semibold text-on-surface">Card Title</h2>
+    <p className="text-on-surface-variant">Card content goes here.</p>
+  </div>
+</div>
+```
+
+### Form Input
+
+```tsx
+<div className="space-y-2">
+  <label htmlFor="email" className="block text-sm font-medium text-on-surface">
+    Email
+  </label>
+  <input
+    type="email"
+    id="email"
+    className="w-full rounded-sm border border-outline bg-surface-elevated px-3 py-2 text-on-surface focus:border-transparent focus:ring-2 focus:ring-primary focus:outline-none"
+    placeholder="you@example.com"
+  />
+  <p className="text-sm text-muted">We'll never share your email.</p>
+</div>
+```
+
+## State Variants
+
+### Hover, Focus, Active
+
+```tsx
+<button className="bg-primary hover:bg-primary/90 active:bg-primary/80 focus:ring-2 focus:ring-primary">
+  Interactive Button
+</button>
+
+<a href="#" className="text-secondary hover:text-secondary/80 hover:underline">
+  Link
+</a>
+```
+
+### Group Hover
+
+```tsx
+<div className="group">
+  <img src="/image.jpg" className="transition-opacity group-hover:opacity-75" />
+  <p className="group-hover:text-primary">Hover the container</p>
+</div>
+```
+
+### Disabled
+
+```tsx
+<button className="disabled:cursor-not-allowed disabled:opacity-50" disabled>
+  Disabled Button
+</button>
+```
+
+## Dark Mode
+
+```css
+@import "tailwindcss";
+
+@media (prefers-color-scheme: dark) {
+    /* Or use class-based: .dark */
+}
+```
+
+```tsx
+<div className="bg-background text-on-surface dark:bg-background dark:text-on-surface">
+  <h1 className="text-on-surface">Title</h1>
+  <p className="text-on-surface-variant">Description</p>
+</div>
+```
+
+NovelGuard default is dark; prefer `dark:` variants for light-mode overrides when both themes ship.
+
+## Custom Styles
+
+### Arbitrary Values
+
+Use sparingly — prefer `@theme` tokens from DESIGN.md.
+
+```tsx
+<div className="top-[117px]" />
+<div className="grid-cols-[228px_1fr]" /> {/* sidebar width per DESIGN.md */}
+```
+
+### @apply Directive
+
+```css
+.btn-primary {
+  @apply rounded-sm bg-primary px-4 py-2 font-medium text-background;
+  @apply hover:bg-primary/90 focus:ring-2 focus:ring-primary focus:outline-none;
+  @apply disabled:cursor-not-allowed disabled:opacity-50;
+}
+```
+
+Prefer utility classes in JSX over `@apply` when possible.
+
+## Configuration
+
+### Tailwind v4: CSS-First Configuration
+
+Extend `@theme` in `globals.css` — see **NovelGuard @theme** above. Keep in sync with [DESIGN.md](mdc:DESIGN.md) front matter; run `python scripts/sync_design_tokens.py --check` when Qt tokens change.
+
+### Tailwind v3 Config (Still Supported)
+
+```javascript
+module.exports = {
+  content: ["./app/**/*.{js,ts,jsx,tsx,mdx}", "./components/**/*.{js,ts,jsx,tsx,mdx}"],
+  theme: {
+    extend: {
+      colors: {
+        background: "#121212",
+        surface: "#1e1e1e",
+        primary: "#bb86fc",
+      },
+      fontFamily: {
+        sans: ["Pretendard", "Noto Sans KR", "Segoe UI", "sans-serif"],
+      },
+    },
+  },
+  plugins: [require("@tailwindcss/forms"), require("@tailwindcss/typography")],
+};
+```
+
+## Plugins
+
+```bash
+npm install @tailwindcss/forms @tailwindcss/typography @tailwindcss/aspect-ratio @tailwindcss/container-queries
+```
+
+```tsx
+<input type="text" className="form-input rounded-sm" />
+<article className="prose lg:prose-xl">...</article>
+```
+
+## Performance
+
+- Tailwind v4 auto-detects template files — no `content` config needed.
+- Full builds ~3.5× faster than v3 (~100ms).
+- **Browser requirements:** Safari 16.4+, Chrome 111+, Firefox 128+
+
+## Common Patterns
+
+```tsx
+<div className="flex min-h-screen items-center justify-center">Centered</div>
+
+<header className="sticky top-0 z-50 border-b border-outline bg-surface-elevated">
+  <nav>Navigation</nav>
+</header>
+
+<div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+  {items.map((item) => (
+    <Card key={item.id} item={item} />
+  ))}
+</div>
+
+<p className="truncate">Truncated text</p>
+<p className="line-clamp-3">Max three lines</p>
+```
+
+## Best Practices
+
+1. **Use Consistent Spacing**: Stick to Tailwind's spacing scale; align with DESIGN.md `spacing.*`
+2. **Responsive by Default**: Mobile-first breakpoints
+3. **Extract Components**: Avoid repeating long class lists
+4. **Use Theme Colors**: Define in `@theme` from DESIGN.md, not arbitrary hex
+5. **Leverage @apply Sparingly**: Prefer utility classes in JSX
+6. **Enable Dark Mode**: NovelGuard dark is default; plan light overrides explicitly
+7. **Use Plugins**: Official plugins for forms, typography, etc.
+8. **Qt vs Web**: PySide6 QSS uses generated Python tokens — do not mix Tailwind into `src/gui/**/*.py`

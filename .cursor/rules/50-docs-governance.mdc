@@ -1,0 +1,18 @@
+---
+description: Documentation authority and Superpowers doc locations
+globs:
+  - "docs/**"
+  - "documents/**"
+alwaysApply: false
+---
+
+# Documentation Governance
+
+- **Authority:** existing docs unless contradicted by current code or tests.
+- **New design specs:** `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`
+- **New implementation plans:** `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`
+- **Index:** [docs/superpowers/README.md](mdc:docs/superpowers/README.md)
+- **Architecture / runtime truth:** [docs/current_architecture.md](mdc:docs/current_architecture.md), [pyproject.toml](mdc:pyproject.toml)
+- **Historical research and old plans:** [documents/](mdc:documents/README.md) — do not add new specs/plans here
+- **Archive:** [docs/archive/](mdc:docs/archive/README.md) — may be stale; prefer current_architecture for behavior
+- Do not silently change public contracts without a spec and drift note in the plan.

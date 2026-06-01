@@ -1,0 +1,27 @@
+---
+description: Route work to the correct Superpowers skill
+alwaysApply: true
+---
+
+# Superpowers Routing
+
+Use installed Superpowers skills as the primary workflow layer. [AGENTS.md](mdc:AGENTS.md) defines priority when skills conflict with project policy.
+
+## Skill routing
+
+| User intent | Required flow |
+|-------------|----------------|
+| New feature / behavior / architecture change | `brainstorming` first → spec in `docs/superpowers/specs/` |
+| Approved design or spec exists | `writing-plans` → plan in `docs/superpowers/plans/` |
+| Plan exists; implementation starts | `executing-plans` or `subagent-driven-development` |
+| Bug / regression / failing test | `systematic-debugging` |
+| Any code change | `test-driven-development` discipline where practical |
+| Review requested | `requesting-code-review` |
+| Implementation complete | `finishing-a-development-branch` |
+
+## Rules
+
+- Do not skip design/spec/planning gates for non-trivial work.
+- If the user says design is already approved, locate the spec/plan file before coding.
+- Persona briefings run **immediately before** implementation; they do not replace brainstorming or writing-plans.
+- Do not modify Superpowers plugin/skills source in this repo.
