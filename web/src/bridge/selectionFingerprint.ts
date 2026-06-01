@@ -38,7 +38,7 @@ function canonicalJson(value: unknown): string {
 }
 
 /** SHA-256 hex (UTF-8), sync — matches Python hashlib.sha256(utf8).hexdigest(). */
-function sha256HexUtf8(message: string): string {
+export function sha256HexUtf8(message: string): string {
   const K = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
     0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
