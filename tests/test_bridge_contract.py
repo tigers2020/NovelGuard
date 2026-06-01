@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 
@@ -7,33 +8,39 @@ import pytest
 
 from app.bridge_api import BridgeApi
 from app.bridge_contract import (
+    ApplyFailedError,
     EmptySelectionError,
     InvalidSelectionScopeError,
     PreviewApplyError,
     SnapshotContractError,
     clamp_query_limit,
     validate_app_snapshot,
+    validate_move_preview,
     validate_quality_rows_page,
     validate_review_rows_page,
     validate_selection_scope,
 )
 from app.bridge_parity import PYWEBVIEW_API_METHODS
 from app.selection_fingerprint import selection_fingerprint
-from app.session_factory import create_library_session
+from app.session_factory import create_bridge_api, create_library_session
 from application.library_session import LibrarySession
+from application.ports.filesystem_apply import ApplyRowResult
 from application.quality_analyzer import analyze_quality
+from domain.apply_models import PreviewOperation
+from domain.apply_path_policy import build_move_duplicate_dest_relative, validate_move_operation
 from domain.duplicate_exact import find_exact_duplicate_groups
 from domain.models import FileRecord, make_file_id
 from domain.quality import make_issue_id
 from infrastructure import filesystem_scanner
 from infrastructure.content_hasher import hash_file
+from infrastructure.local_filesystem_apply import LocalFilesystemApplyAdapter
 from infrastructure.memory_library_index import MemoryLibraryIndex
 from infrastructure.sqlite_library_index import SqliteLibraryIndex
 from tests.fixtures.bridge_contract_fixtures import VALID_SNAPSHOT
 
 
 def _memory_api() -> BridgeApi:
-    return BridgeApi(create_library_session(MemoryLibraryIndex()))
+    return create_bridge_api(create_library_session(MemoryLibraryIndex()))
 
 
 @pytest.mark.parametrize(
@@ -184,7 +191,7 @@ def test_bridge_api_scan_populates_file_count(tmp_path: Path) -> None:
     (tmp_path / "two.txt").write_text("b", encoding="utf-8")
     session = create_library_session(MemoryLibraryIndex())
     session.select_folder(str(tmp_path))
-    api = BridgeApi(session)
+    api = create_bridge_api(session)
     rev_before = api.get_snapshot()["work"]["resolve"]["libraryRevision"]
     api.start_scan()
     deadline = time.monotonic() + 5.0
@@ -202,7 +209,7 @@ def test_cancel_scan_discards_partial(monkeypatch: pytest.MonkeyPatch, tmp_path:
     (tmp_path / "a.txt").write_text("x", encoding="utf-8")
     session = LibrarySession(MemoryLibraryIndex(), scan_folder=filesystem_scanner.scan_folder)
     session.select_folder(str(tmp_path))
-    api = BridgeApi(session)
+    api = create_bridge_api(session)
     api.start_scan()
     deadline = time.monotonic() + 5.0
     snap = api.get_snapshot()
@@ -324,7 +331,7 @@ def test_query_review_rows_exact_duplicate_pair(tmp_path: Path) -> None:
     (tmp_path / "copy_b.txt").write_text(payload, encoding="utf-8")
     session = create_library_session(MemoryLibraryIndex())
     session.select_folder(str(tmp_path))
-    api = BridgeApi(session)
+    api = create_bridge_api(session)
     api.start_scan()
     snap = _scan_until_idle(api)
     assert snap["work"]["scan"]["state"] == "success"
@@ -341,7 +348,7 @@ def test_snapshot_duplicate_group_count(tmp_path: Path) -> None:
     (tmp_path / "two.txt").write_text(text, encoding="utf-8")
     session = create_library_session(MemoryLibraryIndex())
     session.select_folder(str(tmp_path))
-    api = BridgeApi(session)
+    api = create_bridge_api(session)
     api.start_scan()
     snap = _scan_until_idle(api)
     assert snap["work"]["resolve"]["groupCount"] >= 1
@@ -354,7 +361,7 @@ def test_query_review_rows_near_filter_empty(tmp_path: Path) -> None:
     (tmp_path / "two.txt").write_text(text, encoding="utf-8")
     session = create_library_session(MemoryLibraryIndex())
     session.select_folder(str(tmp_path))
-    api = BridgeApi(session)
+    api = create_bridge_api(session)
     api.start_scan()
     _scan_until_idle(api)
     page = api.query_review_rows({"viewMode": "all", "limit": 50, "filters": {"types": ["near"]}})
@@ -443,7 +450,7 @@ def test_query_quality_rows_detects_issues(tmp_path: Path) -> None:
     (tmp_path / "bad.txt").write_bytes(b"\xff\xfe")
     session = create_library_session(MemoryLibraryIndex())
     session.select_folder(str(tmp_path))
-    api = BridgeApi(session)
+    api = create_bridge_api(session)
     api.start_scan()
     snap = _scan_until_idle(api)
     assert snap["work"]["scan"]["state"] == "success"
@@ -464,7 +471,7 @@ def test_query_quality_rows_limit_capped_at_200(tmp_path: Path) -> None:
         (tmp_path / f"empty_{i}.txt").write_bytes(b"")
     session = create_library_session(MemoryLibraryIndex())
     session.select_folder(str(tmp_path))
-    api = BridgeApi(session)
+    api = create_bridge_api(session)
     api.start_scan()
     _scan_until_idle(api)
     page = api.query_quality_rows({"issueType": "small_file", "limit": 999})
@@ -477,7 +484,7 @@ def test_get_quality_issue_detail_from_cache(tmp_path: Path) -> None:
     (tmp_path / target_name).write_bytes(b"")
     session = create_library_session(MemoryLibraryIndex())
     session.select_folder(str(tmp_path))
-    api = BridgeApi(session)
+    api = create_bridge_api(session)
     api.start_scan()
     _scan_until_idle(api)
     page = api.query_quality_rows({"issueType": "small_file", "limit": 10})
@@ -494,7 +501,7 @@ def test_query_quality_rows_unknown_issue_type_empty(tmp_path: Path) -> None:
     (tmp_path / "empty.txt").write_bytes(b"")
     session = create_library_session(MemoryLibraryIndex())
     session.select_folder(str(tmp_path))
-    api = BridgeApi(session)
+    api = create_bridge_api(session)
     api.start_scan()
     _scan_until_idle(api)
     page = api.query_quality_rows({"issueType": "near", "limit": 50})
@@ -507,7 +514,7 @@ def test_snapshot_quality_counts(tmp_path: Path) -> None:
     (tmp_path / "bad.txt").write_bytes(b"\xff\xfe")
     session = create_library_session(MemoryLibraryIndex())
     session.select_folder(str(tmp_path))
-    api = BridgeApi(session)
+    api = create_bridge_api(session)
     api.start_scan()
     snap = _scan_until_idle(api)
     assert snap["work"]["quality"]["smallFileAnomalyCount"] == 1
@@ -536,3 +543,272 @@ def test_sqlite_quality_issues_folder_scoped(tmp_path: Path) -> None:
     index.replace_files(folder_b, [])
     index.replace_quality_issues(folder_b, [])
     assert index.quality_issues() == []
+
+
+def _move_op(
+    *,
+    source: str = "a/keep.txt",
+    dest: str = "duplicate/a/keep.txt",
+) -> PreviewOperation:
+    return PreviewOperation(
+        row_id="file:g1:f1",
+        action="move_duplicate",
+        source_path=source,
+        dest_path=dest,
+        source_file_id="f1",
+        source_size=10,
+        source_content_hash="abc",
+    )
+
+
+def test_apply_path_policy_blocks_path_traversal(tmp_path: Path) -> None:
+    root = tmp_path / "lib"
+    root.mkdir()
+    result = validate_move_operation(
+        root,
+        _move_op(source="../outside.txt", dest="duplicate/outside.txt"),
+        destination_exists=False,
+    )
+    assert not result.allowed
+    assert result.reason == "path_traversal"
+
+
+def test_apply_path_policy_blocks_absolute_dest(tmp_path: Path) -> None:
+    root = tmp_path / "lib"
+    root.mkdir()
+    (root / "src.txt").write_text("x", encoding="utf-8")
+    result = validate_move_operation(
+        root,
+        _move_op(source="src.txt", dest="/absolute/dup.txt"),
+        destination_exists=False,
+    )
+    assert not result.allowed
+    assert result.reason in ("absolute_path", "path_traversal", "invalid_target")
+
+
+def test_apply_path_policy_blocks_destination_exists(tmp_path: Path) -> None:
+    root = tmp_path / "lib"
+    (root / "duplicate").mkdir(parents=True)
+    (root / "duplicate" / "dup.txt").write_text("exists", encoding="utf-8")
+    (root / "src.txt").write_text("src", encoding="utf-8")
+    result = validate_move_operation(
+        root,
+        _move_op(source="src.txt", dest="duplicate/dup.txt"),
+        destination_exists=True,
+    )
+    assert not result.allowed
+    assert result.reason == "destination_exists"
+
+
+def test_apply_path_policy_allows_valid_move(tmp_path: Path) -> None:
+    root = tmp_path / "lib"
+    root.mkdir()
+    (root / "src.txt").write_text("src", encoding="utf-8")
+    dest_rel = build_move_duplicate_dest_relative("duplicate", "src.txt")
+    result = validate_move_operation(
+        root,
+        _move_op(source="src.txt", dest=dest_rel),
+        destination_exists=False,
+    )
+    assert result.allowed
+    assert result.reason is None
+
+
+def test_filesystem_apply_moves_file(tmp_path: Path) -> None:
+    root = tmp_path / "lib"
+    root.mkdir()
+    src = root / "src.txt"
+    src.write_text("payload", encoding="utf-8")
+    dest = root / "duplicate" / "src.txt"
+    adapter = LocalFilesystemApplyAdapter()
+    assert adapter.move_file(src, dest).outcome == "ok"
+    assert dest.read_text(encoding="utf-8") == "payload"
+    assert not src.exists()
+
+
+def test_filesystem_apply_move_rejects_existing_destination(tmp_path: Path) -> None:
+    root = tmp_path / "lib"
+    (root / "duplicate").mkdir(parents=True)
+    (root / "duplicate" / "taken.txt").write_text("taken", encoding="utf-8")
+    src = root / "src.txt"
+    src.write_text("src", encoding="utf-8")
+    dest = root / "duplicate" / "taken.txt"
+    adapter = LocalFilesystemApplyAdapter()
+    result = adapter.move_file(src, dest)
+    assert result.outcome == "error"
+    assert result.error is not None
+    assert "destination exists" in result.error
+    assert src.exists()
+    assert dest.read_text(encoding="utf-8") == "taken"
+
+
+def test_filesystem_apply_ensure_parent_dir(tmp_path: Path) -> None:
+    root = tmp_path / "lib"
+    root.mkdir()
+    dest = root / "nested" / "dir" / "file.txt"
+    adapter = LocalFilesystemApplyAdapter()
+    assert adapter.ensure_parent_dir(dest).outcome == "ok"
+    assert (root / "nested" / "dir").is_dir()
+
+
+def _duplicate_api(tmp_path: Path, audit_path: Path | None = None) -> BridgeApi:
+    payload = "same story content\n"
+    (tmp_path / "copy_a.txt").write_text(payload, encoding="utf-8")
+    (tmp_path / "copy_b.txt").write_text(payload, encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session, audit_log_path=audit_path)
+    api.start_scan()
+    _scan_until_idle(api)
+    return api
+
+
+def _quad_duplicate_api(
+    tmp_path: Path,
+    *,
+    audit_path: Path | None = None,
+    filesystem: LocalFilesystemApplyAdapter | None = None,
+) -> BridgeApi:
+    payload = "same story content\n"
+    for index in range(4):
+        (tmp_path / f"copy_{index}.txt").write_text(payload, encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    kwargs: dict = {"audit_log_path": audit_path}
+    if filesystem is not None:
+        kwargs["filesystem"] = filesystem
+    api = create_bridge_api(session, **kwargs)
+    api.start_scan()
+    _scan_until_idle(api)
+    return api
+
+
+class _FailOnNthMoveAdapter(LocalFilesystemApplyAdapter):
+    def __init__(self, fail_on: int) -> None:
+        self._fail_on = fail_on
+        self._move_calls = 0
+
+    def move_file(self, src: Path, dest: Path) -> ApplyRowResult:
+        self._move_calls += 1
+        if self._move_calls >= self._fail_on:
+            return ApplyRowResult(outcome="error", error="injected failure")
+        return super().move_file(src, dest)
+
+
+def test_real_move_preview_lists_duplicate_member(tmp_path: Path) -> None:
+    api = _duplicate_api(tmp_path)
+    page = api.query_review_rows({"viewMode": "all", "limit": 50})
+    move_row = next(row for row in page["rows"] if row.get("proposedAction") == "move_duplicate")
+    preview = api.get_move_preview({"type": "explicit_rows", "rowIds": [move_row["id"]]})
+    validate_move_preview(preview)
+    assert preview["summary"]["operationCount"] >= 1
+    assert preview["rows"][0]["id"].startswith("file:")
+    assert preview["rows"][0]["action"] == "move_duplicate"
+
+
+def test_real_apply_moves_duplicate_file(
+    tmp_path: Path, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    audit_file = tmp_path_factory.mktemp("audit") / "apply-audit.jsonl"
+    api = _duplicate_api(tmp_path, audit_path=audit_file)
+    page = api.query_review_rows({"viewMode": "all", "limit": 50})
+    move_row = next(row for row in page["rows"] if row.get("proposedAction") == "move_duplicate")
+    sel = {"type": "explicit_rows", "rowIds": [move_row["id"]]}
+    preview = api.get_move_preview(sel)
+    api.apply_resolved_actions({"selection": sel, "previewToken": preview["previewToken"]})
+    src_name = move_row["name"]
+    assert not (tmp_path / src_name).exists()
+    assert (tmp_path / "duplicate" / src_name).exists()
+    snap = api.get_snapshot()
+    assert snap["work"]["resolve"]["hasPendingApply"] is False
+
+
+def test_apply_stale_after_file_change(tmp_path: Path) -> None:
+    api = _duplicate_api(tmp_path)
+    page = api.query_review_rows({"viewMode": "all", "limit": 50})
+    move_row = next(row for row in page["rows"] if row.get("proposedAction") == "move_duplicate")
+    sel = {"type": "explicit_rows", "rowIds": [move_row["id"]]}
+    preview = api.get_move_preview(sel)
+    path = tmp_path / move_row["path"]
+    path.write_text(path.read_text(encoding="utf-8") + "changed\n", encoding="utf-8")
+    with pytest.raises(PreviewApplyError) as exc:
+        api.apply_resolved_actions({"selection": sel, "previewToken": preview["previewToken"]})
+    assert exc.value.reason == "STALE_PREVIEW"
+    snap = api.get_snapshot()
+    assert snap["work"]["resolve"]["hasPendingApply"] is False
+
+
+def test_bridge_stale_revision_clears_pending(tmp_path: Path) -> None:
+    api = _duplicate_api(tmp_path)
+    page = api.query_review_rows({"viewMode": "all", "limit": 50})
+    move_row = next(row for row in page["rows"] if row.get("proposedAction") == "move_duplicate")
+    sel = {"type": "explicit_rows", "rowIds": [move_row["id"]]}
+    preview = api.get_move_preview(sel)
+    api._session.increment_library_revision()
+    with pytest.raises(PreviewApplyError) as exc:
+        api.apply_resolved_actions({"selection": sel, "previewToken": preview["previewToken"]})
+    assert exc.value.reason == "STALE_PREVIEW"
+    assert api.get_snapshot()["work"]["resolve"]["hasPendingApply"] is False
+
+
+def test_apply_reuse_token_raises_no_pending(tmp_path: Path) -> None:
+    api = _duplicate_api(tmp_path)
+    page = api.query_review_rows({"viewMode": "all", "limit": 50})
+    move_row = next(row for row in page["rows"] if row.get("proposedAction") == "move_duplicate")
+    sel = {"type": "explicit_rows", "rowIds": [move_row["id"]]}
+    preview = api.get_move_preview(sel)
+    api.apply_resolved_actions({"selection": sel, "previewToken": preview["previewToken"]})
+    with pytest.raises(PreviewApplyError) as exc:
+        api.apply_resolved_actions({"selection": sel, "previewToken": preview["previewToken"]})
+    assert exc.value.reason == "NO_PENDING_APPLY"
+
+
+def test_select_folder_during_apply_raises_library_busy(tmp_path: Path) -> None:
+    api = _duplicate_api(tmp_path)
+    api._session.set_apply_in_progress(True)
+    with pytest.raises(PreviewApplyError) as exc:
+        api.select_folder()
+    assert exc.value.reason == "LIBRARY_BUSY"
+
+
+def test_start_scan_during_apply_raises_library_busy(tmp_path: Path) -> None:
+    api = _duplicate_api(tmp_path)
+    api._session.set_apply_in_progress(True)
+    with pytest.raises(PreviewApplyError) as exc:
+        api.start_scan()
+    assert exc.value.reason == "LIBRARY_BUSY"
+
+
+def test_partial_apply_batch_records_audit_and_raises(
+    tmp_path: Path, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    audit_file = tmp_path_factory.mktemp("audit") / "apply-audit.jsonl"
+    fs = _FailOnNthMoveAdapter(fail_on=3)
+    api = _quad_duplicate_api(tmp_path, audit_path=audit_file, filesystem=fs)
+    page = api.query_review_rows({"viewMode": "all", "limit": 50})
+    move_rows = [row for row in page["rows"] if row.get("proposedAction") == "move_duplicate"]
+    assert len(move_rows) >= 3
+    sel = {"type": "explicit_rows", "rowIds": [row["id"] for row in move_rows[:3]]}
+    preview = api.get_move_preview(sel)
+    assert preview["summary"]["operationCount"] == 3
+
+    with pytest.raises(ApplyFailedError) as exc:
+        api.apply_resolved_actions({"selection": sel, "previewToken": preview["previewToken"]})
+    assert exc.value.reason == "APPLY_FAILED"
+    assert exc.value.details.get("partialSuccess") is True
+    assert exc.value.details.get("succeededCount") == 2
+
+    batch = move_rows[:3]
+    moved = [row["name"] for row in batch if (tmp_path / "duplicate" / row["name"]).exists()]
+    unmoved = [row["name"] for row in batch if (tmp_path / row["name"]).exists()]
+    assert len(moved) == 2
+    assert len(unmoved) == 1
+
+    records = [
+        json.loads(line) for line in audit_file.read_text(encoding="utf-8").splitlines() if line
+    ]
+    row_events = [record for record in records if record.get("event") == "apply_row"]
+    outcomes = [record["outcome"] for record in row_events]
+    assert outcomes.count("ok") == 2
+    assert outcomes.count("error") == 1
+    assert api.get_snapshot()["work"]["resolve"]["hasPendingApply"] is False

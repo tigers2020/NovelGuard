@@ -96,7 +96,7 @@ Spec: `docs/superpowers/specs/01-2026-06-01-pr13-preview-token-stale-apply-desig
 Bridge methods (TS camelCase / Python snake_case):
 
 - `getMovePreview` / `get_move_preview` — returns `previewToken`, `libraryRevision`, `selectionFingerprint`, `rows`, `summary`
-- `applyResolvedActions` / `apply_resolved_actions` — requires `{ selection, previewToken }`; no filesystem mutation in PR-13
+- `applyResolvedActions` / `apply_resolved_actions` — requires `{ selection, previewToken }`; PR-15 desktop: real **`move_duplicate`** only (see below)
 - `discardMovePreview` / `discard_move_preview` — idempotent cleanup when Apply dialog closes
 
 **Note:** “token” here is a preview–apply correlation id, not `DESIGN.md` color/spacing design tokens.
@@ -121,7 +121,18 @@ Commands:
 - `get_snapshot` — real `fileCount` / `totalBytes`; duplicate counts stay **0** until PR-14b
 - `query_review_rows` / `query_quality_rows` — valid **empty** pages in 14a
 
-No filesystem move/delete. Preview apply remains PR-13 no-op.
+## Real apply (PR-15)
+
+Spec: `docs/superpowers/specs/003-2026-06-01-real-apply-use-cases-design.md`
+
+| Surface | PR-15 behavior |
+|---------|----------------|
+| Browser `npm run dev` | **`mockBridge`** — simulated preview/apply, no disk I/O |
+| Desktop `BridgeApi` | Real **`move_duplicate`** after PR-13 guards; **no delete**, no overwrite, no auto-rename |
+| Audit log | `~/.novelguard/apply-audit.jsonl` (outside scanned library root) |
+| After ≥1 move | `libraryRevision` bumps once, then `refresh_index_from_disk()` (no second bump) |
+
+Errors: `STALE_PREVIEW`, `APPLY_FAILED`, `LIBRARY_BUSY` (plus PR-13 preview codes).
 
 ## Exact duplicates (PR-14b)
 

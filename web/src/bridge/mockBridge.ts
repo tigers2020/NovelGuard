@@ -26,7 +26,8 @@ import {
   summarizeReviewRows,
 } from "./mockData";
 import { BridgeCallError } from "./bridgeErrors";
-import { selectionFingerprint } from "./selectionFingerprint";
+import { selectionFingerprint, sha256HexUtf8 } from "./selectionFingerprint";
+import type { ReviewRow } from "../types/review";
 
 const state = {
   activeMode: "resolve" as WorkMode,
@@ -43,7 +44,10 @@ let pendingPreview: {
   libraryRevision: number;
   selectionFingerprint: string;
   rows: MovePreviewRow[];
+  planFingerprint: string;
 } | null = null;
+
+let applyInProgress = false;
 
 function rejectApply(method: string, reason: PreviewApplyErrorCode): never {
   throw new BridgeCallError(`Apply rejected: ${reason}`, {
@@ -127,6 +131,58 @@ function countCurrentQuery(query: ReviewRowsQuery, excludeRowIds: string[]): num
     .length;
 }
 
+function resolveSelectedRows(selection: SelectionScope): ReviewRow[] {
+  const ids = resolveSelectionIds(selection);
+  const idSet = new Set(ids);
+  return getAllReviewRows().filter((row) => idSet.has(row.id));
+}
+
+function buildMockPreviewPlan(selection: SelectionScope): {
+  rows: MovePreviewRow[];
+  summary: {
+    rowCount: number;
+    operationCount: number;
+    conflictCount?: number;
+    blockedCount?: number;
+  };
+  planFingerprint: string;
+} {
+  const selectedRows = resolveSelectedRows(selection);
+  const rows: MovePreviewRow[] = [];
+  let blockedCount = 0;
+
+  for (const row of selectedRows) {
+    if (row.rowKind !== "file") continue;
+    const action = row.proposedAction;
+    if (action === "keep" || action === "ignore" || action === "delete") continue;
+    if (action === "move_organized") {
+      blockedCount += 1;
+      continue;
+    }
+    if (action === "move_duplicate") {
+      rows.push({ id: row.id, action: "move_duplicate" });
+    } else {
+      blockedCount += 1;
+    }
+  }
+
+  const operations = rows.map((r) => ({ rowId: r.id, action: r.action }));
+  const planFingerprint = sha256HexUtf8(JSON.stringify(operations));
+
+  const summary: {
+    rowCount: number;
+    operationCount: number;
+    conflictCount?: number;
+    blockedCount?: number;
+  } = {
+    rowCount: rows.length,
+    operationCount: rows.length,
+  };
+  if (blockedCount > 0) summary.blockedCount = blockedCount;
+
+  return { rows, summary, planFingerprint };
+}
+
 function resolveSelectionIds(selection: SelectionScope): string[] {
   validateSelectionScope(selection, (query, excludeRowIds) =>
     countCurrentQuery(query, excludeRowIds),
@@ -150,10 +206,16 @@ export const mockBridge: NovelGuardBridge = {
   },
 
   async selectFolder() {
+    if (applyInProgress) {
+      rejectApply("select_folder", "LIBRARY_BUSY");
+    }
     state.folderPath = "D:/Novels/Library/selected";
   },
 
   async startScan() {
+    if (applyInProgress) {
+      rejectApply("start_scan", "LIBRARY_BUSY");
+    }
     state.pipelineRunning = true;
   },
 
@@ -266,17 +328,17 @@ export const mockBridge: NovelGuardBridge = {
   },
 
   async getMovePreview(selection) {
-    const ids = resolveSelectionIds(selection);
     const fp = selectionFingerprint(selection);
     const token = `preview-${globalThis.crypto.randomUUID()}`;
     const rev = libraryRevision;
-    const rows: MovePreviewRow[] = ids.map((id) => ({ id, action: "move_organized" }));
+    const plan = buildMockPreviewPlan(selection);
 
     pendingPreview = {
       token,
       libraryRevision: rev,
       selectionFingerprint: fp,
-      rows,
+      rows: plan.rows,
+      planFingerprint: plan.planFingerprint,
     };
     state.hasPendingApply = true;
 
@@ -285,11 +347,11 @@ export const mockBridge: NovelGuardBridge = {
       libraryRevision: rev,
       selectionFingerprint: fp,
       hasPendingApply: true,
-      rows,
-      summary: { rowCount: rows.length, conflictCount: 0 },
+      rows: plan.rows,
+      summary: plan.summary,
     };
     validateMovePreviewResult(result);
-    console.info("[mockBridge] getMovePreview", selection, ids.length);
+    console.info("[mockBridge] getMovePreview", selection, plan.rows.length);
     return result;
   },
 
@@ -306,16 +368,23 @@ export const mockBridge: NovelGuardBridge = {
       rejectApply(method, "INVALID_PREVIEW_TOKEN");
     }
     if (libraryRevision !== pendingPreview.libraryRevision) {
+      clearPendingPreview();
       rejectApply(method, "STALE_PREVIEW");
     }
     const fp = selectionFingerprint(request.selection);
     if (fp !== pendingPreview.selectionFingerprint) {
+      clearPendingPreview();
       rejectApply(method, "SELECTION_CHANGED");
     }
 
-    const count = pendingPreview.rows.length;
-    clearPendingPreview();
-    console.info("[mockBridge] applyResolvedActions", request.selection, count);
+    applyInProgress = true;
+    try {
+      const count = pendingPreview.rows.length;
+      clearPendingPreview();
+      console.info("[mockBridge] applyResolvedActions", request.selection, count);
+    } finally {
+      applyInProgress = false;
+    }
   },
 
   async discardMovePreview(request: DiscardMovePreviewRequest) {

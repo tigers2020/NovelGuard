@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { mockBridge } from "./mockBridge";
+import { getAllReviewRows } from "./mockData";
 import { createPywebviewBridge } from "./pywebviewBridge";
 import {
   NOVEL_GUARD_BRIDGE_METHODS,
@@ -99,5 +100,20 @@ describe("bridge parity", () => {
     expect(preview.hasPendingApply).toBe(true);
     expect(typeof preview.libraryRevision).toBe("number");
     expect(preview.selectionFingerprint).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("getMovePreview executable rows are move_duplicate only", async () => {
+    const moveIds = getAllReviewRows()
+      .filter((row) => row.rowKind === "file" && row.proposedAction === "move_duplicate")
+      .slice(0, 5)
+      .map((row) => row.id);
+    const preview = await mockBridge.getMovePreview({
+      type: "explicit_rows",
+      rowIds: moveIds,
+    });
+    for (const row of preview.rows) {
+      expect(row.action).toBe("move_duplicate");
+    }
+    expect(preview.summary.operationCount).toBe(moveIds.length);
   });
 });

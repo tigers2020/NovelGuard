@@ -23,10 +23,9 @@ def main() -> int:
         print(f"Build web UI first: cd web && npm run build\nMissing: {WEB_DIST}", file=sys.stderr)
         return 1
 
-    from app.bridge_api import BridgeApi
-    from app.session_factory import create_library_session
+    from app.session_factory import create_bridge_api, create_library_session
 
-    api = BridgeApi(create_library_session())
+    api = create_bridge_api(create_library_session())
     # Use file path (not file:// URI alone) so relative ./assets/* from Vite build resolve.
     webview.create_window(
         "NovelGuard",

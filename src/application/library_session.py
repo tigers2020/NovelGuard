@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from application.dto_mapper import (
@@ -56,6 +57,7 @@ class LibrarySession:
         self._encoding_issue_count = 0
         self._small_file_anomaly_count = 0
         self._total_quality_issue_count = 0
+        self._apply_in_progress = False
 
     def select_folder(self, path: str | None = None) -> None:
         folder = path
@@ -94,7 +96,7 @@ class LibrarySession:
         _ = options
         with self._lock:
             folder = self._index.folder_path
-            if not folder or self._pipeline_running:
+            if not folder or self._pipeline_running or self._apply_in_progress:
                 return
             self._backup_files = self._index.files()
             self._backup_folder = folder
@@ -202,6 +204,67 @@ class LibrarySession:
         with self._lock:
             files = self._index.files()
             return files[0].id if files else None
+
+    def library_root_path(self) -> Path | None:
+        with self._lock:
+            folder = self._index.folder_path
+            return Path(folder) if folder else None
+
+    def review_rows_snapshot(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return list(self._review_rows_cache)
+
+    def file_record_for_review_row(self, row: dict[str, Any]) -> FileRecord | None:
+        with self._lock:
+            row_id = str(row.get("id", ""))
+            if row_id.startswith("file:"):
+                parts = row_id.split(":", 2)
+                if len(parts) == 3:
+                    found = self._files_by_id.get(parts[2])
+                    if found is not None:
+                        return found
+            path = row.get("path")
+            if isinstance(path, str):
+                for record in self._files_by_id.values():
+                    if record.relative_path == path:
+                        return record
+            return None
+
+    def increment_library_revision(self) -> None:
+        with self._lock:
+            self._library_revision += 1
+
+    def set_apply_in_progress(self, value: bool) -> None:
+        with self._lock:
+            self._apply_in_progress = value
+
+    def is_apply_or_scan_busy(self) -> bool:
+        with self._lock:
+            return self._apply_in_progress or self._pipeline_running
+
+    def refresh_index_from_disk(self) -> None:
+        with self._lock:
+            folder = self._index.folder_path
+            if not folder:
+                return
+        collected: list[FileRecord] = []
+
+        def on_progress(_pct: int, _label: str) -> None:
+            return
+
+        def cancel_check() -> bool:
+            return False
+
+        self._scan_folder(
+            folder,
+            on_progress=on_progress,
+            cancel_check=cancel_check,
+            out=collected.append,
+        )
+        with self._lock:
+            self._index.replace_files(folder, collected)
+            self._rebuild_review_index(collected)
+            self._rebuild_quality_index(folder, collected)
 
     def _clear_review_cache(self) -> None:
         self._review_rows_cache = []

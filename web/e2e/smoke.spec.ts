@@ -25,7 +25,16 @@ async function clickApplyPreviewRun(page: import("@playwright/test").Page) {
     .evaluate((el) => (el as HTMLButtonElement).click());
 }
 
+/** Pick a mock row with executable move_duplicate so preview reaches confirm step. */
+async function selectExecutableMoveRow(page: import("@playwright/test").Page) {
+  await page.getByRole("button", { name: "Move Plan" }).click();
+  const row = page.getByTestId("grid-row-row-2");
+  await row.scrollIntoViewIfNeeded();
+  await row.click();
+}
+
 async function runApplyPreview(page: import("@playwright/test").Page) {
+  await selectExecutableMoveRow(page);
   await openApplyDialog(page);
   await clickApplyPreviewRun(page);
 }

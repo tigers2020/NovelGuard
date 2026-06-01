@@ -5,7 +5,9 @@ export type PreviewApplyErrorCode =
   | "INVALID_PREVIEW_TOKEN"
   | "NO_PENDING_APPLY"
   | "STALE_PREVIEW"
-  | "SELECTION_CHANGED";
+  | "SELECTION_CHANGED"
+  | "APPLY_FAILED"
+  | "LIBRARY_BUSY";
 
 export interface MovePreviewRow {
   id: string;
@@ -15,6 +17,8 @@ export interface MovePreviewRow {
 export interface MovePreviewSummary {
   rowCount: number;
   conflictCount?: number;
+  operationCount?: number;
+  blockedCount?: number;
 }
 
 export interface MovePreviewResult {
