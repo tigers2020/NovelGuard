@@ -14,14 +14,14 @@ export function AppShell({
   commandBar: ReactNode;
 }) {
   return (
-    <div className="grid h-full min-h-full grid-rows-[auto_1fr_auto_auto] overflow-hidden bg-background text-on-surface">
-      {header}
-      <div className="grid min-h-0 grid-cols-[14rem_1fr]">
-        {sidebar}
-        <main className="min-h-0 min-w-0 overflow-hidden">{children}</main>
+    <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background text-on-surface">
+      <div className="shrink-0">{header}</div>
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="w-56 shrink-0 overflow-hidden">{sidebar}</div>
+        <main className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</main>
       </div>
-      {strip}
-      {commandBar}
+      <div className="shrink-0">{strip}</div>
+      <div className="shrink-0">{commandBar}</div>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import type { ReviewRow } from "../../../types/review";
 
 export function DetailPanel({ selectedRow }: { selectedRow: ReviewRow | null }) {
   return (
-    <aside className="w-[360px] shrink-0 overflow-y-auto bg-background p-4">
+    <aside className="h-full min-h-0 w-[360px] shrink-0 overflow-y-auto bg-background p-4">
       <div className="rounded-md border border-outline bg-surface p-4">
         <p className="text-xs uppercase tracking-wide text-muted">Evidence & Move Detail</p>
         <h2 className="mt-1 text-lg font-bold text-on-surface">

@@ -16,7 +16,7 @@ export function FacetPanel({
   onViewModeChange: (mode: ReviewViewMode) => void;
 }) {
   return (
-    <aside className="w-64 shrink-0 overflow-y-auto border-r border-outline bg-background p-4">
+    <aside className="h-full min-h-0 w-64 shrink-0 overflow-y-auto border-r border-outline bg-background p-4">
       <h2 className="text-sm font-bold uppercase tracking-wide text-muted">Review views</h2>
       <div className="mt-3 space-y-1">
         {viewModes.map((item) => (

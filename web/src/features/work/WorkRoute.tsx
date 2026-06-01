@@ -24,9 +24,9 @@ export function WorkRoute({ onOpenPreview }: { onOpenPreview: (selection: Select
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <WorkModeTabs mode={mode} onModeChange={(m) => void setModeOptimistic(m)} />
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
         {mode === "scan" && (
           <ScanWorkspace
             library={snapshot.library}

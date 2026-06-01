@@ -10,7 +10,7 @@ export function BatchActionBar({
   onPreview: () => void;
 }) {
   return (
-    <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-outline bg-surface px-4 py-3">
+    <div className="relative z-30 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-outline bg-surface px-4 py-3">
       <p className="text-sm text-on-surface-variant">
         {selectionLabel} ·{" "}
         <span className="font-semibold text-on-surface">{filteredCount.toLocaleString()}</span>{" "}

@@ -1,28 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { SortingState, VisibilityState } from "@tanstack/react-table";
+import type { SortingState } from "@tanstack/react-table";
 import { useBridge, useSnapshot } from "../../app/providers/snapshotHooks";
 import type { ReviewRow, ReviewRowsQuery, ReviewViewMode } from "../../types/review";
 import type { SelectionScope } from "../../types/selection";
-import { ColumnChooser } from "../../components/grid/ColumnChooser";
 import { StatChip } from "../../components/ui/StatChip";
 import { FacetPanel } from "./resolve/FacetPanel";
 import { VirtualizedReviewGrid } from "./resolve/VirtualizedReviewGrid";
-import {
-  REVIEW_GRID_STORAGE_KEY,
-  defaultReviewColumnVisibility,
-  optionalReviewColumnKeys,
-} from "./resolve/reviewGridColumns";
+import { REVIEW_GRID_SIZING_KEY } from "./resolve/reviewGridColumns";
+import { mergeReviewColumnVisibility } from "./resolve/reviewGridLayout";
 import { DetailPanel } from "./resolve/DetailPanel";
 import { BatchActionBar } from "./resolve/BatchActionBar";
 
-function loadColumnVisibility(): VisibilityState {
+function loadColumnSizing(): Record<string, number> {
   try {
-    const raw = localStorage.getItem(REVIEW_GRID_STORAGE_KEY);
-    return raw
-      ? { ...defaultReviewColumnVisibility, ...JSON.parse(raw) }
-      : defaultReviewColumnVisibility;
+    const raw = localStorage.getItem(REVIEW_GRID_SIZING_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
   } catch {
-    return defaultReviewColumnVisibility;
+    return {};
   }
 }
 
@@ -42,7 +36,7 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
   const [explicitIds, setExplicitIds] = useState<string[]>([]);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(loadColumnVisibility);
+  const [columnSizing, setColumnSizing] = useState<Record<string, number>>(loadColumnSizing);
 
   const currentQuery = useMemo<ReviewRowsQuery>(() => {
     const primary = sorting[0];
@@ -124,28 +118,18 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
       : `${filteredCount} in current filter`;
 
   return (
-    <main className="flex h-full min-h-0 flex-col bg-background" data-testid="resolve-workspace">
+    <main
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-background"
+      data-testid="resolve-workspace"
+    >
       <div className="shrink-0 border-b border-outline p-4">
         <p className="text-xs font-semibold text-secondary">Resolve & Organize</p>
         <h1 className="text-xl font-bold text-on-surface">중복 검토와 이동 정리를 한 큐에서 처리</h1>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-          <div className="grid gap-2 sm:grid-cols-4">
-            <StatChip label="Queue" value={resolve.queueCount} tone="warn" />
-            <StatChip label="Groups" value={resolve.groupCount} />
-            <StatChip label="Conflicts" value={resolve.conflictCount} tone="danger" />
-            <StatChip label="Approved" value={resolve.approvedCount} tone="good" />
-          </div>
-          <ColumnChooser
-            visibility={columnVisibility}
-            optionalKeys={optionalReviewColumnKeys}
-            onChange={(key, visible) => {
-              setColumnVisibility((prev) => {
-                const next = { ...prev, [key]: visible };
-                localStorage.setItem(REVIEW_GRID_STORAGE_KEY, JSON.stringify(next));
-                return next;
-              });
-            }}
-          />
+        <div className="mt-4 grid gap-2 sm:grid-cols-4">
+          <StatChip label="Queue" value={resolve.queueCount} tone="warn" />
+          <StatChip label="Groups" value={resolve.groupCount} />
+          <StatChip label="Conflicts" value={resolve.conflictCount} tone="danger" />
+          <StatChip label="Approved" value={resolve.approvedCount} tone="good" />
         </div>
         <input
           value={search}
@@ -172,19 +156,26 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
         )}
       </div>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="relative z-0 flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <FacetPanel viewMode={viewMode} onViewModeChange={setViewMode} />
-        <VirtualizedReviewGrid
-          rows={rows}
-          selectedRowId={selectedRow?.id ?? null}
-          onSelectRow={toggleSelect}
-          onNearEnd={handleNearEnd}
-          loadingMore={loadingMore}
-          sorting={sorting}
-          onSortingChange={setSorting}
-          columnVisibility={columnVisibility}
-          onColumnVisibilityChange={setColumnVisibility}
-        />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <VirtualizedReviewGrid
+            rows={rows}
+            selectedRowId={selectedRow?.id ?? null}
+            onSelectRow={toggleSelect}
+            onNearEnd={handleNearEnd}
+            loadingMore={loadingMore}
+            sorting={sorting}
+            onSortingChange={setSorting}
+            columnSizing={columnSizing}
+            onColumnSizingChange={(next) => {
+              setColumnSizing(next);
+              localStorage.setItem(REVIEW_GRID_SIZING_KEY, JSON.stringify(next));
+            }}
+            mergeColumnVisibility={mergeReviewColumnVisibility}
+            enableColumnResize
+          />
+        </div>
         <DetailPanel selectedRow={selectedRow} />
       </div>
 

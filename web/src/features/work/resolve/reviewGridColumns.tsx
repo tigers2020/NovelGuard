@@ -4,21 +4,20 @@ import { proposedActionLabel, reviewStatusLabel, reviewTypeLabel } from "../../.
 
 const helper = createColumnHelper<ReviewRow>();
 
-export const REVIEW_GRID_STORAGE_KEY = "novelguard.reviewGrid.columns.v1";
+export const REVIEW_GRID_SIZING_KEY = "novelguard.reviewGrid.sizing.v1";
 
-export const optionalReviewColumnKeys = ["encoding", "integrity", "path", "sizeBytes"] as const;
-
-export const defaultReviewColumnVisibility: Record<string, boolean> = {
+/** TanStack table state: all columns enabled; render uses width-based merge. */
+export const reviewGridAllColumnsVisible: Record<string, boolean> = {
   status: true,
   type: true,
   name: true,
   proposedAction: true,
   targetFolder: true,
   confidence: true,
-  encoding: false,
-  integrity: false,
-  path: false,
-  sizeBytes: false,
+  encoding: true,
+  integrity: true,
+  path: true,
+  sizeBytes: true,
 };
 
 import type { ColumnDef } from "@tanstack/react-table";
@@ -28,7 +27,7 @@ export function buildReviewGridColumns(): ColumnDef<ReviewRow>[] {
     helper.accessor("status", {
       header: "Status",
       enableSorting: true,
-      meta: { gridWidth: "5rem" },
+      meta: { gridWidth: "5rem", minWidthPx: 56, resizable: true },
       cell: (ctx) => (
         <span
           className={
@@ -46,14 +45,14 @@ export function buildReviewGridColumns(): ColumnDef<ReviewRow>[] {
     helper.accessor("type", {
       header: "Type",
       enableSorting: true,
-      meta: { gridWidth: "5rem" },
+      meta: { gridWidth: "5rem", minWidthPx: 56, resizable: true },
       cell: (ctx) => <span className="text-muted">{reviewTypeLabel[ctx.getValue()]}</span>,
     }),
     helper.accessor("name", {
       id: "name",
       header: "Name / Keeper",
       enableSorting: true,
-      meta: { gridWidth: "minmax(0,1fr)" },
+      meta: { gridWidth: "minmax(0,1fr)", minWidthPx: 160, resizable: true },
       cell: (ctx) => {
         const row = ctx.row.original;
         return (
@@ -67,7 +66,7 @@ export function buildReviewGridColumns(): ColumnDef<ReviewRow>[] {
     helper.accessor("proposedAction", {
       header: "Action",
       enableSorting: true,
-      meta: { gridWidth: "7rem" },
+      meta: { gridWidth: "7rem", minWidthPx: 72, resizable: true },
       cell: (ctx) => (
         <span className="truncate text-on-surface-variant">
           {proposedActionLabel[ctx.getValue()]}
@@ -77,13 +76,13 @@ export function buildReviewGridColumns(): ColumnDef<ReviewRow>[] {
     helper.accessor("targetFolder", {
       header: "Target",
       enableSorting: true,
-      meta: { gridWidth: "7rem" },
+      meta: { gridWidth: "7rem", minWidthPx: 72, resizable: true },
       cell: (ctx) => <span className="truncate text-muted">{ctx.getValue() ?? "—"}</span>,
     }),
     helper.accessor("confidence", {
       header: "Conf.",
       enableSorting: true,
-      meta: { gridWidth: "4.5rem" },
+      meta: { gridWidth: "4.5rem", minWidthPx: 52, resizable: true },
       cell: (ctx) => (
         <span className="tabular-nums text-on-surface-variant">{ctx.getValue() ?? "—"}</span>
       ),
@@ -91,26 +90,26 @@ export function buildReviewGridColumns(): ColumnDef<ReviewRow>[] {
     helper.accessor("encoding", {
       header: "Encoding",
       enableSorting: true,
-      meta: { gridWidth: "6rem" },
+      meta: { gridWidth: "6rem", minWidthPx: 64, resizable: true },
       cell: (ctx) => <span className="text-secondary">{ctx.getValue() ?? "—"}</span>,
     }),
     helper.accessor("integrity", {
       header: "Integrity",
       enableSorting: true,
-      meta: { gridWidth: "8rem" },
+      meta: { gridWidth: "8rem", minWidthPx: 72, resizable: true },
       cell: (ctx) => <span className="text-muted">{ctx.getValue() ?? "—"}</span>,
     }),
     helper.accessor((row) => row.path ?? "—", {
       id: "path",
       header: "Path",
       enableSorting: false,
-      meta: { gridWidth: "minmax(0,1.2fr)" },
+      meta: { gridWidth: "minmax(0,1.2fr)", minWidthPx: 120, resizable: true },
       cell: (ctx) => <span className="truncate text-xs text-muted">{String(ctx.getValue())}</span>,
     }),
     helper.accessor("sizeBytes", {
       header: "Size",
       enableSorting: true,
-      meta: { gridWidth: "5rem" },
+      meta: { gridWidth: "5rem", minWidthPx: 56, resizable: true },
       cell: (ctx) => {
         const v = ctx.getValue();
         return (

@@ -27,18 +27,14 @@ if not exist "web\node_modules\" (
   popd
 )
 
-if not exist "web\dist\index.html" (
-  echo [2/3] Building web UI...
-  pushd web
-  call npm run build
-  if errorlevel 1 (
-    popd
-    exit /b 1
-  )
+echo [2/3] Building web UI...
+pushd web
+call npm run build
+if errorlevel 1 (
   popd
-) else (
-  echo [2/3] web\dist present - skip build
+  exit /b 1
 )
+popd
 
 pip show pywebview >nul 2>&1
 if errorlevel 1 (

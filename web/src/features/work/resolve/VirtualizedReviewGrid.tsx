@@ -1,8 +1,9 @@
 import { useMemo } from "react";
-import type { OnChangeFn, SortingState, VisibilityState } from "@tanstack/react-table";
+import type { OnChangeFn, SortingState } from "@tanstack/react-table";
+import type { VisibilityState } from "@tanstack/react-table";
 import { VirtualizedDataGrid } from "../../../components/grid/VirtualizedDataGrid";
 import type { ReviewRow } from "../../../types/review";
-import { buildReviewGridColumns } from "./reviewGridColumns";
+import { buildReviewGridColumns, reviewGridAllColumnsVisible } from "./reviewGridColumns";
 
 export function VirtualizedReviewGrid({
   rows,
@@ -12,8 +13,10 @@ export function VirtualizedReviewGrid({
   loadingMore,
   sorting,
   onSortingChange,
-  columnVisibility,
-  onColumnVisibilityChange,
+  columnSizing,
+  onColumnSizingChange,
+  mergeColumnVisibility,
+  enableColumnResize,
 }: {
   rows: ReviewRow[];
   selectedRowId: string | null;
@@ -22,8 +25,10 @@ export function VirtualizedReviewGrid({
   loadingMore?: boolean;
   sorting: SortingState;
   onSortingChange: OnChangeFn<SortingState>;
-  columnVisibility: VisibilityState;
-  onColumnVisibilityChange: OnChangeFn<VisibilityState>;
+  columnSizing?: Record<string, number>;
+  onColumnSizingChange?: (next: Record<string, number>) => void;
+  mergeColumnVisibility?: (containerWidth: number) => VisibilityState;
+  enableColumnResize?: boolean;
 }) {
   const columns = useMemo(() => buildReviewGridColumns(), []);
 
@@ -38,8 +43,11 @@ export function VirtualizedReviewGrid({
       onSelectRow={onSelectRow}
       sorting={sorting}
       onSortingChange={onSortingChange}
-      columnVisibility={columnVisibility}
-      onColumnVisibilityChange={onColumnVisibilityChange}
+      columnVisibility={reviewGridAllColumnsVisible}
+      columnSizing={columnSizing}
+      onColumnSizingChange={onColumnSizingChange}
+      mergeColumnVisibility={mergeColumnVisibility}
+      enableColumnResize={enableColumnResize}
       onNearEnd={onNearEnd}
       loadingMore={loadingMore}
       footer={
