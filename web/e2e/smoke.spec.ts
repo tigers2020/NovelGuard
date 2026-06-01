@@ -10,6 +10,26 @@ async function openResolveWorkspace(page: import("@playwright/test").Page) {
   await expect(page.getByTestId("resolve-review-grid")).toBeVisible({ timeout: 15_000 });
 }
 
+/** Open apply subflow. Bar click uses evaluate (grid can intercept pointer events); in-dialog clicks use the dialog scope. */
+async function openApplyDialog(page: import("@playwright/test").Page) {
+  await page.getByTestId("batch-preview-open").evaluate((el) => (el as HTMLButtonElement).click());
+  const dialog = page.getByTestId("apply-subflow-dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByTestId("apply-preview-run")).toBeVisible();
+}
+
+async function clickApplyPreviewRun(page: import("@playwright/test").Page) {
+  await page
+    .getByTestId("apply-subflow-dialog")
+    .getByTestId("apply-preview-run")
+    .evaluate((el) => (el as HTMLButtonElement).click());
+}
+
+async function runApplyPreview(page: import("@playwright/test").Page) {
+  await openApplyDialog(page);
+  await clickApplyPreviewRun(page);
+}
+
 test.describe("NovelGuard smoke", () => {
   test("app loads and shows connection badge", async ({ page }) => {
     await page.goto("/");
@@ -29,6 +49,19 @@ test.describe("NovelGuard smoke", () => {
 
   test("resolve grid loads rows from mock bridge", async ({ page }) => {
     await openResolveWorkspace(page);
+  });
+
+  test("quality query failure shows error and retry", async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as unknown as { __NOVELGUARD_TEST_BRIDGE_FAIL__?: string }).__NOVELGUARD_TEST_BRIDGE_FAIL__ =
+        "queryQualityRows";
+    });
+    await page.goto("/");
+    await page.getByTestId("work-mode-tab-quality").click();
+    await expect(page.getByTestId("quality-workspace")).toBeVisible();
+    await expect(page.getByTestId("quality-query-error")).toBeVisible();
+    await page.getByTestId("quality-query-retry").click();
+    await expect(page.getByTestId("quality-query-error")).toBeVisible();
   });
 
   test("query failure shows error and retry", async ({ page }) => {
@@ -59,8 +92,8 @@ test.describe("NovelGuard smoke", () => {
         "getMovePreview";
     });
     await openResolveWorkspace(page);
-    await page.getByTestId("batch-preview-open").evaluate((el) => (el as HTMLButtonElement).click());
-    await page.getByTestId("apply-preview-run").click({ force: true });
+    await openApplyDialog(page);
+    await clickApplyPreviewRun(page);
     await expect(page.getByTestId("apply-preview-error")).toBeVisible();
     await expect(page.getByTestId("apply-confirm-run")).toHaveCount(0);
   });
@@ -96,18 +129,19 @@ test.describe("NovelGuard smoke", () => {
   test("closing apply dialog discards pending preview", async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 900 });
     await openResolveWorkspace(page);
-    await page.getByTestId("batch-preview-open").evaluate((el) => (el as HTMLButtonElement).click());
-    await page.getByTestId("apply-preview-run").click({ force: true });
+    await runApplyPreview(page);
     await expect(page.getByTestId("apply-confirm-run")).toBeVisible();
-    await page.getByRole("button", { name: "취소" }).click();
+    await page
+      .getByTestId("apply-subflow-dialog")
+      .getByRole("button", { name: "취소" })
+      .evaluate((el) => (el as HTMLButtonElement).click());
     await expect(page.getByTestId("apply-confirm-run")).toHaveCount(0);
   });
 
   test("library revision bump shows stale banner", async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 900 });
     await openResolveWorkspace(page);
-    await page.getByTestId("batch-preview-open").evaluate((el) => (el as HTMLButtonElement).click());
-    await page.getByTestId("apply-preview-run").click({ force: true });
+    await runApplyPreview(page);
     await expect(page.getByTestId("apply-confirm-run")).toBeVisible();
     await page.evaluate(() => {
       (window as unknown as { __NOVELGUARD_TEST_BUMP_REVISION__?: () => void }).__NOVELGUARD_TEST_BUMP_REVISION__?.();

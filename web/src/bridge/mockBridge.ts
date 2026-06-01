@@ -196,6 +196,21 @@ export const mockBridge: NovelGuardBridge = {
   },
 
   async queryQualityRows(query) {
+    const validIssueTypes = ["integrity", "encoding", "small_file"] as const;
+    if (!validIssueTypes.includes(query.issueType)) {
+      const empty = {
+        rows: [],
+        pageInfo: {
+          cursor: query.cursor ?? null,
+          nextCursor: null,
+          hasMore: false,
+          totalFiltered: 0,
+        },
+        summary: { issueCount: 0, warningCount: 0, errorCount: 0 },
+      };
+      validateQualityRowsPage(empty);
+      return empty;
+    }
     const all = buildQualityRows().filter((row) => row.issueType === query.issueType);
     const search = query.filters?.search?.toLowerCase();
     const filtered = all.filter((row) => {

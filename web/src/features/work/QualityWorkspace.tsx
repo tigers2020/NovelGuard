@@ -82,7 +82,10 @@ export function QualityWorkspace() {
   };
 
   return (
-    <main className="flex h-full min-h-0 flex-col overflow-hidden bg-background p-5">
+    <main
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-background p-5"
+      data-testid="quality-workspace"
+    >
       <section className="shrink-0 rounded-md border border-outline bg-surface p-5">
         <h1 className="text-xl font-bold text-on-surface">품질 · 무결성</h1>
         <p className="mt-1 text-sm text-on-surface-variant">v1: read-only issue list · repair stub</p>
@@ -108,9 +111,19 @@ export function QualityWorkspace() {
           ))}
         </div>
         {queryError && (
-          <p className="mt-2 text-sm text-error" data-testid="quality-query-error">
-            {queryError}
-          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <p className="text-sm text-error" data-testid="quality-query-error">
+              {queryError}
+            </p>
+            <button
+              type="button"
+              data-testid="quality-query-retry"
+              className="rounded-md border border-outline px-3 py-1 text-sm font-semibold text-on-surface hover:bg-hover"
+              onClick={() => void loadPage(null, false)}
+            >
+              Retry
+            </button>
+          </div>
         )}
       </section>
 
