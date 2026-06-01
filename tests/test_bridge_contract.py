@@ -17,6 +17,7 @@ from app.bridge_contract import (
     validate_review_rows_page,
     validate_selection_scope,
 )
+from app.bridge_parity import PYWEBVIEW_API_METHODS
 from app.selection_fingerprint import selection_fingerprint
 from app.session_factory import create_library_session
 from application.library_session import LibrarySession
@@ -61,6 +62,32 @@ def test_current_query_requires_view_mode() -> None:
 
 def test_clamp_query_limit_max_200() -> None:
     assert clamp_query_limit({"viewMode": "action", "limit": 999}) == 200
+
+
+def test_pywebview_api_methods_match_locked_contract() -> None:
+    """Locked contract; must match web/src/contracts/bridgeParity.ts PYWEBVIEW_API_METHODS."""
+    locked = [
+        "get_snapshot",
+        "select_folder",
+        "start_scan",
+        "cancel_run",
+        "set_work_mode",
+        "query_review_rows",
+        "query_quality_rows",
+        "get_duplicate_group_detail",
+        "get_quality_issue_detail",
+        "get_move_preview",
+        "apply_resolved_actions",
+        "discard_move_preview",
+    ]
+    assert list(PYWEBVIEW_API_METHODS) == locked
+
+
+def test_bridge_api_exposes_pywebview_methods() -> None:
+    api = _memory_api()
+    for name in PYWEBVIEW_API_METHODS:
+        assert hasattr(api, name), f"BridgeApi missing {name}"
+        assert callable(getattr(api, name))
 
 
 def test_bridge_api_get_snapshot_valid() -> None:
@@ -430,6 +457,34 @@ def test_query_quality_rows_detects_issues(tmp_path: Path) -> None:
     encoding_page = api.query_quality_rows({"issueType": "encoding", "limit": 50})
     assert len(encoding_page["rows"]) == 1
     assert encoding_page["rows"][0]["issueType"] == "encoding"
+
+
+def test_query_quality_rows_limit_capped_at_200(tmp_path: Path) -> None:
+    for i in range(250):
+        (tmp_path / f"empty_{i}.txt").write_bytes(b"")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = BridgeApi(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    page = api.query_quality_rows({"issueType": "small_file", "limit": 999})
+    validate_quality_rows_page(page)
+    assert len(page["rows"]) <= 200
+
+
+def test_get_quality_issue_detail_from_cache(tmp_path: Path) -> None:
+    (tmp_path / "empty.txt").write_bytes(b"")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = BridgeApi(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    page = api.query_quality_rows({"issueType": "small_file", "limit": 10})
+    assert page["rows"]
+    row_id = page["rows"][0]["id"]
+    detail = api.get_quality_issue_detail(row_id)
+    assert detail["id"] == row_id
+    assert detail["name"] == "empty.txt"
 
 
 def test_query_quality_rows_unknown_issue_type_empty(tmp_path: Path) -> None:
