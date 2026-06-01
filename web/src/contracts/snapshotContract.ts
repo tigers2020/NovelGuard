@@ -41,6 +41,11 @@ function assertRequiredFields(snapshot: Record<string, unknown>): void {
   if (!isRecord(snapshot.fileListSummary)) {
     throw new SnapshotContractError("AppSnapshot.fileListSummary must be an object");
   }
+  const work = snapshot.work as Record<string, unknown>;
+  const resolve = work.resolve;
+  if (!isRecord(resolve) || typeof resolve.libraryRevision !== "number") {
+    throw new SnapshotContractError("ResolveSnapshot.libraryRevision must be a number");
+  }
 }
 
 /** Runtime guard: no unbounded row arrays on snapshot payloads. */

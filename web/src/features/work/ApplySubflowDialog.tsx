@@ -1,36 +1,112 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { SelectionScope } from "../../types/selection";
+import type { PreviewApplyErrorCode } from "../../types/movePreview";
 import { useBridge } from "../../app/providers/snapshotHooks";
+import { BridgeCallError } from "../../bridge/bridgeErrors";
+import { selectionFingerprint } from "../../bridge/selectionFingerprint";
 
 type Step = "preview" | "confirm" | "apply";
+
+type PreviewState =
+  | { status: "idle" }
+  | {
+      status: "ready";
+      token: string;
+      libraryRevision: number;
+      selectionFingerprint: string;
+      rowCount: number;
+    }
+  | { status: "stale"; reason: "selection_changed" | "library_changed" }
+  | { status: "error"; message: string; reason?: PreviewApplyErrorCode };
+
+function applyErrorMessage(err: unknown): { message: string; reason?: PreviewApplyErrorCode } {
+  if (err instanceof BridgeCallError) {
+    const reason = err.reason;
+    const byReason: Record<PreviewApplyErrorCode, string> = {
+      STALE_PREVIEW: "라이브러리가 변경되었습니다. 다시 미리보기하세요.",
+      SELECTION_CHANGED: "선택이 변경되었습니다. 다시 미리보기하세요.",
+      NO_PENDING_APPLY: "적용 가능한 미리보기가 없습니다.",
+      MISSING_PREVIEW_TOKEN: "미리보기 토큰이 없습니다.",
+      INVALID_PREVIEW_TOKEN: "미리보기 토큰이 유효하지 않습니다.",
+    };
+    if (reason) {
+      return { message: byReason[reason], reason };
+    }
+    return { message: err.message };
+  }
+  return { message: err instanceof Error ? err.message : "Apply failed" };
+}
 
 export function ApplySubflowDialog({
   open,
   selection,
+  snapshotLibraryRevision,
   onClose,
 }: {
   open: boolean;
   selection: SelectionScope | null;
+  snapshotLibraryRevision: number;
   onClose: () => void;
 }) {
   const bridge = useBridge();
   const [step, setStep] = useState<Step>("preview");
-  const [previewCount, setPreviewCount] = useState(0);
+  const [previewState, setPreviewState] = useState<PreviewState>({ status: "idle" });
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Token last issued by preview; used for discard on close even when UI shows stale. */
+  const [activePreviewToken, setActivePreviewToken] = useState<string | null>(null);
+
+  const effectivePreviewState = useMemo((): PreviewState => {
+    if (previewState.status !== "ready" || !selection) {
+      return previewState;
+    }
+    const fp = selectionFingerprint(selection);
+    if (fp !== previewState.selectionFingerprint) {
+      return { status: "stale", reason: "selection_changed" };
+    }
+    if (snapshotLibraryRevision !== previewState.libraryRevision) {
+      return { status: "stale", reason: "library_changed" };
+    }
+    return previewState;
+  }, [previewState, selection, snapshotLibraryRevision]);
 
   if (!open || !selection) return null;
+
+  const handleClose = async () => {
+    if (activePreviewToken) {
+      try {
+        await bridge.discardMovePreview({ previewToken: activePreviewToken });
+      } catch {
+        // Still close UI; discard is best-effort cleanup.
+      }
+    }
+    setActivePreviewToken(null);
+    setPreviewState({ status: "idle" });
+    setStep("preview");
+    setPreviewError(null);
+    setApplyError(null);
+    onClose();
+  };
 
   const runPreview = async () => {
     setBusy(true);
     setPreviewError(null);
+    setApplyError(null);
     try {
       const result = await bridge.getMovePreview(selection);
-      setPreviewCount(result.rows.length);
+      setActivePreviewToken(result.previewToken);
+      setPreviewState({
+        status: "ready",
+        token: result.previewToken,
+        libraryRevision: result.libraryRevision,
+        selectionFingerprint: result.selectionFingerprint,
+        rowCount: result.rows.length,
+      });
       setStep("confirm");
     } catch (err) {
       setPreviewError(err instanceof Error ? err.message : "Preview failed");
+      setPreviewState({ status: "error", message: "Preview failed" });
       setStep("preview");
     } finally {
       setBusy(false);
@@ -38,21 +114,40 @@ export function ApplySubflowDialog({
   };
 
   const runApply = async () => {
+    if (effectivePreviewState.status !== "ready") {
+      return;
+    }
     setBusy(true);
     setApplyError(null);
     try {
-      await bridge.applyResolvedActions(selection);
-      onClose();
+      await bridge.applyResolvedActions({
+        selection,
+        previewToken: effectivePreviewState.token,
+      });
+      setActivePreviewToken(null);
+      setPreviewState({ status: "idle" });
       setStep("preview");
-      setPreviewCount(0);
       setPreviewError(null);
-      setApplyError(null);
+      onClose();
     } catch (err) {
-      setApplyError(err instanceof Error ? err.message : "Apply failed");
+      const { message, reason } = applyErrorMessage(err);
+      setApplyError(message);
+      if (reason === "STALE_PREVIEW" || reason === "SELECTION_CHANGED") {
+        setPreviewState({
+          status: "stale",
+          reason: reason === "STALE_PREVIEW" ? "library_changed" : "selection_changed",
+        });
+      }
     } finally {
       setBusy(false);
     }
   };
+
+  const canApply =
+    effectivePreviewState.status === "ready" &&
+    step === "confirm" &&
+    !previewError &&
+    effectivePreviewState.rowCount > 0;
 
   return (
     <div
@@ -86,28 +181,34 @@ export function ApplySubflowDialog({
           ))}
         </ol>
 
+        {effectivePreviewState.status === "stale" && (
+          <p className="mt-3 text-sm text-warning" data-testid="apply-stale-banner" role="status">
+            미리보기가 오래되었습니다. 다시 미리보기가 필요합니다.
+          </p>
+        )}
+
         {previewError && (
           <p className="mt-3 text-sm text-error" data-testid="apply-preview-error" role="alert">
             {previewError}
           </p>
         )}
 
-        {applyError && (
-          <p className="mt-3 text-sm text-error" data-testid="apply-apply-error" role="alert">
-            {applyError}
+        {(applyError || effectivePreviewState.status === "error") && (
+          <p className="mt-3 text-sm text-error" data-testid="apply-bridge-error" role="alert">
+            {applyError ?? (effectivePreviewState.status === "error" ? effectivePreviewState.message : "")}
           </p>
         )}
 
-        {step === "confirm" && !previewError && (
+        {step === "confirm" && effectivePreviewState.status === "ready" && !previewError && (
           <p className="mt-4 text-sm text-on-surface">
-            미리보기 대상: <strong>{previewCount}</strong> rows
+            미리보기 대상: <strong>{effectivePreviewState.rowCount}</strong> rows
           </p>
         )}
 
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => void handleClose()}
             className="rounded-md border border-outline px-3 py-2 text-sm font-semibold hover:bg-hover"
           >
             취소
@@ -123,7 +224,7 @@ export function ApplySubflowDialog({
               미리보기
             </button>
           )}
-          {step === "confirm" && !previewError && previewCount > 0 && (
+          {canApply && (
             <button
               type="button"
               disabled={busy}

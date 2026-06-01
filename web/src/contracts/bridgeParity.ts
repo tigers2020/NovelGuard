@@ -12,6 +12,7 @@ export const NOVEL_GUARD_BRIDGE_METHODS = [
   "getQualityIssueDetail",
   "getMovePreview",
   "applyResolvedActions",
+  "discardMovePreview",
 ] as const satisfies readonly (keyof NovelGuardBridge)[];
 
 export const PYWEBVIEW_API_METHODS = [
@@ -26,6 +27,7 @@ export const PYWEBVIEW_API_METHODS = [
   "get_quality_issue_detail",
   "get_move_preview",
   "apply_resolved_actions",
+  "discard_move_preview",
 ] as const;
 
 export function assertBridgeParity(bridge: NovelGuardBridge): void {

@@ -16,6 +16,7 @@ export interface ResolveSnapshot {
   conflictCount: number;
   approvedCount: number;
   hasPendingApply: boolean;
+  libraryRevision: number;
 }
 
 export interface QualitySnapshot {

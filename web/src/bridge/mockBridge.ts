@@ -2,8 +2,16 @@ import type { NovelGuardBridge } from "./NovelGuardBridge";
 import type { AppSnapshot, WorkMode } from "../types/snapshot";
 import type { ReviewRowsQuery } from "../types/review";
 import type { SelectionScope } from "../types/selection";
+import type {
+  ApplyResolvedActionsRequest,
+  DiscardMovePreviewRequest,
+  MovePreviewRow,
+  MovePreviewResult,
+  PreviewApplyErrorCode,
+} from "../types/movePreview";
 import { validateSelectionScope } from "../types/selection";
 import { validateAppSnapshot } from "../contracts/snapshotContract";
+import { validateMovePreviewResult } from "../contracts/movePreviewContract";
 import {
   clampQualityQueryLimit,
   validateQualityRowsPage,
@@ -17,6 +25,8 @@ import {
   sortReviewRows,
   summarizeReviewRows,
 } from "./mockData";
+import { BridgeCallError } from "./bridgeErrors";
+import { selectionFingerprint } from "./selectionFingerprint";
 
 const state = {
   activeMode: "resolve" as WorkMode,
@@ -25,6 +35,38 @@ const state = {
   hasPendingApply: false,
   selectedCount: 0,
 };
+
+let libraryRevision = 0;
+
+let pendingPreview: {
+  token: string;
+  libraryRevision: number;
+  selectionFingerprint: string;
+  rows: MovePreviewRow[];
+} | null = null;
+
+function rejectApply(method: string, reason: PreviewApplyErrorCode): never {
+  throw new BridgeCallError(`Apply rejected: ${reason}`, {
+    code: "rejected",
+    method,
+    reason,
+  });
+}
+
+function clearPendingPreview(): void {
+  pendingPreview = null;
+  state.hasPendingApply = false;
+}
+
+export function bumpLibraryRevisionForTest(): void {
+  libraryRevision += 1;
+  clearPendingPreview();
+}
+
+if (typeof window !== "undefined") {
+  (window as unknown as { __NOVELGUARD_TEST_BUMP_REVISION__?: () => void }).__NOVELGUARD_TEST_BUMP_REVISION__ =
+    bumpLibraryRevisionForTest;
+}
 
 function buildSnapshot(): AppSnapshot {
   const allRows = getAllReviewRows();
@@ -63,6 +105,7 @@ function buildSnapshot(): AppSnapshot {
         conflictCount: summary.conflictCount,
         approvedCount: summary.approvedCount,
         hasPendingApply: state.hasPendingApply,
+        libraryRevision,
       },
       quality: {
         integrityIssueCount: qualityRows.filter((r) => r.issueType === "integrity").length,
@@ -115,7 +158,13 @@ export const mockBridge: NovelGuardBridge = {
   },
 
   async cancelRun() {
-    state.pipelineRunning = false;
+    if (state.pipelineRunning) {
+      state.pipelineRunning = false;
+      libraryRevision += 1;
+      clearPendingPreview();
+    } else {
+      state.pipelineRunning = false;
+    }
   },
 
   async setWorkMode(mode) {
@@ -203,16 +252,64 @@ export const mockBridge: NovelGuardBridge = {
 
   async getMovePreview(selection) {
     const ids = resolveSelectionIds(selection);
-    state.hasPendingApply = true;
-    console.info("[mockBridge] getMovePreview", selection, ids.length);
-    return {
-      rows: ids.map((id) => ({ id, action: "move_organized" })),
+    const fp = selectionFingerprint(selection);
+    const token = `preview-${globalThis.crypto.randomUUID()}`;
+    const rev = libraryRevision;
+    const rows: MovePreviewRow[] = ids.map((id) => ({ id, action: "move_organized" }));
+
+    pendingPreview = {
+      token,
+      libraryRevision: rev,
+      selectionFingerprint: fp,
+      rows,
     };
+    state.hasPendingApply = true;
+
+    const result: MovePreviewResult = {
+      previewToken: token,
+      libraryRevision: rev,
+      selectionFingerprint: fp,
+      hasPendingApply: true,
+      rows,
+      summary: { rowCount: rows.length, conflictCount: 0 },
+    };
+    validateMovePreviewResult(result);
+    console.info("[mockBridge] getMovePreview", selection, ids.length);
+    return result;
   },
 
-  async applyResolvedActions(selection) {
-    const ids = resolveSelectionIds(selection);
-    state.hasPendingApply = false;
-    console.info("[mockBridge] applyResolvedActions", selection, ids.length);
+  async applyResolvedActions(request: ApplyResolvedActionsRequest) {
+    const method = "applyResolvedActions";
+    const token = request.previewToken?.trim() ?? "";
+    if (!token) {
+      rejectApply(method, "MISSING_PREVIEW_TOKEN");
+    }
+    if (!pendingPreview) {
+      rejectApply(method, "NO_PENDING_APPLY");
+    }
+    if (token !== pendingPreview.token) {
+      rejectApply(method, "INVALID_PREVIEW_TOKEN");
+    }
+    if (libraryRevision !== pendingPreview.libraryRevision) {
+      rejectApply(method, "STALE_PREVIEW");
+    }
+    const fp = selectionFingerprint(request.selection);
+    if (fp !== pendingPreview.selectionFingerprint) {
+      rejectApply(method, "SELECTION_CHANGED");
+    }
+
+    const count = pendingPreview.rows.length;
+    clearPendingPreview();
+    console.info("[mockBridge] applyResolvedActions", request.selection, count);
+  },
+
+  async discardMovePreview(request: DiscardMovePreviewRequest) {
+    // Lifecycle cleanup — idempotent; never throws on mismatch.
+    if (pendingPreview && request.previewToken === pendingPreview.token) {
+      clearPendingPreview();
+    } else {
+      state.hasPendingApply = false;
+      pendingPreview = null;
+    }
   },
 };

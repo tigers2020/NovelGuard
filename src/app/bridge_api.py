@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 from typing import Any
+from uuid import uuid4
 
 from app.bridge_contract import (
+    PreviewApplyError,
     clamp_query_limit,
     validate_app_snapshot,
     validate_move_preview,
@@ -13,6 +15,7 @@ from app.bridge_contract import (
     validate_review_rows_page,
     validate_selection_scope,
 )
+from app.selection_fingerprint import selection_fingerprint
 
 
 class BridgeApi:
@@ -21,6 +24,19 @@ class BridgeApi:
     def __init__(self) -> None:
         self._active_mode = "resolve"
         self._folder = "D:/Novels/Library/raw"
+        self._library_revision = 0
+        self._has_pending_apply = False
+        self._pending_apply: dict[str, Any] | None = None
+
+    def _resolve_block(self) -> dict[str, Any]:
+        return {
+            "queueCount": 412,
+            "groupCount": 37,
+            "conflictCount": 3,
+            "approvedCount": 126,
+            "hasPendingApply": self._has_pending_apply,
+            "libraryRevision": self._library_revision,
+        }
 
     def get_snapshot(self) -> dict[str, Any]:
         payload = {
@@ -46,13 +62,7 @@ class BridgeApi:
             "work": {
                 "activeMode": self._active_mode,
                 "scan": {"state": "success", "lastRun": "2026-06-01 10:42"},
-                "resolve": {
-                    "queueCount": 412,
-                    "groupCount": 37,
-                    "conflictCount": 3,
-                    "approvedCount": 126,
-                    "hasPendingApply": False,
-                },
+                "resolve": self._resolve_block(),
                 "quality": {
                     "integrityIssueCount": 8,
                     "encodingIssueCount": 4,
@@ -144,12 +154,57 @@ class BridgeApi:
 
     def get_move_preview(self, selection: dict[str, Any]) -> dict[str, Any]:
         validate_selection_scope(selection)
-        payload = {"rows": [{"selection": selection}]}
+        token = f"preview-{uuid4()}"
+        fp = selection_fingerprint(selection)
+        rev = self._library_revision
+        self._pending_apply = {
+            "token": token,
+            "fingerprint": fp,
+            "library_revision": rev,
+        }
+        self._has_pending_apply = True
+        payload: dict[str, Any] = {
+            "previewToken": token,
+            "libraryRevision": rev,
+            "selectionFingerprint": fp,
+            "hasPendingApply": True,
+            "rows": [{"id": "row-1", "action": "move_organized"}],
+            "summary": {"rowCount": 1},
+        }
         validate_move_preview(payload)
         return payload
 
-    def apply_resolved_actions(self, selection: dict[str, Any]) -> None:
+    def _validate_apply(self, payload: dict[str, Any]) -> tuple[dict[str, Any], str]:
+        token = (payload.get("previewToken") or "").strip()
+        if not token:
+            raise PreviewApplyError("MISSING_PREVIEW_TOKEN")
+        selection = payload.get("selection")
+        if not isinstance(selection, dict):
+            raise PreviewApplyError("INVALID_PREVIEW_TOKEN", "selection required")
         validate_selection_scope(selection)
+        pending = self._pending_apply
+        if not pending:
+            raise PreviewApplyError("NO_PENDING_APPLY")
+        if token != pending.get("token"):
+            raise PreviewApplyError("INVALID_PREVIEW_TOKEN")
+        if self._library_revision != pending.get("library_revision"):
+            raise PreviewApplyError("STALE_PREVIEW")
+        fp = selection_fingerprint(selection)
+        if fp != pending.get("fingerprint"):
+            raise PreviewApplyError("SELECTION_CHANGED")
+        return selection, token
+
+    def apply_resolved_actions(self, payload: dict[str, Any]) -> None:
+        self._validate_apply(payload)
+        self._pending_apply = None
+        self._has_pending_apply = False
+
+    def discard_move_preview(self, payload: dict[str, Any]) -> None:
+        token = (payload.get("previewToken") or "").strip()
+        pending = self._pending_apply
+        if pending and token and token == pending.get("token"):
+            self._pending_apply = None
+        self._has_pending_apply = False
 
     def query_review_rows_json(self, query_json: str) -> str:
         """Optional helper if JS passes JSON string."""

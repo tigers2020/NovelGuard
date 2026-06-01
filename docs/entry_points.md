@@ -88,3 +88,19 @@ npm run bench:grid
 ```
 
 `test:perf` gates DOM virtualization bounds and filter+paginate latency. Resolve grid uses TanStack Table + Virtual; optional columns via **열 선택** chooser.
+
+## Preview token / stale apply (PR-13)
+
+Spec: `docs/superpowers/specs/01-2026-06-01-pr13-preview-token-stale-apply-design.md`
+
+Bridge methods (TS camelCase / Python snake_case):
+
+- `getMovePreview` / `get_move_preview` — returns `previewToken`, `libraryRevision`, `selectionFingerprint`, `rows`, `summary`
+- `applyResolvedActions` / `apply_resolved_actions` — requires `{ selection, previewToken }`; no filesystem mutation in PR-13
+- `discardMovePreview` / `discard_move_preview` — idempotent cleanup when Apply dialog closes
+
+**Note:** “token” here is a preview–apply correlation id, not `DESIGN.md` color/spacing design tokens.
+
+`AppSnapshot.work.resolve.libraryRevision` is required for library stale detection in the UI.
+
+E2E hook (mock only): `window.__NOVELGUARD_TEST_BUMP_REVISION__()` bumps revision for stale-banner smoke.

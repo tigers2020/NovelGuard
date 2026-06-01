@@ -1,6 +1,11 @@
 import type { AppSnapshot, WorkMode } from "../types/snapshot";
 import type { ReviewRowsPage, ReviewRowsQuery } from "../types/review";
 import type { QualityIssueDetail, QualityRowsPage, QualityRowsQuery } from "../types/quality";
+import type {
+  ApplyResolvedActionsRequest,
+  DiscardMovePreviewRequest,
+  MovePreviewResult,
+} from "../types/movePreview";
 import type { SelectionScope } from "../types/selection";
 
 export interface NovelGuardBridge {
@@ -13,6 +18,7 @@ export interface NovelGuardBridge {
   queryQualityRows(query: QualityRowsQuery): Promise<QualityRowsPage>;
   getDuplicateGroupDetail(groupId: string): Promise<Record<string, unknown>>;
   getQualityIssueDetail(issueId: string): Promise<QualityIssueDetail>;
-  getMovePreview(selection: SelectionScope): Promise<{ rows: unknown[] }>;
-  applyResolvedActions(selection: SelectionScope): Promise<void>;
+  getMovePreview(selection: SelectionScope): Promise<MovePreviewResult>;
+  applyResolvedActions(request: ApplyResolvedActionsRequest): Promise<void>;
+  discardMovePreview(request: DiscardMovePreviewRequest): Promise<void>;
 }
