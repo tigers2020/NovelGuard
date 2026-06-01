@@ -7,7 +7,9 @@ from pathlib import Path
 from domain.apply_models import PolicyBlockReason, PolicyResult, PreviewOperation
 
 
-def resolve_under_library_root(library_root: Path, relative: str) -> tuple[Path | None, PolicyBlockReason | None]:
+def resolve_under_library_root(
+    library_root: Path, relative: str
+) -> tuple[Path | None, PolicyBlockReason | None]:
     """Resolve an existing relative path under library_root, or return block reason."""
     rel = _normalize_relative(relative)
     if rel is None:
@@ -34,12 +36,15 @@ def resolve_destination_path(
     basename = dest_parts.name
     parent_rel = dest_parts.parent
     if parent_rel == Path("."):
-        parent_resolved = library_root.resolve()
+        parent_resolved: Path | None = library_root.resolve()
     else:
-        parent_resolved, reason = resolve_under_library_root(library_root, str(parent_rel).replace("\\", "/"))
+        parent_resolved, reason = resolve_under_library_root(
+            library_root, str(parent_rel).replace("\\", "/")
+        )
         if reason is not None or parent_resolved is None:
             return None, reason or "invalid_target"
 
+    assert parent_resolved is not None
     candidate = parent_resolved / basename
     root = library_root.resolve()
     if not _is_under_root(candidate, root):
