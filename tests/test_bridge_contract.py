@@ -13,14 +13,17 @@ from app.bridge_contract import (
     SnapshotContractError,
     clamp_query_limit,
     validate_app_snapshot,
+    validate_quality_rows_page,
     validate_review_rows_page,
     validate_selection_scope,
 )
 from app.selection_fingerprint import selection_fingerprint
 from app.session_factory import create_library_session
 from application.library_session import LibrarySession
+from application.quality_analyzer import analyze_quality
 from domain.duplicate_exact import find_exact_duplicate_groups
 from domain.models import FileRecord, make_file_id
+from domain.quality import make_issue_id
 from infrastructure import filesystem_scanner
 from infrastructure.content_hasher import hash_file
 from infrastructure.memory_library_index import MemoryLibraryIndex
@@ -330,3 +333,148 @@ def test_query_review_rows_near_filter_empty(tmp_path: Path) -> None:
     page = api.query_review_rows({"viewMode": "all", "limit": 50, "filters": {"types": ["near"]}})
     assert page["rows"] == []
     validate_review_rows_page(page)
+
+
+def test_analyze_quality_empty_file(tmp_path: Path) -> None:
+    folder = tmp_path / "lib"
+    folder.mkdir()
+    empty = folder / "empty.txt"
+    empty.write_bytes(b"")
+    record = FileRecord(
+        id=make_file_id("empty.txt", 0, 1),
+        relative_path="empty.txt",
+        name="empty.txt",
+        size_bytes=0,
+        modified_at_ns=1,
+        extension=".txt",
+    )
+    issues = analyze_quality(str(folder), [record])
+    assert len(issues) == 1
+    assert issues[0].kind == "empty_file"
+    assert issues[0].issue_id == make_issue_id(record.id, "empty_file")
+
+
+def test_analyze_quality_tiny_file(tmp_path: Path) -> None:
+    folder = tmp_path / "lib"
+    folder.mkdir()
+    tiny = folder / "tiny.txt"
+    tiny.write_bytes(b"x")
+    record = FileRecord(
+        id=make_file_id("tiny.txt", 1, 1),
+        relative_path="tiny.txt",
+        name="tiny.txt",
+        size_bytes=1,
+        modified_at_ns=1,
+        extension=".txt",
+    )
+    issues = analyze_quality(str(folder), [record])
+    assert len(issues) == 1
+    assert issues[0].kind == "tiny_file"
+
+
+def test_analyze_quality_invalid_utf8(tmp_path: Path) -> None:
+    folder = tmp_path / "lib"
+    folder.mkdir()
+    bad = folder / "bad.txt"
+    bad.write_bytes(b"\xff\xfe")
+    record = FileRecord(
+        id=make_file_id("bad.txt", 2, 1),
+        relative_path="bad.txt",
+        name="bad.txt",
+        size_bytes=2,
+        modified_at_ns=1,
+        extension=".txt",
+    )
+    issues = analyze_quality(str(folder), [record])
+    assert len(issues) == 1
+    assert issues[0].kind == "invalid_utf8"
+
+
+def test_analyze_quality_read_error(tmp_path: Path) -> None:
+    folder = tmp_path / "lib"
+    folder.mkdir()
+    record = FileRecord(
+        id=make_file_id("missing.txt", 10, 1),
+        relative_path="missing.txt",
+        name="missing.txt",
+        size_bytes=10,
+        modified_at_ns=1,
+        extension=".txt",
+    )
+
+    def fail_read(_path: Path) -> bytes:
+        raise OSError("simulated read failure")
+
+    issues = analyze_quality(str(folder), [record], read_bytes=fail_read)
+    assert len(issues) == 1
+    assert issues[0].kind == "read_error"
+
+
+def test_query_quality_rows_detects_issues(tmp_path: Path) -> None:
+    (tmp_path / "empty.txt").write_bytes(b"")
+    (tmp_path / "tiny.txt").write_bytes(b"x")
+    (tmp_path / "bad.txt").write_bytes(b"\xff\xfe")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = BridgeApi(session)
+    api.start_scan()
+    snap = _scan_until_idle(api)
+    assert snap["work"]["scan"]["state"] == "success"
+    assert snap["fileListSummary"]["issueCount"] == 3
+
+    small_page = api.query_quality_rows({"issueType": "small_file", "limit": 50})
+    validate_quality_rows_page(small_page)
+    assert len(small_page["rows"]) == 2
+    assert all(row["id"].startswith("quality:") for row in small_page["rows"])
+
+    encoding_page = api.query_quality_rows({"issueType": "encoding", "limit": 50})
+    assert len(encoding_page["rows"]) == 1
+    assert encoding_page["rows"][0]["issueType"] == "encoding"
+
+
+def test_query_quality_rows_unknown_issue_type_empty(tmp_path: Path) -> None:
+    (tmp_path / "empty.txt").write_bytes(b"")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = BridgeApi(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    page = api.query_quality_rows({"issueType": "near", "limit": 50})
+    assert page["rows"] == []
+    validate_quality_rows_page(page)
+
+
+def test_snapshot_quality_counts(tmp_path: Path) -> None:
+    (tmp_path / "empty.txt").write_bytes(b"")
+    (tmp_path / "bad.txt").write_bytes(b"\xff\xfe")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = BridgeApi(session)
+    api.start_scan()
+    snap = _scan_until_idle(api)
+    assert snap["work"]["quality"]["smallFileAnomalyCount"] == 1
+    assert snap["work"]["quality"]["encodingIssueCount"] == 1
+    assert snap["fileListSummary"]["issueCount"] == 2
+
+
+def test_sqlite_quality_issues_folder_scoped(tmp_path: Path) -> None:
+    db = tmp_path / "library.db"
+    index = SqliteLibraryIndex(db)
+    folder_a = str(tmp_path / "a")
+    folder_b = str(tmp_path / "b")
+    record = FileRecord(
+        id=make_file_id("only.txt", 0, 1),
+        relative_path="only.txt",
+        name="only.txt",
+        size_bytes=0,
+        modified_at_ns=1,
+        extension=".txt",
+    )
+    issues_a = analyze_quality(folder_a, [record])
+    index.replace_files(folder_a, [record])
+    index.replace_quality_issues(folder_a, issues_a)
+    assert len(index.quality_issues()) == 1
+
+    index.replace_files(folder_b, [])
+    index.replace_quality_issues(folder_b, [])
+    assert index.quality_issues() == []

@@ -57,6 +57,10 @@ def build_snapshot(
     has_pending_apply: bool,
     duplicate_group_count: int = 0,
     queue_count: int = 0,
+    integrity_issue_count: int = 0,
+    encoding_issue_count: int = 0,
+    small_file_anomaly_count: int = 0,
+    total_quality_issue_count: int = 0,
     connection: str = "Library session (Python)",
 ) -> dict[str, Any]:
     return {
@@ -69,7 +73,7 @@ def build_snapshot(
             "fileCount": file_count,
             "totalBytes": total_bytes,
             "duplicateGroups": duplicate_group_count,
-            "integrityIssues": 0,
+            "integrityIssues": integrity_issue_count,
             "lastRun": scan_last_run,
             "scanOptions": [".txt", ".md", "하위 폴더 포함"],
         },
@@ -91,15 +95,15 @@ def build_snapshot(
                 "libraryRevision": library_revision,
             },
             "quality": {
-                "integrityIssueCount": 0,
-                "encodingIssueCount": 0,
-                "smallFileAnomalyCount": 0,
+                "integrityIssueCount": integrity_issue_count,
+                "encodingIssueCount": encoding_issue_count,
+                "smallFileAnomalyCount": small_file_anomaly_count,
             },
         },
         "fileListSummary": {
             "totalCount": file_count,
             "filteredCount": file_count,
-            "issueCount": 0,
+            "issueCount": total_quality_issue_count,
             "selectedCount": 0,
         },
     }

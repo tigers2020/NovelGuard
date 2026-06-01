@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from domain.models import FileRecord
+from domain.quality import QualityIssue
 
 
 class LibraryIndexPort(Protocol):
@@ -18,3 +19,7 @@ class LibraryIndexPort(Protocol):
     def file_count(self) -> int: ...
 
     def total_bytes(self) -> int: ...
+
+    def replace_quality_issues(self, folder_path: str, issues: list[QualityIssue]) -> None: ...
+
+    def quality_issues(self) -> list[QualityIssue]: ...

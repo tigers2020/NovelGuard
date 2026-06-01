@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 
 from domain.models import FileRecord
+from domain.quality import QualityIssue
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS files (
@@ -20,6 +23,19 @@ CREATE TABLE IF NOT EXISTS files (
   encoding_status TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_files_folder ON files(folder_path);
+CREATE TABLE IF NOT EXISTS quality_issues (
+  folder_path TEXT NOT NULL,
+  issue_id TEXT NOT NULL,
+  file_id TEXT NOT NULL,
+  path TEXT NOT NULL,
+  severity TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  message TEXT NOT NULL,
+  evidence_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (folder_path, issue_id)
+);
+CREATE INDEX IF NOT EXISTS idx_quality_issues_folder ON quality_issues(folder_path);
 """
 
 
@@ -38,6 +54,7 @@ class SqliteLibraryIndex:
         self._current_folder = None
         with self._connect() as conn:
             conn.execute("DELETE FROM files")
+            conn.execute("DELETE FROM quality_issues")
 
     def replace_files(self, folder_path: str, files: list[FileRecord]) -> None:
         self._current_folder = folder_path
@@ -102,3 +119,56 @@ class SqliteLibraryIndex:
 
     def total_bytes(self) -> int:
         return sum(f.size_bytes for f in self.files())
+
+    def replace_quality_issues(self, folder_path: str, issues: list[QualityIssue]) -> None:
+        created_at = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            conn.execute("DELETE FROM quality_issues WHERE folder_path = ?", (folder_path,))
+            conn.executemany(
+                """
+                INSERT INTO quality_issues (
+                  folder_path, issue_id, file_id, path, severity, kind, message,
+                  evidence_json, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        folder_path,
+                        issue.issue_id,
+                        issue.file_id,
+                        issue.path,
+                        issue.severity,
+                        issue.kind,
+                        issue.message,
+                        json.dumps(issue.evidence),
+                        created_at,
+                    )
+                    for issue in issues
+                ],
+            )
+
+    def quality_issues(self) -> list[QualityIssue]:
+        if self._current_folder is None:
+            return []
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT issue_id, file_id, path, severity, kind, message, evidence_json
+                FROM quality_issues
+                WHERE folder_path = ?
+                ORDER BY path, kind
+                """,
+                (self._current_folder,),
+            ).fetchall()
+        return [
+            QualityIssue(
+                issue_id=row[0],
+                file_id=row[1],
+                path=row[2],
+                severity=row[3],  # type: ignore[arg-type]
+                kind=row[4],  # type: ignore[arg-type]
+                message=row[5],
+                evidence=json.loads(row[6]),
+            )
+            for row in rows
+        ]

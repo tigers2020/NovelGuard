@@ -8,10 +8,12 @@ from typing import Any
 
 from application.dto_mapper import (
     build_snapshot,
-    empty_quality_page,
     scan_timestamp,
 )
 from application.ports.library_index import LibraryIndexPort
+from application.quality_analyzer import analyze_quality
+from application.quality_query import query_quality_page
+from application.quality_rows_builder import build_quality_rows
 from application.review_query import query_review_page
 from application.review_rows_builder import build_review_rows
 from domain.duplicate_exact import find_exact_duplicate_groups
@@ -49,6 +51,11 @@ class LibrarySession:
         self._duplicate_group_count = 0
         self._queue_count = 0
         self._files_by_id: dict[str, FileRecord] = {}
+        self._quality_rows_cache: list[dict[str, Any]] = []
+        self._integrity_issue_count = 0
+        self._encoding_issue_count = 0
+        self._small_file_anomaly_count = 0
+        self._total_quality_issue_count = 0
 
     def select_folder(self, path: str | None = None) -> None:
         folder = path
@@ -71,6 +78,7 @@ class LibrarySession:
 
         with self._lock:
             self._index.replace_files(folder, [])
+            self._index.replace_quality_issues(folder, [])
             self._library_revision += 1
             self._scan_state = "ready"
             self._scan_last_run = None
@@ -128,6 +136,10 @@ class LibrarySession:
                 has_pending_apply=self._has_pending_apply,
                 duplicate_group_count=self._duplicate_group_count,
                 queue_count=self._queue_count,
+                integrity_issue_count=self._integrity_issue_count,
+                encoding_issue_count=self._encoding_issue_count,
+                small_file_anomaly_count=self._small_file_anomaly_count,
+                total_quality_issue_count=self._total_quality_issue_count,
             )
 
     def query_review_rows(self, query: dict[str, Any]) -> dict[str, Any]:
@@ -136,9 +148,9 @@ class LibrarySession:
             return query_review_page(self._review_rows_cache, query, limit=limit)
 
     def query_quality_rows(self, query: dict[str, Any]) -> dict[str, Any]:
-        _ = query
         with self._lock:
-            return empty_quality_page()
+            limit = _clamp_query_limit(query)
+            return query_quality_page(self._quality_rows_cache, query, limit=limit)
 
     def get_duplicate_group_detail(self, group_id: str) -> dict[str, Any]:
         with self._lock:
@@ -184,6 +196,14 @@ class LibrarySession:
         self._duplicate_group_count = 0
         self._queue_count = 0
         self._files_by_id = {}
+        self._clear_quality_cache()
+
+    def _clear_quality_cache(self) -> None:
+        self._quality_rows_cache = []
+        self._integrity_issue_count = 0
+        self._encoding_issue_count = 0
+        self._small_file_anomaly_count = 0
+        self._total_quality_issue_count = 0
 
     def _rebuild_review_index(self, files: list[FileRecord]) -> None:
         self._files_by_id = {f.id: f for f in files}
@@ -191,6 +211,21 @@ class LibrarySession:
         self._review_rows_cache = build_review_rows(groups, self._files_by_id)
         self._duplicate_group_count = len(groups)
         self._queue_count = len(self._review_rows_cache)
+
+    def _rebuild_quality_index(self, folder: str, files: list[FileRecord]) -> None:
+        issues = analyze_quality(folder, files)
+        self._index.replace_quality_issues(folder, issues)
+        self._quality_rows_cache = build_quality_rows(issues, self._files_by_id)
+        self._integrity_issue_count = sum(
+            1 for row in self._quality_rows_cache if row.get("issueType") == "integrity"
+        )
+        self._encoding_issue_count = sum(
+            1 for row in self._quality_rows_cache if row.get("issueType") == "encoding"
+        )
+        self._small_file_anomaly_count = sum(
+            1 for row in self._quality_rows_cache if row.get("issueType") == "small_file"
+        )
+        self._total_quality_issue_count = len(self._quality_rows_cache)
 
     def _run_scan(self, folder: str) -> None:
         collected: list[FileRecord] = []
@@ -238,6 +273,7 @@ class LibrarySession:
 
             self._index.replace_files(folder, collected)
             self._rebuild_review_index(collected)
+            self._rebuild_quality_index(folder, collected)
             self._scan_state = "success"
             self._scan_last_run = scan_timestamp()
             self._library_revision += 1
@@ -251,18 +287,22 @@ class LibrarySession:
         if self._backup_files is not None and self._backup_folder:
             self._index.replace_files(self._backup_folder, self._backup_files)
             self._rebuild_review_index(self._backup_files)
+            self._rebuild_quality_index(self._backup_folder, self._backup_files)
         else:
             self._index.replace_files(folder, [])
+            self._index.replace_quality_issues(folder, [])
             self._clear_review_cache()
 
     def _restore_backup_after_failed_scan(self, folder: str) -> None:
         if self._backup_files is not None and self._backup_folder:
             self._index.replace_files(self._backup_folder, self._backup_files)
             self._rebuild_review_index(self._backup_files)
+            self._rebuild_quality_index(self._backup_folder, self._backup_files)
             self._scan_state = "success"
             self._pipeline_label = "대기 중"
         else:
             self._index.replace_files(folder, [])
+            self._index.replace_quality_issues(folder, [])
             self._clear_review_cache()
             self._scan_state = "error"
 
