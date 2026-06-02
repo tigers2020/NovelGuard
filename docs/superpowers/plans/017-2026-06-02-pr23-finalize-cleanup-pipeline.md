@@ -10,7 +10,7 @@
 
 **Spec:** [011-2026-06-02-finalize-cleanup-pipeline-design.md](../specs/011-2026-06-02-finalize-cleanup-pipeline-design.md) (**approved** 2026-06-02)
 
-**Plan status:** **Approved** (2026-06-02)
+**Plan status:** **Implemented** (merged [PR #14](https://github.com/tigers2020/NovelGuard/pull/14), 2026-06-02)
 
 **Prerequisite:** PR-22 merged or committed (`[pr22] quality repair execution`)
 
@@ -66,13 +66,13 @@
 
 ## Task 1: Blocker / warning rules
 
-- [ ] `exact_unresolved_queue_count(session) -> int` — exact file rows only (`rowKind=file`, `type=exact`, `status in {unreviewed, conflict}`); excludes near/relation/group rows
-- [ ] `compute_finalize_blockers(session) -> list[dict]` — G2 approved codes; **never** use raw `queueCount` for `UNRESOLVED_DUPLICATE_QUEUE`
-- [ ] `near_unresolved_file_row_count(session) -> int` — G3 `NEAR_GROUPS_PRESENT`
-- [ ] `relation_unresolved_file_row_count(session) -> int` — G3 `UNREVIEWED_RELATION`
-- [ ] `compute_finalize_warnings(session) -> list[dict]` — omit entries when count==0; no cleanup-empty warning
-- [ ] `build_finalize_summary` sets `resolve.exactUnresolvedQueueCount` from `exact_unresolved_queue_count`
-- [ ] Unit coverage via contract tests only
+- [x] `exact_unresolved_queue_count(session) -> int` — exact file rows only (`rowKind=file`, `type=exact`, `status in {unreviewed, conflict}`); excludes near/relation/group rows
+- [x] `compute_finalize_blockers(session) -> list[dict]` — G2 approved codes; **never** use raw `queueCount` for `UNRESOLVED_DUPLICATE_QUEUE`
+- [x] `near_unresolved_file_row_count(session) -> int` — G3 `NEAR_GROUPS_PRESENT`
+- [x] `relation_unresolved_file_row_count(session) -> int` — G3 `UNREVIEWED_RELATION`
+- [x] `compute_finalize_warnings(session) -> list[dict]` — omit entries when count==0; no cleanup-empty warning
+- [x] `build_finalize_summary` sets `resolve.exactUnresolvedQueueCount` from `exact_unresolved_queue_count`
+- [x] Unit coverage via contract tests only
 
 ```python
 def exact_unresolved_queue_count(session) -> int:
@@ -96,19 +96,19 @@ def exact_unresolved_queue_count(session) -> int:
 
 ## Task 2: Summary + audit tail
 
-- [ ] `read_audit_tail(path, limit=50)` — last move/repair apply timestamps + counts
-- [ ] `build_finalize_summary(session) -> dict`
+- [x] `read_audit_tail(path, limit=50)` — last move/repair apply timestamps + counts
+- [x] `build_finalize_summary(session) -> dict`
 
 ---
 
 ## Task 3: Runner + cleanup port
 
-- [ ] `refresh_finalize_session_state(session)` — G4: resolve recount + targeted `reanalyze_quality_for_file_ids`
-- [ ] `FinalizeRunner` 4 steps on background thread; **reverify** blockers/warnings authoritative over precheck
-- [ ] `cancel_finalize` flag between steps
-- [ ] `finalize_cleanup` port — bottom-up empty dirs under `duplicate/**`, `organized/**` only; `Path.resolve()` + root escape check
-- [ ] Cleanup runner table (G5): `includeCleanup` × blockers → preview-only vs delete
-- [ ] `LIBRARY_BUSY` mutual exclusion with scan/apply/repair
+- [x] `refresh_finalize_session_state(session)` — G4: resolve recount + targeted `reanalyze_quality_for_file_ids`
+- [x] `FinalizeRunner` 4 steps on background thread; **reverify** blockers/warnings authoritative over precheck
+- [x] `cancel_finalize` flag between steps
+- [x] `finalize_cleanup` port — bottom-up empty dirs under `duplicate/**`, `organized/**` only; `Path.resolve()` + root escape check
+- [x] Cleanup runner table (G5): `includeCleanup` × blockers → preview-only vs delete
+- [x] `LIBRARY_BUSY` mutual exclusion with scan/apply/repair
 
 ```python
 def refresh_finalize_session_state(session) -> None:
@@ -122,29 +122,29 @@ def refresh_finalize_session_state(session) -> None:
 
 ## Task 4: Report IO
 
-- [ ] `write_finalize_report(...)` → `reportId`, path
-- [ ] `read_finalize_report(reportId)`
-- [ ] Update `work.finalize` on snapshot after run (G6 fields)
-- [ ] Bump `libraryRevision` only when `removedEmptyDirs` non-empty (G6)
+- [x] `write_finalize_report(...)` → `reportId`, path
+- [x] `read_finalize_report(reportId)`
+- [x] Update `work.finalize` on snapshot after run (G6 fields)
+- [x] Bump `libraryRevision` only when `removedEmptyDirs` non-empty (G6)
 
 ---
 
 ## Task 5: Bridge
 
-- [ ] Wire 4 methods; validators
-- [ ] `run_finalize_verification` does not reject on summary blockers alone (B1)
-- [ ] Extend `PYWEBVIEW_API_METHODS` + TS parity
+- [x] Wire 4 methods; validators
+- [x] `run_finalize_verification` does not reject on summary blockers alone (B1)
+- [x] Extend `PYWEBVIEW_API_METHODS` + TS parity
 
 ---
 
 ## Task 6: Web UI
 
-- [ ] `FinalizeWorkspace` — summary, blockers, warnings, CTAs
-- [ ] B1 `data-state` matrix (empty / ready / warning / disabled / running / success / error)
-- [ ] B1: disable primary + cleanup when `summary.blockers.length > 0`; tooltip = first blocker
-- [ ] Cleanup checkbox (G5): default off; label/helper per spec; disabled when blockers or running
-- [ ] `완료 보고서 보기` enabled only when `lastReportId != null`
-- [ ] Report viewer (read-only JSON panel)
+- [x] `FinalizeWorkspace` — summary, blockers, warnings, CTAs
+- [x] B1 `data-state` matrix (empty / ready / warning / disabled / running / success / error)
+- [x] B1: disable primary + cleanup when `summary.blockers.length > 0`; tooltip = first blocker
+- [x] Cleanup checkbox (G5): default off; label/helper per spec; disabled when blockers or running
+- [x] `완료 보고서 보기` enabled only when `lastReportId != null`
+- [x] Report viewer (read-only JSON panel)
 
 ---
 
@@ -183,12 +183,14 @@ def refresh_finalize_session_state(session) -> None:
 | `run_finalize_verification` with pre-existing blockers → `blocked` + report (bridge not rejected) | Yes |
 | `libraryRevision` unchanged when report-only run (no cleanup removal) | Yes |
 
+**Contract suite (merged):** Five focused cases in `tests/test_bridge_contract.py` (`get_finalize_summary`, clean `complete`, exact queue `blocked`, `LIBRARY_BUSY`). Remaining matrix rows: implementation + manual QA; extend in a follow-up if full matrix automation is required.
+
 ---
 
 ## Task 7: Verification
 
-- [ ] `python scripts/verify_phase_completion.py` — report counts
-- [ ] Scope freeze — no packaging / FileDock / new repair APIs
+- [x] `python scripts/verify_phase_completion.py` — report counts
+- [x] Scope freeze — no packaging / FileDock / new repair APIs
 
 ---
 
@@ -203,3 +205,4 @@ def refresh_finalize_session_state(session) -> None:
 | 2026-06-02 | G5: cleanup allowlist, runner table, UI checkbox, cleanup contract rows |
 | 2026-06-02 | G6: no library lock; revision bump on cleanup removal only |
 | 2026-06-02 | B1: UI/bridge split; plan status → **approved** |
+| 2026-06-02 | Tasks 1–7 complete; merged PR #14; plan status → **implemented** |
