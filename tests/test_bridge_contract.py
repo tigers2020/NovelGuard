@@ -626,6 +626,83 @@ def test_get_quality_issue_detail_id_without_prefix(tmp_path: Path) -> None:
     assert detail["detail"]["id"] == row["id"]
 
 
+def test_query_quality_rows_sort_name_asc(tmp_path: Path) -> None:
+    import unicodedata
+
+    (tmp_path / "가.txt").write_bytes(b"x")
+    (tmp_path / "나.txt").write_bytes(b"x")
+    (tmp_path / "a.txt").write_bytes(b"x")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    page = api.query_quality_rows(
+        {"issueType": "small_file", "limit": 50, "sort": {"field": "name", "direction": "asc"}},
+    )
+    names = [row["name"] for row in page["rows"]]
+    assert names == sorted(
+        names,
+        key=lambda value: unicodedata.normalize("NFC", value).casefold(),
+    )
+
+
+def test_query_quality_rows_invalid_sort_field_rejected(tmp_path: Path) -> None:
+    (tmp_path / "empty.txt").write_bytes(b"")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    with pytest.raises(PreviewApplyError) as exc_info:
+        api.query_quality_rows(
+            {
+                "issueType": "small_file",
+                "sort": {"field": "notAllowed", "direction": "asc"},
+            },
+        )
+    assert exc_info.value.reason == "INVALID_SORT_FIELD"
+
+
+def test_query_quality_rows_stable_sort_order(tmp_path: Path) -> None:
+    for i in range(4):
+        (tmp_path / f"empty_{i}.txt").write_bytes(b"")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    query = {
+        "issueType": "small_file",
+        "limit": 50,
+        "sort": {"field": "severity", "direction": "desc"},
+    }
+    first = api.query_quality_rows(query)
+    second = api.query_quality_rows(query)
+    assert [row["id"] for row in first["rows"]] == [row["id"] for row in second["rows"]]
+
+
+def test_query_quality_rows_severity_desc_errors_first(tmp_path: Path) -> None:
+    (tmp_path / "empty.txt").write_bytes(b"")
+    (tmp_path / "bad.txt").write_bytes(b"\xff\xfe")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    page = api.query_quality_rows(
+        {
+            "issueType": "encoding",
+            "limit": 50,
+            "sort": {"field": "severity", "direction": "desc"},
+        },
+    )
+    encoding_rows = [row for row in page["rows"] if row["issueType"] == "encoding"]
+    if len(encoding_rows) >= 2:
+        severities = [row["severity"] for row in encoding_rows]
+        assert severities.index("error") < severities.index("warning")
+
+
 def test_query_quality_rows_unknown_issue_type_empty(tmp_path: Path) -> None:
     (tmp_path / "empty.txt").write_bytes(b"")
     session = create_library_session(MemoryLibraryIndex())
@@ -1532,3 +1609,21 @@ def test_finalize_while_scan_raises_library_busy(tmp_path: Path) -> None:
     with pytest.raises(FinalizeError) as exc_info:
         api.run_finalize_verification({"includeCleanup": False})
     assert exc_info.value.reason == "LIBRARY_BUSY"
+
+
+def test_library_session_emits_invalidation_callback() -> None:
+    events: list[dict[str, object]] = []
+
+    def on_invalidation(event: dict[str, object]) -> None:
+        events.append(event)
+
+    session = create_library_session(
+        MemoryLibraryIndex(),
+        on_snapshot_invalidation=on_invalidation,
+    )
+    session.increment_library_revision(invalidation_reason="libraryRevision")
+    assert len(events) == 1
+    assert events[0]["type"] == "snapshotInvalidated"
+    assert events[0]["reason"] == "libraryRevision"
+    assert "percent" not in events[0]
+    assert "label" not in events[0]

@@ -51,6 +51,20 @@ class RepairApplyError(ValueError):
         super().__init__(message or reason)
 
 
+QUALITY_SORT_FIELDS = frozenset(
+    {"name", "path", "issueType", "severity", "encoding", "integrity"}
+)
+
+
+class QualityQueryError(ValueError):
+    def __init__(self, reason: str, message: str | None = None) -> None:
+        self.reason = reason
+        super().__init__(message or reason)
+
+    def __str__(self) -> str:
+        return json.dumps({"reason": self.reason}, ensure_ascii=False)
+
+
 class ApplyFailedError(ValueError):
     def __init__(
         self,

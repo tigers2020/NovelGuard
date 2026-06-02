@@ -1,5 +1,6 @@
 import type { ReviewRow, ReviewRowsQuery, ReviewStatus, ReviewRowType, ProposedAction } from "../types/review";
-import type { QualityIssueType, QualityRow } from "../types/quality";
+import type { QualityIssueType, QualityRow, QualityRowsQuery } from "../types/quality";
+import { BridgeCallError } from "./bridgeErrors";
 
 const FILE_NAMES = [
   "히어로는 악에게 패배하였습니다 1-1014 完.txt",
@@ -54,6 +55,61 @@ export function getAllReviewRows(count = 1284): ReviewRow[] {
   });
 
   return cachedRows;
+}
+
+const QUALITY_SORT_FIELDS = new Set([
+  "name",
+  "path",
+  "issueType",
+  "severity",
+  "encoding",
+  "integrity",
+]);
+
+const SEVERITY_ORDINAL: Record<string, number> = { error: 0, warning: 1 };
+
+export function textSortKey(value: string | null | undefined): string {
+  return (value ?? "").normalize("NFC").toLocaleLowerCase("en-US");
+}
+
+export function sortQualityRows(
+  rows: QualityRow[],
+  sort?: QualityRowsQuery["sort"],
+): QualityRow[] {
+  if (!sort?.field) return rows;
+  if (!QUALITY_SORT_FIELDS.has(sort.field)) {
+    throw new BridgeCallError("Bridge call rejected: INVALID_SORT_FIELD", {
+      code: "rejected",
+      method: "queryQualityRows",
+      reason: "INVALID_SORT_FIELD",
+    });
+  }
+  const reverse = sort.direction === "desc";
+  const field = sort.field;
+
+  const indexed = rows.map((row, index) => ({ row, index }));
+  indexed.sort((a, b) => {
+    let cmp = 0;
+    if (field === "severity") {
+      const ao = -(SEVERITY_ORDINAL[a.row.severity] ?? 99);
+      const bo = -(SEVERITY_ORDINAL[b.row.severity] ?? 99);
+      cmp = ao - bo;
+    } else {
+      const readField = (row: QualityRow): string | undefined => {
+        if (field === "path") return row.path;
+        if (field === "name") return row.name;
+        if (field === "issueType") return row.issueType;
+        if (field === "encoding") return row.encoding;
+        if (field === "integrity") return row.integrity;
+        return undefined;
+      };
+      cmp = textSortKey(readField(a.row)).localeCompare(textSortKey(readField(b.row)), "en-US");
+    }
+    if (cmp !== 0) return reverse ? -cmp : cmp;
+    if (a.index !== b.index) return a.index - b.index;
+    return a.row.id.localeCompare(b.row.id);
+  });
+  return indexed.map((entry) => entry.row);
 }
 
 export function sortReviewRows(rows: ReviewRow[], sort?: ReviewRowsQuery["sort"]): ReviewRow[] {

@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createInvalidationScheduler } from "./snapshotInvalidationSchedule";
 import {
   BRIDGE_ERROR_CODES,
   BridgeUnavailableError,
@@ -9,7 +10,7 @@ import {
 import { resolveBridge, resolveBridgeAsync } from "./bridgeFactory";
 import { PYWEBVIEW_READY_EVENT } from "./waitForPywebviewApi";
 import { mockBridge } from "./mockBridge";
-import { getAllReviewRows } from "./mockData";
+import { getAllReviewRows, sortQualityRows, textSortKey } from "./mockData";
 import { createPywebviewBridge } from "./pywebviewBridge";
 import {
   NOVEL_GUARD_BRIDGE_METHODS,
@@ -122,6 +123,62 @@ describe("bridge parity", () => {
     expect(page.pageInfo.totalFiltered).toBe(0);
   });
 
+  it("mockBridge queryQualityRows sorts by name asc", async () => {
+    const page = await mockBridge.queryQualityRows({
+      issueType: "encoding",
+      limit: 50,
+      sort: { field: "name", direction: "asc" },
+    });
+    const names = page.rows.map((row) => row.name);
+    const sorted = [...names].sort((a, b) =>
+      textSortKey(a).localeCompare(textSortKey(b), "en-US"),
+    );
+    expect(names).toEqual(sorted);
+  });
+
+  it("mockBridge queryQualityRows rejects invalid sort field", async () => {
+    await expect(
+      mockBridge.queryQualityRows({
+        issueType: "encoding",
+        sort: { field: "notAllowed", direction: "asc" },
+      }),
+    ).rejects.toMatchObject({ reason: "INVALID_SORT_FIELD" });
+  });
+
+  it("mockBridge queryQualityRows stable order for identical queries", async () => {
+    const query = {
+      issueType: "integrity" as const,
+      limit: 20,
+      sort: { field: "severity" as const, direction: "desc" as const },
+    };
+    const first = await mockBridge.queryQualityRows(query);
+    const second = await mockBridge.queryQualityRows(query);
+    expect(first.rows.map((row) => row.id)).toEqual(second.rows.map((row) => row.id));
+  });
+
+  it("sortQualityRows matches stable tie-break by id", () => {
+    const rows = [
+      {
+        id: "quality:b",
+        issueType: "small_file" as const,
+        name: "same",
+        severity: "warning" as const,
+        encoding: "UTF-8",
+        integrity: "Tiny",
+      },
+      {
+        id: "quality:a",
+        issueType: "small_file" as const,
+        name: "same",
+        severity: "warning" as const,
+        encoding: "UTF-8",
+        integrity: "Tiny",
+      },
+    ];
+    const sorted = sortQualityRows(rows, { field: "name", direction: "asc" });
+    expect(sorted.map((row) => row.id)).toEqual(["quality:a", "quality:b"]);
+  });
+
   it("queryQualityRows rejects when pywebview api method is missing", async () => {
     const fakeApi = Object.fromEntries(
       PYWEBVIEW_API_METHODS.filter((m) => m !== "query_quality_rows").map((m) => [
@@ -208,5 +265,74 @@ describe("bridge parity", () => {
   it("queryFileRows clamps limit to 200", async () => {
     const page = await mockBridge.queryFileRows({ cursor: null, limit: 999 });
     expect(page.rows.length).toBeLessThanOrEqual(200);
+  });
+});
+
+describe("snapshot invalidation", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("coalesces scanProgress invalidations", () => {
+    vi.useFakeTimers();
+    const refreshes: number[] = [];
+    const scheduler = createInvalidationScheduler({
+      debounceMs: 200,
+      onRefresh: () => {
+        refreshes.push(1);
+      },
+    });
+    for (let i = 1; i <= 5; i++) {
+      scheduler.handle({
+        type: "snapshotInvalidated",
+        reason: "scanProgress",
+        sequence: i,
+      });
+    }
+    expect(refreshes).toHaveLength(0);
+    vi.advanceTimersByTime(200);
+    expect(refreshes).toHaveLength(1);
+    scheduler.dispose();
+  });
+
+  it("immediate invalidation collapses pending debounce into one refresh", () => {
+    vi.useFakeTimers();
+    const refreshes: number[] = [];
+    const scheduler = createInvalidationScheduler({
+      debounceMs: 200,
+      onRefresh: () => {
+        refreshes.push(1);
+        return Promise.resolve();
+      },
+    });
+    scheduler.handle({
+      type: "snapshotInvalidated",
+      reason: "scanProgress",
+      sequence: 1,
+    });
+    scheduler.handle({
+      type: "snapshotInvalidated",
+      reason: "libraryRevision",
+      sequence: 2,
+    });
+    vi.advanceTimersByTime(0);
+    expect(refreshes).toHaveLength(1);
+    scheduler.dispose();
+  });
+
+  it("mockBridge subscribe emits and unsubscribe stops delivery", async () => {
+    vi.useFakeTimers();
+    const seen: number[] = [];
+    const unsub = mockBridge.subscribeSnapshotInvalidation((e) => {
+      seen.push(e.sequence);
+    });
+    await mockBridge.startScan();
+    vi.advanceTimersByTime(300);
+    expect(seen.length).toBeGreaterThan(0);
+    const last = seen.length;
+    unsub();
+    vi.advanceTimersByTime(1000);
+    expect(seen.length).toBe(last);
+    await mockBridge.cancelRun();
   });
 });

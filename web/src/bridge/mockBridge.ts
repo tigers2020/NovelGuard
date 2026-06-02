@@ -25,6 +25,7 @@ import {
   filterReviewRows,
   getAllReviewRows,
   paginateRows,
+  sortQualityRows,
   sortReviewRows,
   summarizeReviewRows,
 } from "./mockData";
@@ -54,6 +55,10 @@ import type {
   FinalizeSummary,
   RunFinalizeRequest,
 } from "../types/finalize";
+import type {
+  SnapshotInvalidationEvent,
+  SnapshotInvalidationReason,
+} from "../types/snapshotInvalidation";
 
 const state = {
   activeMode: "resolve" as WorkMode,
@@ -64,6 +69,33 @@ const state = {
 };
 
 let libraryRevision = 0;
+
+let invalidationSequence = 0;
+const invalidationListeners = new Set<(event: SnapshotInvalidationEvent) => void>();
+let scanSimulationTimer: ReturnType<typeof setInterval> | undefined;
+
+function emitSnapshotInvalidation(
+  reason: SnapshotInvalidationReason,
+  partial?: Pick<SnapshotInvalidationEvent, "libraryRevision" | "pipelinePhase">,
+): void {
+  invalidationSequence += 1;
+  const event: SnapshotInvalidationEvent = {
+    type: "snapshotInvalidated",
+    reason,
+    sequence: invalidationSequence,
+    ...partial,
+  };
+  for (const listener of invalidationListeners) {
+    listener(event);
+  }
+}
+
+function stopScanSimulation(): void {
+  if (scanSimulationTimer !== undefined) {
+    clearInterval(scanSimulationTimer);
+    scanSimulationTimer = undefined;
+  }
+}
 
 let pendingPreview: {
   token: string;
@@ -116,6 +148,7 @@ function clearPendingPreview(): void {
 export function bumpLibraryRevisionForTest(): void {
   libraryRevision += 1;
   clearPendingPreview();
+  emitSnapshotInvalidation("libraryRevision", { libraryRevision });
 }
 
 if (typeof window !== "undefined") {
@@ -355,20 +388,38 @@ export const mockBridge: NovelGuardBridge = {
       rejectApply("select_folder", "LIBRARY_BUSY");
     }
     state.folderPath = "D:/Novels/Library/selected";
+    libraryRevision += 1;
+    emitSnapshotInvalidation("libraryRevision", { libraryRevision });
   },
 
   async startScan() {
     if (applyInProgress) {
       rejectApply("start_scan", "LIBRARY_BUSY");
     }
+    stopScanSimulation();
     state.pipelineRunning = true;
+    emitSnapshotInvalidation("pipelinePhase", { pipelinePhase: "scan" });
+    let pct = 0;
+    scanSimulationTimer = setInterval(() => {
+      pct = Math.min(100, pct + 10);
+      emitSnapshotInvalidation("scanProgress", { pipelinePhase: "scan" });
+      if (pct >= 100) {
+        stopScanSimulation();
+        state.pipelineRunning = false;
+        libraryRevision += 1;
+        emitSnapshotInvalidation("libraryRevision", { libraryRevision });
+      }
+    }, 300);
   },
 
   async cancelRun() {
+    stopScanSimulation();
     if (state.pipelineRunning) {
       state.pipelineRunning = false;
       libraryRevision += 1;
       clearPendingPreview();
+      emitSnapshotInvalidation("pipelinePhase", { pipelinePhase: "idle" });
+      emitSnapshotInvalidation("libraryRevision", { libraryRevision });
     } else {
       state.pipelineRunning = false;
     }
@@ -433,7 +484,8 @@ export const mockBridge: NovelGuardBridge = {
       return true;
     });
     const limit = clampQualityQueryLimit(query);
-    const { slice, nextCursor, hasMore } = paginateRows(filtered, query.cursor, limit);
+    const sorted = sortQualityRows(filtered, query.sort);
+    const { slice, nextCursor, hasMore } = paginateRows(sorted, query.cursor, limit);
 
     const page = {
       rows: slice,
@@ -441,12 +493,12 @@ export const mockBridge: NovelGuardBridge = {
         cursor: query.cursor ?? null,
         nextCursor,
         hasMore,
-        totalFiltered: filtered.length,
+        totalFiltered: sorted.length,
       },
       summary: {
-        issueCount: filtered.length,
-        warningCount: filtered.filter((r) => r.severity === "warning").length,
-        errorCount: filtered.filter((r) => r.severity === "error").length,
+        issueCount: sorted.length,
+        warningCount: sorted.filter((r) => r.severity === "warning").length,
+        errorCount: sorted.filter((r) => r.severity === "error").length,
       },
     };
     validateQualityRowsPage(page);
@@ -535,6 +587,7 @@ export const mockBridge: NovelGuardBridge = {
     }
     clearPendingRepair();
     libraryRevision += 1;
+    emitSnapshotInvalidation("repairComplete", { libraryRevision });
     console.info("[mockBridge] applyQualityRepair", request.issueIds);
   },
 
@@ -605,6 +658,7 @@ export const mockBridge: NovelGuardBridge = {
       clearPendingPreview();
       if (count > 0) {
         libraryRevision += 1;
+        emitSnapshotInvalidation("applyComplete", { libraryRevision });
       }
       console.info("[mockBridge] applyResolvedActions", request.selection, count);
     } finally {
@@ -625,6 +679,7 @@ export const mockBridge: NovelGuardBridge = {
     if (updated > 0) {
       libraryRevision += 1;
       clearPendingPreview();
+      emitSnapshotInvalidation("libraryRevision", { libraryRevision });
     }
     return { updatedCount: updated, libraryRevision };
   },
@@ -716,6 +771,13 @@ export const mockBridge: NovelGuardBridge = {
       builtAt: null,
       frontendBuild: "web/build",
       pythonRuntime: "3.12.0",
+    };
+  },
+
+  subscribeSnapshotInvalidation(listener) {
+    invalidationListeners.add(listener);
+    return () => {
+      invalidationListeners.delete(listener);
     };
   },
 };
