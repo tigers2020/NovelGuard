@@ -52,7 +52,9 @@ function parseDensity(raw: string | null): FileRowDensity {
 }
 
 function parsePreset(raw: string | null): FileRowColumnPreset {
-  return raw === "review" ? "review" : "basic";
+  if (raw === "review") return "review";
+  if (raw === "technical") return "technical";
+  return "basic";
 }
 
 export function clampHeightPx(px: number): number {

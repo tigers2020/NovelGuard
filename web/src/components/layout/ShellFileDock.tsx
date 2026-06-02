@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBridge, useSnapshot } from "../../app/providers/snapshotHooks";
+import { BridgeCallError } from "../../bridge/bridgeErrors";
 import { formatBytes } from "../../lib/format";
-import type { FileRow, FileRowColumnPreset, FileRowDensity } from "../../types/fileRows";
+import type {
+  FileRow,
+  FileRowColumnPreset,
+  FileRowDensity,
+  FileRowsQuery,
+  FileRowSortDirection,
+  FileRowSortField,
+} from "../../types/fileRows";
 import { StatChip } from "../ui/StatChip";
 import { columnsForPreset } from "./shellFileDockColumns";
 import {
@@ -12,12 +20,21 @@ import {
 } from "./shellFileDockStorage";
 
 const SEARCH_DEBOUNCE_MS = 220;
+const PAGE_LIMIT = 100;
+
+type SortState = {
+  field: FileRowSortField;
+  direction: FileRowSortDirection;
+};
+
+const DEFAULT_SORT: SortState = { field: "path", direction: "asc" };
 
 export function ShellFileDock({ onOpenResolve }: { onOpenResolve: () => void }) {
   const bridge = useBridge();
   const snapshot = useSnapshot();
   const library = snapshot.library;
   const summary = snapshot.fileListSummary;
+  const libraryRevision = snapshot.work.resolve.libraryRevision;
 
   const [expanded, setExpanded] = useState(() => loadShellFileDockState().expanded);
   const [heightPx, setHeightPx] = useState(() => loadShellFileDockState().heightPx);
@@ -27,9 +44,13 @@ export function ShellFileDock({ onOpenResolve }: { onOpenResolve: () => void }) 
   );
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const [rows, setRows] = useState<FileRow[]>([]);
   const [filteredCount, setFilteredCount] = useState(0);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
 
   const columns = useMemo(() => columnsForPreset(columnPreset), [columnPreset]);
@@ -54,40 +75,79 @@ export function ShellFileDock({ onOpenResolve }: { onOpenResolve: () => void }) 
     [columnPreset, density, expanded, heightPx],
   );
 
-  const loadRows = useCallback(async () => {
-    if (!expanded) return;
-    setLoading(true);
-    try {
-      setQueryError(null);
-      const page = await bridge.queryFileRows({
-        search: debouncedSearch || undefined,
-        preset: columnPreset,
-        cursor: null,
-        limit: 100,
-      });
-      setRows(page.rows);
-      setFilteredCount(page.pageInfo.totalFiltered);
-    } catch (err) {
-      setQueryError(err instanceof Error ? err.message : "Failed to load files");
-      setRows([]);
-      setFilteredCount(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [bridge, columnPreset, debouncedSearch, expanded]);
+  const buildQuery = useCallback(
+    (cursor: string | null): FileRowsQuery => ({
+      search: debouncedSearch || undefined,
+      preset: columnPreset,
+      cursor,
+      limit: PAGE_LIMIT,
+      sort,
+    }),
+    [columnPreset, debouncedSearch, sort],
+  );
+
+  const fetchPage = useCallback(
+    async (cursor: string | null, append: boolean) => {
+      if (!expanded) return;
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+      try {
+        setQueryError(null);
+        const page = await bridge.queryFileRows(buildQuery(cursor));
+        setRows((prev) => (append ? [...prev, ...page.rows] : page.rows));
+        setFilteredCount(page.pageInfo.totalFiltered);
+        setNextCursor(page.pageInfo.nextCursor);
+        setHasMore(page.pageInfo.hasMore);
+      } catch (err) {
+        const message =
+          err instanceof BridgeCallError && err.reason
+            ? err.reason
+            : err instanceof Error
+              ? err.message
+              : "Failed to load files";
+        setQueryError(message);
+        if (!append) {
+          setRows([]);
+          setFilteredCount(0);
+          setNextCursor(null);
+          setHasMore(false);
+        }
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [bridge, buildQuery, expanded],
+  );
 
   useEffect(() => {
     if (!expanded) return;
     const frame = requestAnimationFrame(() => {
-      void loadRows();
+      void fetchPage(null, false);
     });
     return () => cancelAnimationFrame(frame);
-  }, [expanded, loadRows, snapshot.work.resolve.libraryRevision]);
+  }, [expanded, fetchPage, libraryRevision]);
 
   const toggleExpanded = () => {
     const next = !expanded;
     setExpanded(next);
     persist({ expanded: next });
+  };
+
+  const handleSortHeader = (field: FileRowSortField) => {
+    setSort((prev) =>
+      prev.field === field
+        ? { field, direction: prev.direction === "asc" ? "desc" : "asc" }
+        : { field, direction: "asc" },
+    );
+  };
+
+  const sortIndicator = (field: FileRowSortField) => {
+    if (sort.field !== field) return "";
+    return sort.direction === "asc" ? " ▲" : " ▼";
   };
 
   const totalLabel = library.fileCount.toLocaleString();
@@ -151,6 +211,7 @@ export function ShellFileDock({ onOpenResolve }: { onOpenResolve: () => void }) 
               >
                 <option value="basic">Basic</option>
                 <option value="review">Review</option>
+                <option value="technical">Technical</option>
               </select>
             </label>
             <button
@@ -175,43 +236,70 @@ export function ShellFileDock({ onOpenResolve }: { onOpenResolve: () => void }) 
               {queryError}
             </p>
           ) : (
-            <div className="min-h-0 flex-1 overflow-auto rounded-md border border-outline">
-              <table className={`w-full min-w-[640px] ${rowClass}`}>
-                <thead className="sticky top-0 bg-surface-elevated text-left text-xs text-muted">
-                  <tr>
-                    {columns.map((col) => (
-                      <th key={col.id} className="px-3 font-semibold">
-                        {col.header}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading && rows.length === 0 ? (
+            <div className="flex min-h-0 flex-1 flex-col gap-2">
+              <div className="min-h-0 flex-1 overflow-auto rounded-md border border-outline">
+                <table className={`w-full min-w-[640px] ${rowClass}`} data-testid="shell-file-dock-table">
+                  <thead className="sticky top-0 bg-surface-elevated text-left text-xs text-muted">
                     <tr>
-                      <td colSpan={columns.length} className="px-3 py-4 text-muted">
-                        Loading…
-                      </td>
+                      {columns.map((col) =>
+                        col.sortField ? (
+                          <th key={col.id} className="px-3 font-semibold">
+                            <button
+                              type="button"
+                              className="text-left hover:text-on-surface"
+                              data-testid={`shell-file-dock-sort-${col.id}`}
+                              onClick={() => handleSortHeader(col.sortField!)}
+                            >
+                              {col.header}
+                              {sortIndicator(col.sortField)}
+                            </button>
+                          </th>
+                        ) : (
+                          <th key={col.id} className="px-3 font-semibold">
+                            {col.header}
+                          </th>
+                        ),
+                      )}
                     </tr>
-                  ) : rows.length === 0 ? (
-                    <tr>
-                      <td colSpan={columns.length} className="px-3 py-4 text-muted">
-                        No matching files.
-                      </td>
-                    </tr>
-                  ) : (
-                    rows.map((row) => (
-                      <tr key={row.id} className="border-t border-outline/60 hover:bg-hover">
-                        {columns.map((col) => (
-                          <td key={col.id} className="max-w-xs truncate px-3">
-                            {col.cell(row)}
-                          </td>
-                        ))}
+                  </thead>
+                  <tbody>
+                    {loading && rows.length === 0 ? (
+                      <tr>
+                        <td colSpan={columns.length} className="px-3 py-4 text-muted">
+                          Loading…
+                        </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    ) : rows.length === 0 ? (
+                      <tr>
+                        <td colSpan={columns.length} className="px-3 py-4 text-muted">
+                          No matching files.
+                        </td>
+                      </tr>
+                    ) : (
+                      rows.map((row) => (
+                        <tr key={row.id} className="border-t border-outline/60 hover:bg-hover">
+                          {columns.map((col) => (
+                            <td key={col.id} className="max-w-xs truncate px-3">
+                              {col.cell(row)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              {hasMore && (
+                <button
+                  type="button"
+                  data-testid="shell-file-dock-load-more"
+                  className="self-center rounded-md border border-outline px-4 py-1.5 text-sm hover:bg-hover"
+                  disabled={loadingMore}
+                  onClick={() => void fetchPage(nextCursor, true)}
+                >
+                  {loadingMore ? "Loading…" : "Load more"}
+                </button>
+              )}
             </div>
           )}
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from application.file_row_page_memory import query_file_rows_page_memory
 from application.file_row_query import NormalizedFileRowsQuery
 from application.ports.review_state import LoadedReviewState

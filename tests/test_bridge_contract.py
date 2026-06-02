@@ -506,12 +506,10 @@ def test_sqlite_library_index_has_file_review_projection_table(tmp_path: Path) -
     db = tmp_path / "library.db"
     SqliteLibraryIndex(db)
     with sqlite3.connect(db) as conn:
-        found = conn.execute(
-            """
+        found = conn.execute("""
             SELECT name FROM sqlite_master
             WHERE type = 'table' AND name = 'file_review_projection'
-            """
-        ).fetchone()
+            """).fetchone()
     assert found is not None
 
 
@@ -530,7 +528,9 @@ def test_sqlite_query_file_rows_sort_and_search(tmp_path: Path) -> None:
     paths = [row["path"] for row in by_path["rows"]]
     assert paths == sorted(paths)
 
-    by_name_desc = api.query_file_rows({"sort": {"field": "name", "direction": "desc"}, "limit": 10})
+    by_name_desc = api.query_file_rows(
+        {"sort": {"field": "name", "direction": "desc"}, "limit": 10}
+    )
     names = [row["name"] for row in by_name_desc["rows"]]
     assert names == sorted(names, reverse=True)
 
@@ -539,13 +539,64 @@ def test_sqlite_query_file_rows_sort_and_search(tmp_path: Path) -> None:
     assert search["rows"][0]["name"] == "alpha.txt"
 
 
+def test_query_file_rows_cursor_pagination(tmp_path: Path) -> None:
+    folder = tmp_path / "lib"
+    folder.mkdir()
+    for index in range(5):
+        (folder / f"file_{index}.txt").write_bytes(b"x")
+    session = create_library_session(SqliteLibraryIndex(tmp_path / "page.db"))
+    session.select_folder(str(folder))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+
+    first = api.query_file_rows({"limit": 2, "cursor": None})
+    assert len(first["rows"]) == 2
+    assert first["pageInfo"]["hasMore"] is True
+    second = api.query_file_rows({"limit": 2, "cursor": first["pageInfo"]["nextCursor"]})
+    assert len(second["rows"]) == 2
+    assert first["rows"][0]["id"] != second["rows"][0]["id"]
+
+
+def test_query_file_rows_filter_duplicate_group_none(tmp_path: Path) -> None:
+    folder = tmp_path / "lib"
+    folder.mkdir()
+    (folder / "solo.txt").write_bytes(b"only")
+    session = create_library_session(SqliteLibraryIndex(tmp_path / "filter.db"))
+    session.select_folder(str(folder))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+
+    page = api.query_file_rows({"filters": {"duplicateGroup": "none"}, "limit": 50})
+    assert page["pageInfo"]["totalFiltered"] >= 1
+    assert all(row.get("duplicateGroupId") is None for row in page["rows"])
+
+
+def test_query_file_rows_exact_duplicate_enrichment(tmp_path: Path) -> None:
+    payload = "duplicate story body\n"
+    (tmp_path / "keeper.txt").write_text(payload, encoding="utf-8")
+    (tmp_path / "copy.txt").write_text(payload, encoding="utf-8")
+    session = create_library_session(SqliteLibraryIndex(tmp_path / "dup.db"))
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+
+    page = api.query_file_rows({"limit": 50})
+    assert page["pageInfo"]["totalFiltered"] == 2
+    group_ids = {row.get("duplicateGroupId") for row in page["rows"]}
+    assert len(group_ids) == 1
+    assert None not in group_ids
+    assert sum(1 for row in page["rows"] if row.get("isKeeper")) == 1
+
+
 def test_sqlite_library_index_legacy_db_backfills_file_keys(tmp_path: Path) -> None:
     db = tmp_path / "legacy.db"
     folder = str(tmp_path / "lib")
     file_id = make_file_id("legacy.txt", 10, 1)
     with sqlite3.connect(db) as conn:
-        conn.executescript(
-            """
+        conn.executescript("""
             CREATE TABLE files (
               id TEXT PRIMARY KEY,
               folder_path TEXT NOT NULL,
@@ -557,8 +608,7 @@ def test_sqlite_library_index_legacy_db_backfills_file_keys(tmp_path: Path) -> N
               content_sha256 TEXT,
               encoding_status TEXT
             );
-            """
-        )
+            """)
         conn.execute(
             """
             INSERT INTO files (

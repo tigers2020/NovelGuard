@@ -71,7 +71,7 @@ flowchart TD
 | **PR-26** | Snapshot invalidation events | F | No | `specs/014-2026-06-02-snapshot-invalidation-design.md` | `plans/020-2026-06-02-pr26-snapshot-invalidation.md` | **Done** (2026-06-02) |
 | **PR-27** | Quality grid parity with Resolve | F | No | `specs/015-2026-06-02-quality-grid-parity-design.md` | `plans/021-2026-06-02-pr27-quality-grid-parity.md` | **Done** (2026-06-02) |
 | **PR-28** | Settings/Logs v1 (minimal subset) | F | Limited | `specs/016-2026-06-02-settings-logs-design.md` | `plans/022-2026-06-02-pr28-settings-logs.md` | **Done** (2026-06-02); **merge to `main` before PR-29 implement** |
-| **PR-29** | `queryFileRows` advanced / SQL page query | F | No | `specs/017-2026-06-02-query-file-rows-advanced-design.md` | `plans/023-2026-06-02-pr29-query-file-rows-advanced.md` | Spec **approved**; plan 023 **approved** (2026-06-02); Task 1 in progress |
+| **PR-29** | `queryFileRows` advanced / SQL page query | F | No | `specs/017-2026-06-02-query-file-rows-advanced-design.md` | `plans/023-2026-06-02-pr29-query-file-rows-advanced.md` | **Done** (2026-06-02); plan 023 complete |
 | **PR-30** | Bridge / app hygiene refactor | G | No | `specs/018-2026-06-02-bridge-hygiene-design.md` | `plans/024-2026-06-02-pr30-bridge-hygiene.md` | **Proposed** |
 
 ---

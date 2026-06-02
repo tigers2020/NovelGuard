@@ -19,7 +19,10 @@ def query_file_rows_page_memory(
     if not files:
         return empty_file_rows_page(normalized.wire_cursor)
 
-    rows = [_enrich_row(file_record_to_row(record), projection_by_file_id.get(record.id)) for record in files]
+    rows = [
+        _enrich_row(file_record_to_row(record), projection_by_file_id.get(record.id))
+        for record in files
+    ]
     filtered = _apply_filters(rows, normalized)
     sorted_rows = _sort_rows(filtered, normalized)
     offset = normalized.cursor_offset
@@ -52,7 +55,9 @@ def _enrich_row(
     return enriched
 
 
-def _apply_filters(rows: list[dict[str, Any]], normalized: NormalizedFileRowsQuery) -> list[dict[str, Any]]:
+def _apply_filters(
+    rows: list[dict[str, Any]], normalized: NormalizedFileRowsQuery
+) -> list[dict[str, Any]]:
     filters = normalized.filters
     result = rows
     if normalized.search_term:
@@ -70,9 +75,7 @@ def _apply_filters(rows: list[dict[str, Any]], normalized: NormalizedFileRowsQue
     if filters.encodings:
         allowed = set(filters.encodings)
         result = [
-            row
-            for row in result
-            if text_sort_key(str(row.get("integrityStatus") or "")) in allowed
+            row for row in result if text_sort_key(str(row.get("integrityStatus") or "")) in allowed
         ]
     if filters.duplicate_group == "any":
         result = [row for row in result if row.get("duplicateGroupId")]
@@ -97,7 +100,9 @@ def _integrity_bucket(row: dict[str, Any]) -> str:
     return "issue"
 
 
-def _sort_rows(rows: list[dict[str, Any]], normalized: NormalizedFileRowsQuery) -> list[dict[str, Any]]:
+def _sort_rows(
+    rows: list[dict[str, Any]], normalized: NormalizedFileRowsQuery
+) -> list[dict[str, Any]]:
     field = normalized.sort_field
     reverse = normalized.sort_direction == "desc"
 

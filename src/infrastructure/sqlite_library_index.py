@@ -6,10 +6,10 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from application.dto_mapper import empty_file_rows_page
 from application.file_row_query import NormalizedFileRowsQuery, text_sort_key
-from infrastructure.sqlite_file_rows_page import query_sqlite_file_rows_page
 from application.ports.review_state import LoadedReviewState
 from domain.duplicate_near import (
     NearDuplicateGroup,
@@ -19,6 +19,7 @@ from domain.duplicate_near import (
 )
 from domain.models import FileRecord
 from domain.quality import QualityIssue
+from infrastructure.sqlite_file_rows_page import query_sqlite_file_rows_page
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS files (
@@ -123,12 +124,10 @@ def _file_sort_keys(record: FileRecord) -> tuple[str, str, str, str]:
 
 
 def _backfill_file_keys(conn: sqlite3.Connection) -> None:
-    rows = conn.execute(
-        """
+    rows = conn.execute("""
         SELECT folder_path, id, name, relative_path, extension, encoding_status
         FROM files
-        """
-    ).fetchall()
+        """).fetchall()
     for folder_path, file_id, name, relative_path, extension, encoding_status in rows:
         conn.execute(
             """
@@ -158,8 +157,7 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         if column not in file_columns:
             conn.execute(f"ALTER TABLE files ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
     _backfill_file_keys(conn)
-    conn.executescript(
-        """
+    conn.executescript("""
         CREATE TABLE IF NOT EXISTS file_review_projection (
           folder_path TEXT NOT NULL,
           file_id TEXT NOT NULL,
@@ -182,8 +180,7 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
           ON files(folder_path, modified_at_ns, id);
         CREATE INDEX IF NOT EXISTS idx_files_folder_encoding_id
           ON files(folder_path, encoding_key, id);
-        """
-    )
+        """)
 
 
 class SqliteLibraryIndex:

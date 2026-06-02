@@ -3,6 +3,8 @@ import type { RepairApplyErrorCode, RepairPreviewErrorCode } from "../types/qual
 
 export type QualityQueryErrorCode = "INVALID_SORT_FIELD";
 
+export type FileRowQueryErrorCode = "INVALID_SORT_FIELD" | "INVALID_FILTER_VALUE";
+
 export type BridgeErrorCode = "timeout" | "rejected" | "missing_method";
 
 export const BRIDGE_ERROR_CODES = {
@@ -37,7 +39,8 @@ export class BridgeCallError extends Error {
     | PreviewApplyErrorCode
     | RepairApplyErrorCode
     | RepairPreviewErrorCode
-    | QualityQueryErrorCode;
+    | QualityQueryErrorCode
+    | FileRowQueryErrorCode;
   readonly details?: ApplyFailedDetails;
 
   constructor(
@@ -49,7 +52,8 @@ export class BridgeCallError extends Error {
         | PreviewApplyErrorCode
         | RepairApplyErrorCode
         | RepairPreviewErrorCode
-        | QualityQueryErrorCode;
+        | QualityQueryErrorCode
+    | FileRowQueryErrorCode;
       details?: ApplyFailedDetails;
       cause?: unknown;
     },

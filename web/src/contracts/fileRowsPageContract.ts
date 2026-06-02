@@ -1,9 +1,18 @@
 import type { FileRowsPage, FileRowsQuery } from "../types/fileRows";
-import { DEFAULT_QUERY_LIMIT, MAX_QUERY_LIMIT, PageContractError } from "./reviewPageContract";
+
+export const FILE_ROWS_DEFAULT_LIMIT = 100;
+export const FILE_ROWS_MAX_LIMIT = 500;
+
+export class PageContractError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PageContractError";
+  }
+}
 
 export function clampFileRowsLimit(query: FileRowsQuery): number {
-  const raw = query.limit ?? DEFAULT_QUERY_LIMIT;
-  return Math.min(Math.max(1, raw), MAX_QUERY_LIMIT);
+  const raw = query.limit ?? FILE_ROWS_DEFAULT_LIMIT;
+  return Math.min(Math.max(1, raw), FILE_ROWS_MAX_LIMIT);
 }
 
 export function validateFileRowsPage(page: unknown): asserts page is FileRowsPage {
@@ -14,8 +23,8 @@ export function validateFileRowsPage(page: unknown): asserts page is FileRowsPag
   if (!Array.isArray(p.rows)) {
     throw new PageContractError("FileRowsPage.rows must be an array");
   }
-  if (p.rows.length > MAX_QUERY_LIMIT) {
-    throw new PageContractError(`FileRowsPage.rows exceeds limit ${MAX_QUERY_LIMIT}`);
+  if (p.rows.length > FILE_ROWS_MAX_LIMIT) {
+    throw new PageContractError(`FileRowsPage.rows exceeds limit ${FILE_ROWS_MAX_LIMIT}`);
   }
   if (!p.pageInfo || typeof p.pageInfo.totalFiltered !== "number") {
     throw new PageContractError("FileRowsPage.pageInfo invalid");

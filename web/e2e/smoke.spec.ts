@@ -199,6 +199,24 @@ test.describe("NovelGuard smoke", () => {
     await expect(page.getByTestId("app-info-diagnostics")).toBeVisible();
   });
 
+  test("shell file dock sort and load more", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("shell-file-dock").getByRole("button", { name: /파일 목록/ }).click();
+    await expect(page.getByTestId("shell-file-dock-table")).toBeVisible({ timeout: 15_000 });
+    const nameHeader = page.getByTestId("shell-file-dock-sort-name");
+    await expect(nameHeader).toBeVisible();
+    await nameHeader.click();
+    await expect(nameHeader).toHaveText(/▲|▼/);
+
+    const loadMore = page.getByTestId("shell-file-dock-load-more");
+    await expect(loadMore).toBeVisible({ timeout: 10_000 });
+    const rowCountBefore = await page.locator("[data-testid='shell-file-dock-table'] tbody tr").count();
+    await loadMore.click();
+    await expect
+      .poll(async () => page.locator("[data-testid='shell-file-dock-table'] tbody tr").count())
+      .toBeGreaterThan(rowCountBefore);
+  });
+
   test("Logs route loads live and artifacts sections", async ({ page }) => {
     await page.goto("/");
     await page.getByTestId("nav-logs").click();

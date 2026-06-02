@@ -270,9 +270,41 @@ describe("bridge parity", () => {
     }
   });
 
-  it("queryFileRows clamps limit to 200", async () => {
+  it("queryFileRows clamps limit to 500", async () => {
     const page = await mockBridge.queryFileRows({ cursor: null, limit: 999 });
-    expect(page.rows.length).toBeLessThanOrEqual(200);
+    expect(page.rows.length).toBeLessThanOrEqual(500);
+  });
+
+  it("queryFileRows rejects invalid sort field", async () => {
+    await expect(
+      mockBridge.queryFileRows({
+        cursor: null,
+        sort: { field: "notAllowed" as "name", direction: "asc" },
+      }),
+    ).rejects.toMatchObject({ reason: "INVALID_SORT_FIELD" });
+  });
+
+  it("queryFileRows rejects invalid filter value", async () => {
+    await expect(
+      mockBridge.queryFileRows({
+        cursor: null,
+        filters: { duplicateGroup: "maybe" as "any" },
+      }),
+    ).rejects.toMatchObject({ reason: "INVALID_FILTER_VALUE" });
+  });
+
+  it("queryFileRows sort changes first row", async () => {
+    const asc = await mockBridge.queryFileRows({
+      cursor: null,
+      limit: 5,
+      sort: { field: "name", direction: "asc" },
+    });
+    const desc = await mockBridge.queryFileRows({
+      cursor: null,
+      limit: 5,
+      sort: { field: "name", direction: "desc" },
+    });
+    expect(asc.rows[0]?.name).not.toBe(desc.rows[0]?.name);
   });
 });
 
