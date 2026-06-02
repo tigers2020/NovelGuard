@@ -7,7 +7,16 @@ export type PreviewApplyErrorCode =
   | "STALE_PREVIEW"
   | "SELECTION_CHANGED"
   | "APPLY_FAILED"
-  | "LIBRARY_BUSY";
+  | "LIBRARY_BUSY"
+  | "INVALID_REVIEW_COMMAND";
+
+/** Optional payload on APPLY_FAILED (PR-15 backend; PR-16 UI). */
+export interface ApplyFailedDetails {
+  partialSuccess?: boolean;
+  succeededCount?: number;
+  failedRowId?: string;
+  refreshError?: string;
+}
 
 export interface MovePreviewRow {
   id: string;

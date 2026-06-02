@@ -49,6 +49,8 @@ class BuildPreviewPlanUseCase:
         for row in selected_rows:
             if row.get("rowKind") != "file":
                 continue
+            if row.get("status") in ("approved", "excluded", "conflict"):
+                continue
             action = row.get("proposedAction")
             if action in ("keep", "ignore", "delete"):
                 continue

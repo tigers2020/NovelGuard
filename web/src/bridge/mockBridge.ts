@@ -27,7 +27,14 @@ import {
 } from "./mockData";
 import { BridgeCallError } from "./bridgeErrors";
 import { selectionFingerprint, sha256HexUtf8 } from "./selectionFingerprint";
-import type { ReviewRow } from "../types/review";
+import {
+  applyMockReviewCommand,
+  applyMockReviewState,
+  fileRowStatusCounts,
+} from "./mockReviewState";
+import type { DuplicateGroupDetail, ReviewRow } from "../types/review";
+import { buildMockDuplicateGroupDetail } from "./mockDuplicateGroupDetail";
+import type { UpdateReviewDecisionsRequest } from "../types/reviewDecisions";
 
 const state = {
   activeMode: "resolve" as WorkMode,
@@ -72,9 +79,13 @@ if (typeof window !== "undefined") {
     bumpLibraryRevisionForTest;
 }
 
+function mergedReviewRows(): ReviewRow[] {
+  return applyMockReviewState(getAllReviewRows());
+}
+
 function buildSnapshot(): AppSnapshot {
-  const allRows = getAllReviewRows();
-  const summary = summarizeReviewRows(allRows);
+  const merged = mergedReviewRows();
+  const counts = fileRowStatusCounts(merged);
   const qualityRows = buildQualityRows();
 
   return {
@@ -104,10 +115,10 @@ function buildSnapshot(): AppSnapshot {
         lastRun: "2026-06-01 10:42",
       },
       resolve: {
-        queueCount: summary.unreviewedCount + summary.conflictCount,
+        queueCount: counts.queueCount,
         groupCount: 37,
-        conflictCount: summary.conflictCount,
-        approvedCount: summary.approvedCount,
+        conflictCount: counts.conflictCount,
+        approvedCount: counts.approvedCount,
         hasPendingApply: state.hasPendingApply,
         libraryRevision,
       },
@@ -119,7 +130,7 @@ function buildSnapshot(): AppSnapshot {
     },
     fileListSummary: {
       totalCount: 1284,
-      filteredCount: allRows.length,
+      filteredCount: merged.length,
       issueCount: qualityRows.length,
       selectedCount: state.selectedCount,
     },
@@ -127,14 +138,14 @@ function buildSnapshot(): AppSnapshot {
 }
 
 function countCurrentQuery(query: ReviewRowsQuery, excludeRowIds: string[]): number {
-  return filterReviewRows(getAllReviewRows(), query).filter((row) => !excludeRowIds.includes(row.id))
+  return filterReviewRows(mergedReviewRows(), query).filter((row) => !excludeRowIds.includes(row.id))
     .length;
 }
 
 function resolveSelectedRows(selection: SelectionScope): ReviewRow[] {
   const ids = resolveSelectionIds(selection);
   const idSet = new Set(ids);
-  return getAllReviewRows().filter((row) => idSet.has(row.id));
+  return mergedReviewRows().filter((row) => idSet.has(row.id));
 }
 
 function buildMockPreviewPlan(selection: SelectionScope): {
@@ -153,8 +164,11 @@ function buildMockPreviewPlan(selection: SelectionScope): {
 
   for (const row of selectedRows) {
     if (row.rowKind !== "file") continue;
+    if (row.status === "approved" || row.status === "excluded" || row.status === "conflict") {
+      continue;
+    }
     const action = row.proposedAction;
-    if (action === "keep" || action === "ignore" || action === "delete") continue;
+    if (action === "keep" || action === "ignore") continue;
     if (action === "move_organized") {
       blockedCount += 1;
       continue;
@@ -192,7 +206,7 @@ function resolveSelectionIds(selection: SelectionScope): string[] {
     return selection.rowIds;
   }
 
-  const filtered = filterReviewRows(getAllReviewRows(), selection.query).filter(
+  const filtered = filterReviewRows(mergedReviewRows(), selection.query).filter(
     (row) => !selection.excludeRowIds.includes(row.id),
   );
   return filtered.map((row) => row.id);
@@ -235,7 +249,7 @@ export const mockBridge: NovelGuardBridge = {
 
   async queryReviewRows(query) {
     const limit = clampQueryLimit(query);
-    const filtered = filterReviewRows(getAllReviewRows(), query);
+    const filtered = filterReviewRows(mergedReviewRows(), query);
     const sorted = sortReviewRows(filtered, query.sort);
     const { slice, nextCursor, hasMore } = paginateRows(sorted, query.cursor, limit);
     const summary = summarizeReviewRows(sorted);
@@ -301,9 +315,8 @@ export const mockBridge: NovelGuardBridge = {
     return page;
   },
 
-  async getDuplicateGroupDetail(groupId) {
-    const row = getAllReviewRows().find((r) => r.groupId === groupId || r.id === groupId);
-    return { groupId, row: row ?? null };
+  async getDuplicateGroupDetail(groupId: string): Promise<DuplicateGroupDetail> {
+    return buildMockDuplicateGroupDetail(groupId, mergedReviewRows(), buildQualityRows());
   },
 
   async getQualityIssueDetail(issueId) {
@@ -381,10 +394,30 @@ export const mockBridge: NovelGuardBridge = {
     try {
       const count = pendingPreview.rows.length;
       clearPendingPreview();
+      if (count > 0) {
+        libraryRevision += 1;
+      }
       console.info("[mockBridge] applyResolvedActions", request.selection, count);
     } finally {
       applyInProgress = false;
     }
+  },
+
+  async updateReviewDecisions(request: UpdateReviewDecisionsRequest) {
+    const method = "updateReviewDecisions";
+    if (request.selection.type !== "explicit_rows" || request.selection.rowIds.length === 0) {
+      rejectApply(method, "INVALID_REVIEW_COMMAND");
+    }
+    validateSelectionScope(request.selection, (query, excludeRowIds) =>
+      countCurrentQuery(query, excludeRowIds),
+    );
+    const selected = resolveSelectedRows(request.selection);
+    const updated = applyMockReviewCommand(selected, request.command, request.keeperFileId);
+    if (updated > 0) {
+      libraryRevision += 1;
+      clearPendingPreview();
+    }
+    return { updatedCount: updated, libraryRevision };
   },
 
   async discardMovePreview(request: DiscardMovePreviewRequest) {

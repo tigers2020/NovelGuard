@@ -10,6 +10,7 @@ from app.bridge_contract import (
     PreviewApplyError,
     clamp_query_limit,
     validate_app_snapshot,
+    validate_duplicate_group_detail,
     validate_move_preview,
     validate_quality_rows_page,
     validate_review_rows_page,
@@ -19,6 +20,7 @@ from app.build_preview_plan import BuildPreviewPlanUseCase
 from app.preview_apply_guard import PreviewApplyGuard
 from app.selection_fingerprint import selection_fingerprint
 from application.library_session import LibrarySession
+from application.review_errors import ReviewDecisionError
 
 
 class BridgeApi:
@@ -71,7 +73,9 @@ class BridgeApi:
         return payload
 
     def get_duplicate_group_detail(self, group_id: str) -> dict[str, Any]:
-        return self._session.get_duplicate_group_detail(group_id)
+        result = self._session.get_duplicate_group_detail(group_id)
+        validate_duplicate_group_detail(result)
+        return result
 
     def get_quality_issue_detail(self, issue_id: str) -> dict[str, Any]:
         return self._session.get_quality_issue_detail(issue_id)
@@ -112,6 +116,31 @@ class BridgeApi:
         _selection, token, revision = self._validate_apply(payload)
         _ = _selection
         self._apply_use_case.execute(preview_token=token, library_revision_at_validate=revision)
+
+    def update_review_decisions(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self._session.is_apply_or_scan_busy():
+            raise PreviewApplyError("LIBRARY_BUSY")
+        selection = payload.get("selection")
+        if not isinstance(selection, dict):
+            raise PreviewApplyError("INVALID_REVIEW_COMMAND", "selection required")
+        validate_selection_scope(selection)
+        command = payload.get("command")
+        if not isinstance(command, str) or not command.strip():
+            raise PreviewApplyError("INVALID_REVIEW_COMMAND", "command required")
+        keeper_file_id = payload.get("keeperFileId")
+        if keeper_file_id is not None and not isinstance(keeper_file_id, str):
+            raise PreviewApplyError("INVALID_REVIEW_COMMAND", "keeperFileId must be a string")
+        try:
+            result = self._session.update_review_decisions(
+                selection,
+                command.strip(),
+                keeper_file_id=keeper_file_id,
+            )
+        except ReviewDecisionError as exc:
+            raise PreviewApplyError(exc.reason, str(exc)) from exc
+        if result.get("updatedCount", 0) > 0:
+            self._invalidate_pending_apply()
+        return result
 
     def discard_move_preview(self, payload: dict[str, Any]) -> None:
         token = (payload.get("previewToken") or "").strip()

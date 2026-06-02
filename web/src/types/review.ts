@@ -51,3 +51,64 @@ export interface ReviewRowsPage {
     approvedCount: number;
   };
 }
+
+export type DuplicateMatchKind = "exact_content_hash";
+
+export interface MemberIntegrity {
+  status: "ok" | "issue";
+  label: string;
+  issueCount: number;
+}
+
+export interface DuplicateGroupMemberDetail {
+  rowId: string;
+  fileId: string;
+  name: string;
+  path: string;
+  sizeBytes: number;
+  status: ReviewStatus;
+  isKeeper: boolean;
+  proposedAction: ProposedAction;
+  targetFolder?: string;
+  encoding?: string;
+  integrity: MemberIntegrity;
+}
+
+export interface DuplicateGroupDetailOk {
+  status: "ok";
+  groupId: string;
+  type: "exact";
+  groupStatus: ReviewStatus;
+  keeperFileId: string;
+  keeperLabel: string;
+  members: DuplicateGroupMemberDetail[];
+  evidence: {
+    matchKind: DuplicateMatchKind;
+    contentSha256: string;
+    memberCount: number;
+  };
+  movePlan: {
+    keeperAction: "keep";
+    duplicateAction: "move_duplicate";
+    targetFolder: string;
+  };
+}
+
+export interface DuplicateGroupDetailNotFound {
+  status: "not_found";
+  groupId: string;
+  members: [];
+  message: string;
+}
+
+export type DuplicateGroupDetail = DuplicateGroupDetailOk | DuplicateGroupDetailNotFound;
+
+export function reviewRowGroupId(row: ReviewRow): string | null {
+  if (row.groupId) return row.groupId;
+  if (row.id.startsWith("group:")) return row.id.slice("group:".length);
+  if (row.id.startsWith("file:")) {
+    const parts = row.id.split(":");
+    return parts.length >= 3 ? parts[1] : null;
+  }
+  return null;
+}

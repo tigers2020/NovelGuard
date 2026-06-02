@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SortingState } from "@tanstack/react-table";
-import { useBridge, useSnapshot } from "../../app/providers/snapshotHooks";
-import type { ReviewRow, ReviewRowsQuery, ReviewViewMode } from "../../types/review";
+import { useBridge, useRefreshSnapshot, useSnapshot } from "../../app/providers/snapshotHooks";
+import type {
+  DuplicateGroupDetail,
+  DuplicateGroupMemberDetail,
+  ReviewRow,
+  ReviewRowsQuery,
+  ReviewViewMode,
+} from "../../types/review";
+import { reviewRowGroupId } from "../../types/review";
+import type { ReviewDecisionCommand } from "../../types/reviewDecisions";
 import type { SelectionScope } from "../../types/selection";
 import { StatChip } from "../../components/ui/StatChip";
 import { FacetPanel } from "./resolve/FacetPanel";
@@ -22,6 +30,7 @@ function loadColumnSizing(): Record<string, number> {
 
 export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: (selection: SelectionScope) => void }) {
   const bridge = useBridge();
+  const refreshSnapshot = useRefreshSnapshot();
   const snapshot = useSnapshot();
   const resolve = snapshot.work.resolve;
 
@@ -37,6 +46,10 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
   const [queryError, setQueryError] = useState<string | null>(null);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnSizing, setColumnSizing] = useState<Record<string, number>>(loadColumnSizing);
+  const [detail, setDetail] = useState<DuplicateGroupDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [detailMutating, setDetailMutating] = useState(false);
 
   const currentQuery = useMemo<ReviewRowsQuery>(() => {
     const primary = sorting[0];
@@ -51,8 +64,30 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
     };
   }, [viewMode, search, sorting]);
 
+  const loadDetail = useCallback(
+    async (row: ReviewRow | null) => {
+      const gid = row ? reviewRowGroupId(row) : null;
+      if (!gid) {
+        setDetail(null);
+        setDetailError(null);
+        return;
+      }
+      setDetailLoading(true);
+      try {
+        setDetailError(null);
+        setDetail(await bridge.getDuplicateGroupDetail(gid));
+      } catch (err) {
+        setDetailError(err instanceof Error ? err.message : "Failed to load group detail");
+        setDetail(null);
+      } finally {
+        setDetailLoading(false);
+      }
+    },
+    [bridge],
+  );
+
   const loadPage = useCallback(
-    async (cursor: string | null, append: boolean) => {
+    async (cursor: string | null, append: boolean, preserveRowId?: string | null) => {
       if (!append) {
         setExplicitIds([]);
       }
@@ -68,7 +103,15 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
         setNextCursor(page.pageInfo.nextCursor);
         setRows((prev) => (append ? [...prev, ...page.rows] : page.rows));
         if (!append && page.rows.length > 0) {
-          setSelectedRow(page.rows[0]);
+          const next =
+            preserveRowId != null
+              ? (page.rows.find((r) => r.id === preserveRowId) ?? page.rows[0])
+              : page.rows[0];
+          setSelectedRow(next);
+          void loadDetail(next);
+        } else if (!append) {
+          setSelectedRow(null);
+          setDetail(null);
         }
       } catch (err) {
         setQueryError(err instanceof Error ? err.message : "Failed to load rows");
@@ -81,7 +124,7 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
         setLoadingMore(false);
       }
     },
-    [bridge, currentQuery],
+    [bridge, currentQuery, loadDetail],
   );
 
   useEffect(() => {
@@ -102,20 +145,88 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
 
   const toggleSelect = (row: ReviewRow) => {
     setSelectedRow(row);
+    void loadDetail(row);
     setExplicitIds((ids) =>
       ids.includes(row.id) ? ids.filter((id) => id !== row.id) : [...ids, row.id],
     );
   };
 
-  const selection: SelectionScope =
+  const explicitSelection = useMemo<SelectionScope>(
+    () => ({ type: "explicit_rows", rowIds: explicitIds }),
+    [explicitIds],
+  );
+
+  const previewSelection: SelectionScope =
     explicitIds.length > 0
-      ? { type: "explicit_rows", rowIds: explicitIds }
+      ? explicitSelection
       : { type: "current_query", query: currentQuery, excludeRowIds: [] };
+
+  const runDetailReviewCommand = useCallback(
+    async (
+      command: ReviewDecisionCommand,
+      selection: SelectionScope,
+      keeperFileId?: string,
+    ) => {
+      const preserveRowId = selectedRow?.id ?? null;
+      setDetailMutating(true);
+      try {
+        setQueryError(null);
+        await bridge.updateReviewDecisions({ selection, command, keeperFileId });
+        await refreshSnapshot();
+        await loadPage(null, false, preserveRowId);
+      } catch (err) {
+        setQueryError(err instanceof Error ? err.message : "Review update failed");
+      } finally {
+        setDetailMutating(false);
+      }
+    },
+    [bridge, loadPage, refreshSnapshot, selectedRow?.id],
+  );
+
+  const runBatchCommand = useCallback(
+    async (command: "approve" | "exclude") => {
+      if (explicitIds.length === 0) return;
+      try {
+        setQueryError(null);
+        await bridge.updateReviewDecisions({ selection: explicitSelection, command });
+        await refreshSnapshot();
+        await loadPage(null, false);
+      } catch (err) {
+        setQueryError(err instanceof Error ? err.message : "Review update failed");
+      }
+    },
+    [bridge, explicitIds, explicitSelection, loadPage, refreshSnapshot],
+  );
 
   const selectionLabel =
     explicitIds.length > 0
       ? `${explicitIds.length} selected`
       : `${filteredCount} in current filter`;
+
+  const handleSetKeeper = (member: DuplicateGroupMemberDetail) => {
+    if (member.isKeeper) return;
+    void runDetailReviewCommand(
+      "setKeeper",
+      { type: "explicit_rows", rowIds: [member.rowId] },
+      member.fileId,
+    );
+  };
+
+  const handleMarkConflict = () => {
+    if (!selectedRow) return;
+    void runDetailReviewCommand("markConflict", {
+      type: "explicit_rows",
+      rowIds: [selectedRow.id],
+    });
+  };
+
+  const handleReset = () => {
+    if (!selectedRow) return;
+    void runDetailReviewCommand("reset", {
+      type: "explicit_rows",
+      rowIds: [selectedRow.id],
+    });
+  };
 
   return (
     <main
@@ -176,13 +287,29 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
             enableColumnResize
           />
         </div>
-        <DetailPanel selectedRow={selectedRow} />
+        <DetailPanel
+          selectedRow={selectedRow}
+          detail={detail}
+          loading={detailLoading}
+          error={detailError}
+          mutating={detailMutating}
+          onSetKeeper={handleSetKeeper}
+          onMarkConflict={handleMarkConflict}
+          onReset={handleReset}
+          onRefreshDetail={() => {
+            void loadPage(null, false);
+            void loadDetail(selectedRow);
+          }}
+        />
       </div>
 
       <BatchActionBar
         selectionLabel={selectionLabel}
         filteredCount={filteredCount}
-        onPreview={() => onOpenPreview(selection)}
+        explicitCount={explicitIds.length}
+        onApprove={() => void runBatchCommand("approve")}
+        onExclude={() => void runBatchCommand("exclude")}
+        onPreview={() => onOpenPreview(previewSelection)}
       />
     </main>
   );

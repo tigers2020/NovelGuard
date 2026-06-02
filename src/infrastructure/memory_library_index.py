@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from application.ports.review_state import LoadedReviewState
 from domain.models import FileRecord
 from domain.quality import QualityIssue
 
@@ -9,11 +10,15 @@ class MemoryLibraryIndex:
         self._current_folder: str | None = None
         self._files: list[FileRecord] = []
         self._quality_issues: list[QualityIssue] = []
+        self._review_groups: dict[str, dict[str, tuple[str | None, str | None]]] = {}
+        self._review_members: dict[str, dict[str, str]] = {}
 
     def clear(self) -> None:
         self._current_folder = None
         self._files = []
         self._quality_issues = []
+        self._review_groups = {}
+        self._review_members = {}
 
     def replace_files(self, folder_path: str, files: list[FileRecord]) -> None:
         self._current_folder = folder_path
@@ -42,3 +47,65 @@ class MemoryLibraryIndex:
         if self._current_folder is None:
             return []
         return list(self._quality_issues)
+
+    def load_review_state(self, folder_path: str) -> LoadedReviewState:
+        return LoadedReviewState(
+            groups=dict(self._review_groups.get(folder_path, {})),
+            members=dict(self._review_members.get(folder_path, {})),
+        )
+
+    def upsert_review_group(
+        self,
+        folder_path: str,
+        group_id: str,
+        *,
+        keeper_file_id: str | None = None,
+        group_status: str | None = None,
+        clear_keeper: bool = False,
+        clear_status: bool = False,
+    ) -> None:
+        bucket = self._review_groups.setdefault(folder_path, {})
+        prev = bucket.get(group_id, (None, None))
+        new_keeper = (
+            None if clear_keeper else (keeper_file_id if keeper_file_id is not None else prev[0])
+        )
+        new_status = (
+            None if clear_status else (group_status if group_status is not None else prev[1])
+        )
+        bucket[group_id] = (new_keeper, new_status)
+
+    def delete_review_group(self, folder_path: str, group_id: str) -> bool:
+        bucket = self._review_groups.get(folder_path, {})
+        if group_id in bucket:
+            del bucket[group_id]
+            return True
+        return False
+
+    def upsert_review_member(self, folder_path: str, file_id: str, member_status: str) -> None:
+        self._review_members.setdefault(folder_path, {})[file_id] = member_status
+
+    def delete_review_member(self, folder_path: str, file_id: str) -> bool:
+        bucket = self._review_members.get(folder_path, {})
+        if file_id in bucket:
+            del bucket[file_id]
+            return True
+        return False
+
+    def clear_review_state(self, folder_path: str) -> None:
+        self._review_groups.pop(folder_path, None)
+        self._review_members.pop(folder_path, None)
+
+    def prune_review_state(
+        self,
+        folder_path: str,
+        valid_group_ids: set[str],
+        valid_file_ids: set[str],
+    ) -> None:
+        groups = self._review_groups.get(folder_path, {})
+        self._review_groups[folder_path] = {
+            gid: state for gid, state in groups.items() if gid in valid_group_ids
+        }
+        members = self._review_members.get(folder_path, {})
+        self._review_members[folder_path] = {
+            fid: status for fid, status in members.items() if fid in valid_file_ids
+        }

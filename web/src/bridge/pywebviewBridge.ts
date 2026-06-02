@@ -1,6 +1,6 @@
 import type { NovelGuardBridge } from "./NovelGuardBridge";
 import type { AppSnapshot } from "../types/snapshot";
-import type { ReviewRowsPage, ReviewRowsQuery } from "../types/review";
+import type { DuplicateGroupDetail, ReviewRowsPage, ReviewRowsQuery } from "../types/review";
 import type { QualityIssueDetail, QualityRowsPage, QualityRowsQuery } from "../types/quality";
 import { validateQualityRowsPage } from "../contracts/qualityPageContract";
 import type {
@@ -8,6 +8,10 @@ import type {
   DiscardMovePreviewRequest,
   MovePreviewResult,
 } from "../types/movePreview";
+import type {
+  UpdateReviewDecisionsRequest,
+  UpdateReviewDecisionsResult,
+} from "../types/reviewDecisions";
 import type { SelectionScope } from "../types/selection";
 import type { WorkMode } from "../types/snapshot";
 import { BridgeCallError } from "./bridgeErrors";
@@ -80,7 +84,7 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
         return page;
       }, { method: "query_quality_rows" }),
     getDuplicateGroupDetail: (groupId: string) =>
-      callBridge(() => call<Record<string, unknown>>(api, "get_duplicate_group_detail", groupId), {
+      callBridge(() => call<DuplicateGroupDetail>(api, "get_duplicate_group_detail", groupId), {
         method: "get_duplicate_group_detail",
       }),
     getQualityIssueDetail: (issueId: string) =>
@@ -98,6 +102,10 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
     discardMovePreview: (request: DiscardMovePreviewRequest) =>
       callBridge(() => call(api, "discard_move_preview", request).then(() => undefined), {
         method: "discard_move_preview",
+      }),
+    updateReviewDecisions: (request: UpdateReviewDecisionsRequest) =>
+      callBridge(() => call<UpdateReviewDecisionsResult>(api, "update_review_decisions", request), {
+        method: "update_review_decisions",
       }),
   };
 }
