@@ -94,6 +94,9 @@ python scripts/verify_phase_completion.py
 
 ## Related docs
 
+- [Known limitations](known-limitations.md)
+- [Smoke record template](smoke-record-template.md)
+- [CHANGELOG.md](../../CHANGELOG.md) — PR-24 release notes (Unreleased)
 - Spec: `docs/superpowers/specs/012-2026-06-02-packaging-distribution-design.md`
 - Plan: `docs/superpowers/plans/018-2026-06-02-pr24-packaging-distribution.md`
 - Manual PyInstaller smoke: `packaging/README.md`
