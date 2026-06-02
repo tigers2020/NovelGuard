@@ -158,14 +158,14 @@
 
 ## Task 6: PyInstaller spec (onedir)
 
-**Files:** `packaging/NovelGuard.spec`
+**Files:** `packaging/NovelGuard.spec`, `packaging/README.md`
 
-- [ ] Entry: `src/app/webview_main.py` (or module run target)
-- [ ] `datas`: bundle `web/build/**`
-- [ ] Hiddenimports for pywebview as needed
-- [ ] Excludes: tests, `.vite`, `node_modules`, source maps
-- [ ] Output: `dist/NovelGuard/NovelGuard.exe` + `_internal/`
-- [ ] Document WebView2 runtime requirement in `known-limitations.md`
+- [x] Entry: `src/app/webview_main.py`; `ROOT = Path(SPECPATH).parent`
+- [x] `datas`: `web/build` → `web/build` (frozen: `_internal/web/build/index.html`)
+- [x] Hiddenimports: empty until smoke demands (tkinter not excluded — folder picker)
+- [x] Excludes: `pytest`, `unittest` only
+- [x] Smoke: `pyinstaller packaging/NovelGuard.spec --noconfirm --clean` → `dist/NovelGuard/NovelGuard.exe`
+- [ ] WebView2 note → `known-limitations.md` (Task 10)
 
 ---
 
