@@ -1,4 +1,4 @@
-"""Verification pipeline: pytest → ruff → mypy → black → npm lint → npm build (fail-fast)."""
+"""Verification pipeline: pytest → ruff → mypy → black → npm lint → verify_packaging (fail-fast)."""
 
 from __future__ import annotations
 
@@ -27,12 +27,17 @@ def main() -> None:
         print("ERROR: npm not found on PATH; required for web lint step.")
         sys.exit(1)
 
+    verify_packaging = project_root / "scripts" / "verify_packaging.py"
     steps: list[tuple[list[str], str]] = [
-        ([sys.executable, "-m", "pytest"], "1/5 python -m pytest"),
-        ([sys.executable, "-m", "ruff", "check", "."], "2/5 python -m ruff check ."),
-        ([sys.executable, "-m", "mypy", "src"], "3/5 python -m mypy src"),
-        ([sys.executable, "-m", "black", "--check", "."], "4/5 python -m black --check ."),
-        ([npm, "run", "lint"], "5/5 npm run lint"),
+        ([sys.executable, "-m", "pytest"], "1/6 python -m pytest"),
+        ([sys.executable, "-m", "ruff", "check", "."], "2/6 python -m ruff check ."),
+        ([sys.executable, "-m", "mypy", "src"], "3/6 python -m mypy src"),
+        ([sys.executable, "-m", "black", "--check", "."], "4/6 python -m black --check ."),
+        ([npm, "run", "lint"], "5/6 npm run lint"),
+        (
+            [sys.executable, str(verify_packaging)],
+            "6/6 packaging verification (static; no PyInstaller run)",
+        ),
     ]
 
     print("\nNovelGuard verification pipeline (fail-fast)")
