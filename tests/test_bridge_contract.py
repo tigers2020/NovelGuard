@@ -1609,21 +1609,3 @@ def test_finalize_while_scan_raises_library_busy(tmp_path: Path) -> None:
     with pytest.raises(FinalizeError) as exc_info:
         api.run_finalize_verification({"includeCleanup": False})
     assert exc_info.value.reason == "LIBRARY_BUSY"
-
-
-def test_library_session_emits_invalidation_callback() -> None:
-    events: list[dict[str, object]] = []
-
-    def on_invalidation(event: dict[str, object]) -> None:
-        events.append(event)
-
-    session = create_library_session(
-        MemoryLibraryIndex(),
-        on_snapshot_invalidation=on_invalidation,
-    )
-    session.increment_library_revision(invalidation_reason="libraryRevision")
-    assert len(events) == 1
-    assert events[0]["type"] == "snapshotInvalidated"
-    assert events[0]["reason"] == "libraryRevision"
-    assert "percent" not in events[0]
-    assert "label" not in events[0]

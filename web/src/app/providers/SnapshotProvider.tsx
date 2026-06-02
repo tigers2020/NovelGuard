@@ -49,14 +49,11 @@ export function SnapshotProvider({
   children: ReactNode;
   bridge?: NovelGuardBridge;
 }) {
-  const [selection, setSelection] = useState<BridgeSelection | null>(() =>
-    selectBridgeImmediate(bridgeOverride),
-  );
+  const immediateSelection = selectBridgeImmediate(bridgeOverride);
+  const [asyncSelection, setAsyncSelection] = useState<BridgeSelection | null>(null);
 
   useEffect(() => {
-    const immediate = selectBridgeImmediate(bridgeOverride);
-    if (immediate) {
-      setSelection(immediate);
+    if (immediateSelection) {
       return;
     }
 
@@ -66,11 +63,14 @@ export function SnapshotProvider({
       try {
         const resolved = await resolveBridgeAsync();
         if (alive) {
-          setSelection({ status: "ok", bridge: resolved.bridge, kind: resolved.kind });
+          setAsyncSelection({ status: "ok", bridge: resolved.bridge, kind: resolved.kind });
         }
       } catch (error) {
         if (alive) {
-          setSelection({ status: "unavailable", unavailableCode: getBridgeErrorCode(error) });
+          setAsyncSelection({
+            status: "unavailable",
+            unavailableCode: getBridgeErrorCode(error),
+          });
         }
       }
     })();
@@ -78,7 +78,9 @@ export function SnapshotProvider({
     return () => {
       alive = false;
     };
-  }, [bridgeOverride]);
+  }, [bridgeOverride, immediateSelection]);
+
+  const selection = immediateSelection ?? asyncSelection;
 
   if (!selection) {
     return <div className="p-6 text-muted">Loading…</div>;
