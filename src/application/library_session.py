@@ -162,22 +162,19 @@ class LibrarySession:
             return query_quality_page(self._quality_rows_cache, query, limit=limit)
 
     def get_duplicate_group_detail(self, group_id: str) -> dict[str, Any]:
+        from application.duplicate_group_detail import (
+            build_duplicate_group_detail,
+            index_quality_rows_by_path,
+        )
+
         with self._lock:
-            groups = find_exact_duplicate_groups(list(self._files_by_id.values()))
-            target = next((g for g in groups if g.group_id == group_id), None)
-            if not target:
-                return {"groupId": group_id, "members": []}
-            members = [
-                {
-                    "id": mid,
-                    "name": self._files_by_id[mid].name,
-                    "path": self._files_by_id[mid].relative_path,
-                    "isKeeper": mid == target.keeper_id,
-                }
-                for mid in target.member_ids
-                if mid in self._files_by_id
-            ]
-            return {"groupId": group_id, "members": members}
+            quality_by_path = index_quality_rows_by_path(self._quality_rows_cache)
+            return build_duplicate_group_detail(
+                group_id,
+                review_rows=self._review_rows_cache,
+                files_by_id=self._files_by_id,
+                quality_by_path=quality_by_path,
+            )
 
     def get_quality_issue_detail(self, issue_id: str) -> dict[str, Any]:
         with self._lock:

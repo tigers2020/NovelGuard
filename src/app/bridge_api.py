@@ -10,6 +10,7 @@ from app.bridge_contract import (
     PreviewApplyError,
     clamp_query_limit,
     validate_app_snapshot,
+    validate_duplicate_group_detail,
     validate_move_preview,
     validate_quality_rows_page,
     validate_review_rows_page,
@@ -72,7 +73,9 @@ class BridgeApi:
         return payload
 
     def get_duplicate_group_detail(self, group_id: str) -> dict[str, Any]:
-        return self._session.get_duplicate_group_detail(group_id)
+        result = self._session.get_duplicate_group_detail(group_id)
+        validate_duplicate_group_detail(result)
+        return result
 
     def get_quality_issue_detail(self, issue_id: str) -> dict[str, Any]:
         return self._session.get_quality_issue_detail(issue_id)

@@ -1,5 +1,5 @@
 import type { AppSnapshot, WorkMode } from "../types/snapshot";
-import type { ReviewRowsPage, ReviewRowsQuery } from "../types/review";
+import type { DuplicateGroupDetail, ReviewRowsPage, ReviewRowsQuery } from "../types/review";
 import type { QualityIssueDetail, QualityRowsPage, QualityRowsQuery } from "../types/quality";
 import type {
   ApplyResolvedActionsRequest,
@@ -20,7 +20,7 @@ export interface NovelGuardBridge {
   setWorkMode(mode: WorkMode): Promise<void>;
   queryReviewRows(query: ReviewRowsQuery): Promise<ReviewRowsPage>;
   queryQualityRows(query: QualityRowsQuery): Promise<QualityRowsPage>;
-  getDuplicateGroupDetail(groupId: string): Promise<Record<string, unknown>>;
+  getDuplicateGroupDetail(groupId: string): Promise<DuplicateGroupDetail>;
   getQualityIssueDetail(issueId: string): Promise<QualityIssueDetail>;
   getMovePreview(selection: SelectionScope): Promise<MovePreviewResult>;
   applyResolvedActions(request: ApplyResolvedActionsRequest): Promise<void>;

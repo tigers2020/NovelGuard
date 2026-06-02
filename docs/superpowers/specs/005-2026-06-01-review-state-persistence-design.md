@@ -27,7 +27,7 @@ PR-14 left every row `"unreviewed"` and snapshot `approvedCount` / `conflictCoun
 | PR-15 | Real `move_duplicate` apply + refresh-from-disk |
 | PR-16 | Apply subflow outcome UI |
 | **PR-17** | **Persisted review state + snapshot truth + batch approve/exclude** |
-| PR-18 | Rich `getDuplicateGroupDetail` + keeper picker in detail (may extend PR-17 UI) |
+| PR-18 | Rich `getDuplicateGroupDetail` + keeper picker in detail — [006 spec](./006-2026-06-01-duplicate-group-detail-design.md) |
 
 Wave B per [master roadmap](../roadmap/000-2026-06-01-novelguard-master-roadmap.md).
 

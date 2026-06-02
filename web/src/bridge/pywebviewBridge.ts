@@ -1,6 +1,6 @@
 import type { NovelGuardBridge } from "./NovelGuardBridge";
 import type { AppSnapshot } from "../types/snapshot";
-import type { ReviewRowsPage, ReviewRowsQuery } from "../types/review";
+import type { DuplicateGroupDetail, ReviewRowsPage, ReviewRowsQuery } from "../types/review";
 import type { QualityIssueDetail, QualityRowsPage, QualityRowsQuery } from "../types/quality";
 import { validateQualityRowsPage } from "../contracts/qualityPageContract";
 import type {
@@ -84,7 +84,7 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
         return page;
       }, { method: "query_quality_rows" }),
     getDuplicateGroupDetail: (groupId: string) =>
-      callBridge(() => call<Record<string, unknown>>(api, "get_duplicate_group_detail", groupId), {
+      callBridge(() => call<DuplicateGroupDetail>(api, "get_duplicate_group_detail", groupId), {
         method: "get_duplicate_group_detail",
       }),
     getQualityIssueDetail: (issueId: string) =>

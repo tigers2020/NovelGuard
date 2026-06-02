@@ -15,6 +15,7 @@ from app.bridge_contract import (
     SnapshotContractError,
     clamp_query_limit,
     validate_app_snapshot,
+    validate_duplicate_group_detail,
     validate_move_preview,
     validate_quality_rows_page,
     validate_review_rows_page,
@@ -843,3 +844,48 @@ def test_partial_apply_batch_records_audit_and_raises(
     assert outcomes.count("ok") == 2
     assert outcomes.count("error") == 1
     assert api.get_snapshot()["work"]["resolve"]["hasPendingApply"] is False
+
+
+def test_get_duplicate_group_detail_members_and_keeper(tmp_path: Path) -> None:
+    api = _duplicate_api(tmp_path)
+    page = api.query_review_rows({"viewMode": "groups", "limit": 50})
+    group_row = next(r for r in page["rows"] if r["rowKind"] == "group")
+    gid = group_row["groupId"]
+    assert isinstance(gid, str)
+    detail = api.get_duplicate_group_detail(gid)
+    validate_duplicate_group_detail(detail)
+    assert detail["status"] == "ok"
+    assert len(detail["members"]) >= 2
+    assert sum(1 for m in detail["members"] if m["isKeeper"]) == 1
+    assert detail["members"][0]["integrity"]["issueCount"] >= 0
+
+
+def test_detail_keeper_follows_set_keeper(tmp_path: Path) -> None:
+    api = _duplicate_api(tmp_path)
+    page = api.query_review_rows({"viewMode": "groups", "limit": 50})
+    group_row = next(r for r in page["rows"] if r["rowKind"] == "group")
+    gid = group_row["groupId"]
+    file_row = next(
+        r
+        for r in page["rows"]
+        if r["rowKind"] == "file" and r["proposedAction"] == "move_duplicate"
+    )
+    new_keeper_id = file_row["id"].split(":")[-1]
+    api.update_review_decisions(
+        {
+            "selection": {"type": "explicit_rows", "rowIds": [file_row["id"]]},
+            "command": "setKeeper",
+            "keeperFileId": new_keeper_id,
+        }
+    )
+    detail = api.get_duplicate_group_detail(gid)
+    assert detail["status"] == "ok"
+    assert detail["keeperFileId"] == new_keeper_id
+
+
+def test_get_duplicate_group_detail_not_found(tmp_path: Path) -> None:
+    api = _duplicate_api(tmp_path)
+    detail = api.get_duplicate_group_detail("dup-nonexistent")
+    validate_duplicate_group_detail(detail)
+    assert detail["status"] == "not_found"
+    assert detail["members"] == []

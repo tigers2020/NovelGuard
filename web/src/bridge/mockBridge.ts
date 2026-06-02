@@ -32,7 +32,8 @@ import {
   applyMockReviewState,
   fileRowStatusCounts,
 } from "./mockReviewState";
-import type { ReviewRow } from "../types/review";
+import type { DuplicateGroupDetail, ReviewRow } from "../types/review";
+import { buildMockDuplicateGroupDetail } from "./mockDuplicateGroupDetail";
 import type { UpdateReviewDecisionsRequest } from "../types/reviewDecisions";
 
 const state = {
@@ -314,9 +315,8 @@ export const mockBridge: NovelGuardBridge = {
     return page;
   },
 
-  async getDuplicateGroupDetail(groupId) {
-    const row = mergedReviewRows().find((r) => r.groupId === groupId || r.id === groupId);
-    return { groupId, row: row ?? null };
+  async getDuplicateGroupDetail(groupId: string): Promise<DuplicateGroupDetail> {
+    return buildMockDuplicateGroupDetail(groupId, mergedReviewRows(), buildQualityRows());
   },
 
   async getQualityIssueDetail(issueId) {

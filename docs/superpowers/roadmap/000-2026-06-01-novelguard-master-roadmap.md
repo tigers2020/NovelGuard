@@ -16,7 +16,7 @@ parent_spec: docs/superpowers/specs/000-2026-06-01-novelguard-ui-overhaul-design
 | Contract / E2E / grid perf (PR-10..12) | **Done** |
 | Preview token & stale apply (PR-13) | **Done** |
 | Greenfield library session (PR-14a..14d) | **Done** |
-| **Next** | **PR-18** — Duplicate group detail panel (spec TBD) |
+| **Next** | **PR-19** — Near duplicate detection (spec TBD) |
 
 Verification baseline: `python scripts/verify_phase_completion.py` (recorded in completed plans).
 
@@ -80,7 +80,7 @@ Sources: [002 greenfield spec § Out of scope](../specs/002-2026-06-01-novelguar
 | **PR-15** | Real filesystem apply use cases | Safe real **move** (`move_duplicate`); dry-run → confirm → apply; audit log | A | **Done** — [009 plan](../plans/009-2026-06-01-pr15-real-apply-use-cases.md) |
 | **PR-16** | Resolve UI real apply outcome | UI shows real apply results; revision/errors after apply | A | **Done** — [004 spec](../specs/004-2026-06-01-resolve-ui-apply-outcome-design.md) |
 | **PR-17** | Review state persistence | Keeper / approved / conflict state saved; snapshot counts truthful | B | **Done** — [005 spec](../specs/005-2026-06-01-review-state-persistence-design.md) · [011 plan](../plans/011-2026-06-01-pr17-review-state-persistence.md) |
-| **PR-18** | Duplicate group detail panel | `getDuplicateGroupDetail` + DetailPanel on real group data | B | Not written |
+| **PR-18** | Duplicate group detail panel | `getDuplicateGroupDetail` + DetailPanel on real group data | B | **Done** — [006 spec](../specs/006-2026-06-01-duplicate-group-detail-design.md) · [012 plan](../plans/012-2026-06-01-pr18-duplicate-group-detail.md) |
 | **PR-19** | Near duplicate detection | Similar-content duplicate candidates (algorithm TBD) | C | Not written |
 | **PR-20** | Relation / filename-blocking signals | Title/filename relation grouping candidates | C | Not written |
 
@@ -278,6 +278,9 @@ PR-17..20 Quality detail → repair preview → repair apply → finalize
 | 2026-06-01 | `009` plan approved; Task 0 E2E preflight 13/13 PASS |
 | 2026-06-01 | PR-17 spec `005` + plan `011` drafted (Wave B); spec queue filename corrected from `004` |
 | 2026-06-01 | PR-17 implemented: `update_review_decisions`, SQLite review state, batch approve/exclude UI |
+| 2026-06-01 | PR-18 spec `006` + plan `012` drafted (Wave B duplicate detail) |
+| 2026-06-01 | PR-18 grill-me: `not_found` union, `MemberIntegrity`, post-mutation refresh; spec+plan **approved** |
+| 2026-06-01 | PR-18 implemented: typed detail DTO, cache-based builder, DetailPanel + review commands |
 
 ---
 
