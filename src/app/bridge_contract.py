@@ -153,8 +153,8 @@ def validate_duplicate_group_detail(payload: Any) -> None:
             raise PageContractError(f"DuplicateGroupDetail ok variant missing {key}")
 
     detail_type = payload.get("type")
-    if detail_type not in ("exact", "near"):
-        raise PageContractError("DuplicateGroupDetail.type must be exact or near")
+    if detail_type not in ("exact", "near", "relation"):
+        raise PageContractError("DuplicateGroupDetail.type must be exact, near, or relation")
     if payload.get("groupStatus") not in _REVIEW_STATUSES:
         raise PageContractError("DuplicateGroupDetail.groupStatus invalid")
 
@@ -167,13 +167,27 @@ def validate_duplicate_group_detail(payload: Any) -> None:
         move_plan = payload.get("movePlan")
         if not isinstance(move_plan, dict):
             raise PageContractError("DuplicateGroupDetail.movePlan must be a dict")
-    else:
+    elif detail_type == "near":
         if evidence.get("matchKind") != "near_ngram_v1":
             raise PageContractError("evidence.matchKind must be near_ngram_v1")
         if not isinstance(evidence.get("maxSimilarity"), (int, float)):
             raise PageContractError("evidence.maxSimilarity must be a number")
         if not isinstance(evidence.get("threshold"), (int, float)):
             raise PageContractError("evidence.threshold must be a number")
+    else:
+        if evidence.get("matchKind") != "relation_filename_v1":
+            raise PageContractError("evidence.matchKind must be relation_filename_v1")
+        if evidence.get("relationKind") not in (
+            "same_title_series",
+            "chapter_sequence",
+            "version_variant",
+        ):
+            raise PageContractError("evidence.relationKind invalid")
+        if evidence.get("confidenceLabel") not in ("low", "medium", "high"):
+            raise PageContractError("evidence.confidenceLabel invalid")
+        for list_key in ("normalizedNames", "matchedTokens", "differingTokens"):
+            if not isinstance(evidence.get(list_key), list):
+                raise PageContractError(f"evidence.{list_key} must be a list")
 
     if not isinstance(evidence.get("memberCount"), int):
         raise PageContractError("evidence.memberCount must be int")

@@ -9,7 +9,8 @@ export type PreviewApplyErrorCode =
   | "APPLY_FAILED"
   | "LIBRARY_BUSY"
   | "INVALID_REVIEW_COMMAND"
-  | "NEAR_DUPLICATE_APPLY_UNSUPPORTED";
+  | "NEAR_DUPLICATE_APPLY_UNSUPPORTED"
+  | "RELATION_APPLY_UNSUPPORTED";
 
 /** Optional payload on APPLY_FAILED (PR-15 backend; PR-16 UI). */
 export interface ApplyFailedDetails {

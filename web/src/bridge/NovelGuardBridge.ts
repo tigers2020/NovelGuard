@@ -28,4 +28,6 @@ export interface NovelGuardBridge {
   updateReviewDecisions(
     request: UpdateReviewDecisionsRequest,
   ): Promise<UpdateReviewDecisionsResult>;
+  getAppSetting(key: string): Promise<boolean>;
+  setAppSetting(key: string, value: boolean): Promise<void>;
 }

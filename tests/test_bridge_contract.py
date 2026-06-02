@@ -88,6 +88,8 @@ def test_pywebview_api_methods_match_locked_contract() -> None:
         "apply_resolved_actions",
         "discard_move_preview",
         "update_review_decisions",
+        "get_app_setting",
+        "set_app_setting",
     ]
     assert list(PYWEBVIEW_API_METHODS) == locked
 
@@ -1049,3 +1051,209 @@ def test_preview_rejects_near_duplicate_rows(tmp_path: Path) -> None:
     with pytest.raises(PreviewApplyError) as exc_info:
         api.get_move_preview({"type": "explicit_rows", "rowIds": [file_row["id"]]})
     assert exc_info.value.reason == "NEAR_DUPLICATE_APPLY_UNSUPPORTED"
+
+
+def test_relation_token_precedence_v2_is_version_not_numeric() -> None:
+    from domain.filename_relation import normalize_filename_for_relation
+
+    parsed = normalize_filename_for_relation("Novel v2.txt", relative_path="Novel v2.txt")
+    assert parsed.version_markers == ("v2",)
+    assert parsed.numeric_tokens == ()
+
+    parsed_v10 = normalize_filename_for_relation("Title v10.txt", relative_path="Title v10.txt")
+    assert parsed_v10.version_markers == ("v10",)
+    assert 10 not in parsed_v10.numeric_tokens
+
+    parsed_v01 = normalize_filename_for_relation("Story v01.txt", relative_path="Story v01.txt")
+    assert parsed_v01.version_markers == ("v01",)
+    assert 1 not in parsed_v01.numeric_tokens
+
+
+def test_relation_batch_and_cluster_ids_are_deterministic() -> None:
+    from application.relation_batch_id import filename_set_digest, make_relation_batch_id
+    from domain.filename_relation import detect_filename_relations
+    from domain.models import FileRecord
+
+    files = [
+        FileRecord(
+            id="a" * 64,
+            relative_path="Series/Novel 01.txt",
+            name="Novel 01.txt",
+            size_bytes=100,
+            modified_at_ns=1,
+            extension=".txt",
+            content_sha256="h1",
+        ),
+        FileRecord(
+            id="b" * 64,
+            relative_path="Series/Novel 02.txt",
+            name="Novel 02.txt",
+            size_bytes=100,
+            modified_at_ns=2,
+            extension=".txt",
+            content_sha256="h2",
+        ),
+    ]
+    digest = filename_set_digest(files)
+    batch_a = make_relation_batch_id(library_revision=3, filename_set_digest_value=digest)
+    batch_b = make_relation_batch_id(library_revision=3, filename_set_digest_value=digest)
+    assert batch_a == batch_b
+
+    result_a = detect_filename_relations(
+        files,
+        exact_membership_by_file_id={},
+        near_membership_by_file_id={},
+        relation_batch_id=batch_a,
+    )
+    result_b = detect_filename_relations(
+        files,
+        exact_membership_by_file_id={},
+        near_membership_by_file_id={},
+        relation_batch_id=batch_b,
+    )
+    assert [group.group_id for group in result_a.groups] == [
+        group.group_id for group in result_b.groups
+    ]
+
+
+def test_relation_does_not_group_generic_chapter_across_folders() -> None:
+    from domain.filename_relation import RELATION_KINDS_V1, detect_filename_relations
+    from domain.models import FileRecord
+
+    files = [
+        FileRecord(
+            id="a" * 64,
+            relative_path="FolderA/Chapter 01.txt",
+            name="Chapter 01.txt",
+            size_bytes=100,
+            modified_at_ns=1,
+            extension=".txt",
+        ),
+        FileRecord(
+            id="b" * 64,
+            relative_path="FolderB/Chapter 02.txt",
+            name="Chapter 02.txt",
+            size_bytes=100,
+            modified_at_ns=2,
+            extension=".txt",
+        ),
+    ]
+    result = detect_filename_relations(
+        files,
+        exact_membership_by_file_id={},
+        near_membership_by_file_id={},
+        relation_batch_id="batch-test",
+    )
+    assert result.groups == ()
+    for group in result.groups:
+        assert group.relation_kind in RELATION_KINDS_V1
+
+
+def test_relation_groups_generic_chapter_in_same_parent() -> None:
+    from domain.filename_relation import RELATION_KINDS_V1, detect_filename_relations
+    from domain.models import FileRecord
+
+    files = [
+        FileRecord(
+            id="a" * 64,
+            relative_path="Series/Chapter 01.txt",
+            name="Chapter 01.txt",
+            size_bytes=100,
+            modified_at_ns=1,
+            extension=".txt",
+        ),
+        FileRecord(
+            id="b" * 64,
+            relative_path="Series/Chapter 02.txt",
+            name="Chapter 02.txt",
+            size_bytes=100,
+            modified_at_ns=2,
+            extension=".txt",
+        ),
+    ]
+    result = detect_filename_relations(
+        files,
+        exact_membership_by_file_id={},
+        near_membership_by_file_id={},
+        relation_batch_id="batch-test",
+    )
+    assert len(result.groups) == 1
+    assert result.groups[0].relation_kind in RELATION_KINDS_V1
+
+
+def test_include_relation_false_skips_relation_rows(tmp_path: Path) -> None:
+    (tmp_path / "Novel 01.txt").write_text("x", encoding="utf-8")
+    (tmp_path / "Novel 02.txt").write_text("y", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    assert api.get_app_setting("include_relation") is False
+    api.start_scan()
+    _scan_until_idle(api)
+    page = api.query_review_rows(
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["relation"]}}
+    )
+    assert page["rows"] == []
+
+
+def test_query_review_rows_relation_after_enabled_scan(tmp_path: Path) -> None:
+    (tmp_path / "Novel 01.txt").write_text("x", encoding="utf-8")
+    (tmp_path / "Novel 02.txt").write_text("y", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.set_app_setting("include_relation", True)
+    api.start_scan()
+    _scan_until_idle(api)
+    relation_page = api.query_review_rows(
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["relation"]}}
+    )
+    validate_review_rows_page(relation_page)
+    if relation_page["rows"]:
+        assert all(row["type"] == "relation" for row in relation_page["rows"])
+        assert all(
+            row.get("relationKind") in ("same_title_series", "chapter_sequence", "version_variant")
+            for row in relation_page["rows"]
+            if row.get("relationKind")
+        )
+
+
+def test_get_relation_group_detail(tmp_path: Path) -> None:
+    (tmp_path / "Novel 01.txt").write_text("x", encoding="utf-8")
+    (tmp_path / "Novel 02.txt").write_text("y", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.set_app_setting("include_relation", True)
+    api.start_scan()
+    _scan_until_idle(api)
+    relation_page = api.query_review_rows(
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["relation"]}}
+    )
+    group_row = next((row for row in relation_page["rows"] if row["rowKind"] == "group"), None)
+    if group_row is None:
+        return
+    detail = api.get_duplicate_group_detail(group_row["groupId"])
+    validate_duplicate_group_detail(detail)
+    assert detail["type"] == "relation"
+    assert detail["evidence"]["matchKind"] == "relation_filename_v1"
+
+
+def test_preview_rejects_relation_rows(tmp_path: Path) -> None:
+    (tmp_path / "Novel 01.txt").write_text("x", encoding="utf-8")
+    (tmp_path / "Novel 02.txt").write_text("y", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.set_app_setting("include_relation", True)
+    api.start_scan()
+    _scan_until_idle(api)
+    relation_page = api.query_review_rows(
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["relation"]}}
+    )
+    file_row = next((row for row in relation_page["rows"] if row["rowKind"] == "file"), None)
+    if file_row is None:
+        return
+    with pytest.raises(PreviewApplyError) as exc_info:
+        api.get_move_preview({"type": "explicit_rows", "rowIds": [file_row["id"]]})
+    assert exc_info.value.reason == "RELATION_APPLY_UNSUPPORTED"

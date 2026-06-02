@@ -2,7 +2,7 @@
 title: NovelGuard Master Roadmap
 status: active
 date: 2026-06-01
-last_reviewed: 2026-06-01
+last_reviewed: 2026-06-02
 parent_spec: docs/superpowers/specs/000-2026-06-01-novelguard-ui-overhaul-design.md
 ---
 
@@ -16,7 +16,7 @@ parent_spec: docs/superpowers/specs/000-2026-06-01-novelguard-ui-overhaul-design
 | Contract / E2E / grid perf (PR-10..12) | **Done** |
 | Preview token & stale apply (PR-13) | **Done** |
 | Greenfield library session (PR-14a..14d) | **Done** |
-| **Next** | **PR-20** — Relation / filename-blocking signals (spec TBD) |
+| **Next** | **PR-20** — Relation / filename-blocking signals — [001 PR-20..25 roadmap](./001-2026-06-02-pr20-pr25-development-roadmap.md) |
 
 Verification baseline: `python scripts/verify_phase_completion.py` (recorded in completed plans).
 
@@ -82,15 +82,17 @@ Sources: [002 greenfield spec § Out of scope](../specs/002-2026-06-01-novelguar
 | **PR-17** | Review state persistence | Keeper / approved / conflict state saved; snapshot counts truthful | B | **Done** — [005 spec](../specs/005-2026-06-01-review-state-persistence-design.md) · [011 plan](../plans/011-2026-06-01-pr17-review-state-persistence.md) |
 | **PR-18** | Duplicate group detail panel | `getDuplicateGroupDetail` + DetailPanel on real group data | B | **Done** — [006 spec](../specs/006-2026-06-01-duplicate-group-detail-design.md) · [012 plan](../plans/012-2026-06-01-pr18-duplicate-group-detail.md) |
 | **PR-19** | Near duplicate detection | Similar-content duplicate candidates (n-gram v1) | C | **Done** — [007 spec](../specs/007-2026-06-01-near-duplicate-detection-design.md) · [013 plan](../plans/013-2026-06-01-pr19-near-duplicate-detection.md) |
-| **PR-20** | Relation / filename-blocking signals | Title/filename relation grouping candidates | C | Not written |
+| **PR-20** | Relation / filename-blocking signals | Title/filename relation grouping candidates | C | Not written — [001 roadmap § PR-20](./001-2026-06-02-pr20-pr25-development-roadmap.md#pr-20--relation--filename-blocking-signals) |
 
-**Quality track (intentionally after PR-20):**
+**Quality track (intentionally after PR-20):** detail in [001 PR-20..25 roadmap](./001-2026-06-02-pr20-pr25-development-roadmap.md).
 
-| PR | Theme | Plain description | Wave |
-|----|-------|-------------------|------|
-| **PR-21** | Quality issue detail | Detail drawer on real quality payloads | D |
-| **PR-22** | Quality repair execution | UTF-8 / integrity repair (batch, cancellable) | D |
-| **PR-23** | Finalize / cleanup pipeline | Finalize subflow after repair patterns exist | D |
+| PR | Theme | Plain description | Wave | Spec status |
+|----|-------|-------------------|------|-------------|
+| **PR-21** | Quality issue detail | Detail drawer on real quality payloads | D | Not written |
+| **PR-22** | Quality repair execution | UTF-8 / integrity repair (batch, cancellable) | D | Not written |
+| **PR-23** | Finalize / cleanup pipeline | Finalize subflow after repair patterns exist | D | Not written |
+| **PR-24** | Packaging / distribution | Production desktop package | E | Not written |
+| **PR-25** | Shell FileDock | Persistent shell-level file dock | F | Not written |
 
 ---
 
@@ -222,23 +224,23 @@ flowchart TD
   P21[PR-21 Quality detail]
   P22[PR-22 Quality repair]
   P23[PR-23 Finalize]
-  P14d --> P15 --> P16 --> P17 --> P18 --> P19 --> P20 --> P21 --> P22 --> P23
+  P24[PR-24 Packaging]
+  P25[PR-25 Shell FileDock]
+  P14d --> P15 --> P16 --> P17 --> P18 --> P19 --> P20 --> P21 --> P22 --> P23 --> P24 --> P25
 ```
 
 Adjust only via roadmap changelog + explicit product decision.
 
 ---
 
-## Spec queue (after PR-15)
+## Spec queue (current)
 
-| Priority | PR scope | Suggested spec filename |
-|----------|----------|-------------------------|
-| **P0** | PR-15 real apply | `specs/003-2026-06-01-real-apply-use-cases-design.md` |
-| P1 | PR-17 review state | `specs/005-2026-06-01-review-state-persistence-design.md` (**draft**) |
-| **P0** | PR-19 near duplicate | [007 spec](../specs/007-2026-06-01-near-duplicate-detection-design.md) approved · [013 plan](../plans/013-2026-06-01-pr19-near-duplicate-detection.md) draft |
-| P3 | PR-24 packaging | `specs/006-2026-06-01-packaging-design.md` (name TBD) |
+| Priority | PR scope | Artifact |
+|----------|----------|----------|
+| **P0** | PR-20 relation / filename-blocking | `specs/008-2026-06-02-relation-filename-blocking-design.md` (proposed) — [001 roadmap](./001-2026-06-02-pr20-pr25-development-roadmap.md#spec-queue-this-track) |
+| P1 | PR-21..25 | See [001 PR-20..25 roadmap](./001-2026-06-02-pr20-pr25-development-roadmap.md) spec queue |
 
-PR-16 may share PR-15 spec or get a thin follow-on spec — decide in `003` spec review.
+Completed queue items: PR-15 `003`, PR-17 `005`, PR-19 `007` — all implemented or approved per tables above.
 
 ---
 
@@ -283,6 +285,8 @@ PR-17..20 Quality detail → repair preview → repair apply → finalize
 | 2026-06-01 | PR-18 implemented: typed detail DTO, cache-based builder, DetailPanel + review commands |
 | 2026-06-01 | PR-19 spec `007` drafted (near-ngram-v1); awaiting grill-me + approval |
 | 2026-06-01 | PR-19 spec `007` **approved** after grill-me (post-scan, results-only, shared review, apply reject) |
+| 2026-06-02 | Child roadmap [001 PR-20..25](./001-2026-06-02-pr20-pr25-development-roadmap.md): detection close (20) → quality (21–23) → packaging (24) → shell FileDock (25) |
+| 2026-06-02 | Position: PR-19 Done; next PR-20 spec `008` (proposed filename in 001) |
 
 ---
 

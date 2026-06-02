@@ -49,9 +49,14 @@ export function buildReviewGridColumns(): ColumnDef<ReviewRow>[] {
       cell: (ctx) => {
         const value = ctx.getValue();
         const isNear = value === "near";
+        const isRelation = value === "relation";
         return (
-          <span className={isNear ? "font-semibold text-secondary" : "text-muted"}>
-            {isNear ? "Near" : reviewTypeLabel[value]}
+          <span
+            className={
+              isNear || isRelation ? "font-semibold text-secondary" : "text-muted"
+            }
+          >
+            {isNear ? "Near" : isRelation ? "Relation" : reviewTypeLabel[value]}
           </span>
         );
       },

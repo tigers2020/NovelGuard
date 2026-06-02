@@ -8,6 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from application.app_settings import AppSettings
 from application.dto_mapper import (
     build_snapshot,
     scan_timestamp,
@@ -22,7 +23,9 @@ from application.review_snapshot_counts import file_row_status_counts
 from application.review_state_merge import rebuild_rows_with_review_state
 from domain.duplicate_exact import find_exact_duplicate_groups
 from domain.duplicate_near import NearDuplicateGroup
+from domain.filename_relation import RelationGroup
 from domain.models import FileRecord
+from domain.settings_keys import SETTINGS_KEY_INCLUDE_RELATION
 
 _MAX_QUERY_LIMIT = 200
 _DEFAULT_QUERY_LIMIT = 100
@@ -66,6 +69,8 @@ class LibrarySession:
         self._total_quality_issue_count = 0
         self._apply_in_progress = False
         self._near_groups_by_id: dict[str, NearDuplicateGroup] = {}
+        self._relation_groups_by_id: dict[str, RelationGroup] = {}
+        self._settings = AppSettings()
 
     def select_folder(self, path: str | None = None) -> None:
         folder = path
@@ -175,6 +180,17 @@ class LibrarySession:
 
         with self._lock:
             quality_by_path = index_quality_rows_by_path(self._quality_rows_cache)
+            if group_id.startswith("relation:"):
+                from application.relation_group_detail import build_relation_group_detail
+
+                relation_group = self._relation_groups_by_id.get(group_id)
+                return build_relation_group_detail(
+                    group_id,
+                    relation_group=relation_group,
+                    review_rows=self._review_rows_cache,
+                    files_by_id=self._files_by_id,
+                    quality_by_path=quality_by_path,
+                )
             if group_id.startswith("near:"):
                 near_group = self._near_groups_by_id.get(group_id)
                 return build_near_group_detail(
@@ -210,6 +226,14 @@ class LibrarySession:
                 "integrity": row["integrity"],
                 "evidence": {"severity": row.get("severity")},
             }
+
+    def get_app_setting(self, key: str) -> bool:
+        with self._lock:
+            return self._settings.get_bool(key)
+
+    def set_app_setting(self, key: str, value: bool) -> None:
+        with self._lock:
+            self._settings.set_bool(key, value)
 
     def library_revision(self) -> int:
         with self._lock:
@@ -272,6 +296,14 @@ class LibrarySession:
             )
             if updated > 0:
                 self._rebuild_review_index(list(self._files_by_id.values()))
+                folder = self._index.folder_path
+                if folder:
+                    try:
+                        self._run_post_scan_detection_phases(
+                            folder, list(self._files_by_id.values())
+                        )
+                    except Exception:
+                        _LOGGER.exception("post-scan detection failed after review update")
                 self._library_revision += 1
             return {
                 "updatedCount": updated,
@@ -310,13 +342,14 @@ class LibrarySession:
             self._rebuild_review_index(collected)
             self._rebuild_quality_index(folder, collected)
             try:
-                self._run_near_duplicate_phase(folder, collected)
+                self._run_post_scan_detection_phases(folder, collected)
             except Exception:
-                _LOGGER.exception("near duplicate detection failed")
+                _LOGGER.exception("post-scan detection failed")
 
     def _clear_review_cache(self) -> None:
         self._review_rows_cache = []
         self._near_groups_by_id = {}
+        self._relation_groups_by_id = {}
         self._duplicate_group_count = 0
         self._queue_count = 0
         self._approved_count = 0
@@ -356,6 +389,64 @@ class LibrarySession:
         self._review_rows_cache = [
             row for row in self._review_rows_cache if row.get("type") != "near"
         ]
+
+    def _strip_relation_rows(self) -> None:
+        self._review_rows_cache = [
+            row for row in self._review_rows_cache if row.get("type") != "relation"
+        ]
+
+    def _run_post_scan_detection_phases(self, folder: str, files: list[FileRecord]) -> None:
+        self._run_near_duplicate_phase(folder, files)
+        self._run_relation_phase(folder, files)
+
+    def _run_relation_phase(self, folder: str, files: list[FileRecord]) -> None:
+        from application.relation_batch_id import filename_set_digest, make_relation_batch_id
+        from application.relation_membership import (
+            build_exact_membership_by_file_id,
+            build_near_membership_by_file_id,
+        )
+        from application.relation_review_rows_builder import build_relation_review_rows
+        from application.review_state_merge import merge_review_state
+        from domain.duplicate_exact import find_exact_duplicate_groups
+        from domain.filename_relation import detect_filename_relations
+
+        self._strip_relation_rows()
+        self._relation_groups_by_id = {}
+
+        if not self._settings.get_bool(SETTINGS_KEY_INCLUDE_RELATION):
+            return
+
+        relation_batch_id = make_relation_batch_id(
+            library_revision=self._library_revision,
+            filename_set_digest_value=filename_set_digest(files),
+        )
+        result = detect_filename_relations(
+            files,
+            exact_membership_by_file_id=build_exact_membership_by_file_id(files),
+            near_membership_by_file_id=build_near_membership_by_file_id(self._near_groups_by_id),
+            relation_batch_id=relation_batch_id,
+        )
+        self._relation_groups_by_id = {group.group_id: group for group in result.groups}
+
+        relation_skeleton = build_relation_review_rows(list(result.groups), self._files_by_id)
+        stored = self._index.load_review_state(folder)
+        exact_groups = find_exact_duplicate_groups(files)
+        relation_rows = merge_review_state(
+            relation_skeleton,
+            stored,
+            groups=exact_groups,
+            files_by_id=self._files_by_id,
+        )
+        self._review_rows_cache.extend(relation_rows)
+
+        valid_group_ids = (
+            {group.group_id for group in exact_groups}
+            | set(self._near_groups_by_id.keys())
+            | set(self._relation_groups_by_id.keys())
+        )
+        valid_file_ids = {file_record.id for file_record in files}
+        self._index.prune_review_state(folder, valid_group_ids, valid_file_ids)
+        self._refresh_resolve_counts()
 
     def _run_near_duplicate_phase(self, folder: str, files: list[FileRecord]) -> None:
         from application.near_batch_id import content_set_digest, make_near_batch_id
@@ -468,9 +559,9 @@ class LibrarySession:
             self._rebuild_review_index(collected)
             self._rebuild_quality_index(folder, collected)
             try:
-                self._run_near_duplicate_phase(folder, collected)
+                self._run_post_scan_detection_phases(folder, collected)
             except Exception:
-                _LOGGER.exception("near duplicate detection failed")
+                _LOGGER.exception("post-scan detection failed")
             self._scan_state = "success"
             self._scan_last_run = scan_timestamp()
             self._library_revision += 1
