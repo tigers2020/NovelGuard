@@ -197,25 +197,27 @@
 
 ## Task 9: Smoke fixture + smoke record
 
-**Files:** `docs/release/smoke-record-template.md`, `docs/release/packaging-windows.md`
+**Files:** `docs/release/smoke-record-template.md`, `docs/release/packaging-windows.md`, `packaging/fixtures/library/`
 
-- [ ] Document fixture library path (repo `tests/fixtures/` or dedicated `packaging/fixtures/library/`)
-- [ ] Manual checklist: launch exe → folder select → scan → resolve navigation → logs path
-- [ ] Destructive ops: fixture only
-- [ ] Fresh-machine prerequisites (WebView2, no npm at runtime)
-- [ ] Filled smoke record template committed as example or left blank for operator
+- [x] Fixture path: `packaging/fixtures/library/` (alpha, alpha-copy, beta, nested/gamma)
+- [x] Manual checklist in smoke record template (launch → folder → scan → resolve → logs)
+- [x] Destructive ops: fixture-only callouts in template + fixture README
+- [x] Fresh-machine prerequisites + WebView2 in `packaging-windows.md`
+- [x] Smoke record template blank for operator (not pre-filled example run)
 
 ---
 
 ## Task 10: Release docs + changelog
 
-- [ ] `docs/release/packaging-windows.md` — build, run, troubleshoot
+- [x] `docs/release/packaging-windows.md` — delivered in Task 9 (Task 10 may extend)
 - [ ] `docs/release/known-limitations.md` — Windows-only, no installer/signing/auto-update, onedir, mock block, no legacy migration
 - [ ] `CHANGELOG.md` — PR-24 entry
 
 ---
 
 ## Task 11: Final verification
+
+**Blocker (pre-merge):** `verify_phase_completion.py` must pass all 6 steps including repo-wide `ruff` (known fail at 2/6 after Task 8; Task 8 scripts are clean).
 
 - [ ] `python scripts/verify_phase_completion.py` — all steps pass
 - [ ] `python scripts/package_windows.py` — produces exe on dev machine
