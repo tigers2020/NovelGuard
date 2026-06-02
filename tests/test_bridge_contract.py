@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 import time
 from pathlib import Path
 
@@ -34,7 +35,7 @@ from app.bridge_parity import PYWEBVIEW_API_METHODS
 from app.selection_fingerprint import selection_fingerprint
 from app.session_factory import create_bridge_api, create_library_session
 from application.app_settings import AppSettings
-from application.file_row_query import normalize_file_rows_query
+from application.file_row_query import normalize_file_rows_query, text_sort_key
 from application.ports.filesystem_apply import ApplyRowResult
 from application.quality_analyzer import analyze_quality
 from application.scan_settings import SettingsValidationError, parse_extension_filter
@@ -460,6 +461,103 @@ def test_sqlite_library_index_round_trip(tmp_path: Path) -> None:
     assert len(loaded) == 1
     assert loaded[0].content_sha256 == "abc"
     assert index.folder_path == folder
+
+
+def test_sqlite_library_index_file_sort_keys_populated(tmp_path: Path) -> None:
+    db = tmp_path / "library.db"
+    index = SqliteLibraryIndex(db)
+    folder = str(tmp_path / "lib")
+    record = FileRecord(
+        id=make_file_id("Café.txt", 5, 1),
+        relative_path="sub/Café.txt",
+        name="Café.txt",
+        size_bytes=5,
+        modified_at_ns=1,
+        extension=".TXT",
+        content_sha256="abc",
+        encoding_status="UTF-8",
+    )
+    index.replace_files(folder, [record])
+    with sqlite3.connect(db) as conn:
+        row = conn.execute(
+            """
+            SELECT name_key, relative_path_key, extension_key, encoding_key
+            FROM files WHERE folder_path = ? AND id = ?
+            """,
+            (folder, record.id),
+        ).fetchone()
+    assert row is not None
+    assert row[0] == text_sort_key("Café.txt")
+    assert row[1] == text_sort_key("sub/Café.txt")
+    assert row[2] == text_sort_key(".TXT")
+    assert row[3] == text_sort_key("UTF-8")
+    assert row[0] != ""
+    assert row[1] != ""
+
+
+def test_sqlite_library_index_has_file_review_projection_table(tmp_path: Path) -> None:
+    db = tmp_path / "library.db"
+    SqliteLibraryIndex(db)
+    with sqlite3.connect(db) as conn:
+        found = conn.execute(
+            """
+            SELECT name FROM sqlite_master
+            WHERE type = 'table' AND name = 'file_review_projection'
+            """
+        ).fetchone()
+    assert found is not None
+
+
+def test_sqlite_library_index_legacy_db_backfills_file_keys(tmp_path: Path) -> None:
+    db = tmp_path / "legacy.db"
+    folder = str(tmp_path / "lib")
+    file_id = make_file_id("legacy.txt", 10, 1)
+    with sqlite3.connect(db) as conn:
+        conn.executescript(
+            """
+            CREATE TABLE files (
+              id TEXT PRIMARY KEY,
+              folder_path TEXT NOT NULL,
+              relative_path TEXT NOT NULL,
+              name TEXT NOT NULL,
+              size_bytes INTEGER NOT NULL,
+              modified_at_ns INTEGER NOT NULL,
+              extension TEXT NOT NULL,
+              content_sha256 TEXT,
+              encoding_status TEXT
+            );
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO files (
+              id, folder_path, relative_path, name, size_bytes, modified_at_ns,
+              extension, content_sha256, encoding_status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                file_id,
+                folder,
+                "legacy.txt",
+                "legacy.txt",
+                10,
+                1,
+                ".txt",
+                None,
+                "ascii",
+            ),
+        )
+        conn.commit()
+
+    SqliteLibraryIndex(db)
+    with sqlite3.connect(db) as conn:
+        row = conn.execute(
+            "SELECT name_key, relative_path_key FROM files WHERE id = ?",
+            (file_id,),
+        ).fetchone()
+    assert row is not None
+    assert row[0] == text_sort_key("legacy.txt")
+    assert row[1] == text_sort_key("legacy.txt")
 
 
 def _scan_until_idle(api: BridgeApi) -> dict:

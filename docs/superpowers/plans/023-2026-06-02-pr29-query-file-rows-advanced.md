@@ -193,13 +193,13 @@ Per spec 017 §12: PR-30 may run in parallel only with characterization-first, b
 - Modify: `src/infrastructure/sqlite_library_index.py`
 - Test: `tests/test_bridge_contract.py` (schema + replace_files keys)
 
-- [ ] **Step 1:** Extend `_SCHEMA` — add columns to `files`:
+- [x] **Step 1:** Extend `_SCHEMA` — add columns to `files`:
   - `name_key`, `relative_path_key`, `extension_key`, `encoding_key` TEXT NOT NULL DEFAULT ''
   - Migration: `ALTER TABLE` or recreate — existing DBs on disk must be handled (see Step 4)
 
-- [ ] **Step 2:** Add `file_review_projection` table per spec §5.4 + index `idx_file_review_folder_group_key_id`.
+- [x] **Step 2:** Add `file_review_projection` table per spec §5.4 + index `idx_file_review_folder_group_key_id`.
 
-- [ ] **Step 3:** Add spec §8.2 indexes (verbatim DDL from spec 017):
+- [x] **Step 3:** Add spec §8.2 indexes (verbatim DDL from spec 017):
 
 ```sql
 CREATE INDEX IF NOT EXISTS idx_files_folder_path_id
@@ -218,9 +218,9 @@ CREATE INDEX IF NOT EXISTS idx_file_review_folder_group_key_id
   ON file_review_projection(folder_path, duplicate_group_key, file_id);
 ```
 
-- [ ] **Step 4:** **Backfill strategy (plan lock):** On `SqliteLibraryIndex` connect/migrate, if `name_key` missing on legacy rows, recompute keys from stored columns OR require successful rescan before file queries return data — document chosen approach in PR notes. **Forbidden:** empty `*_key` on active rows after migration.
+- [x] **Step 4:** **Backfill strategy (plan lock):** On connect, `ALTER TABLE` missing `*_key` columns then `_backfill_file_keys()` from stored columns. **Forbidden:** empty `*_key` on active rows after migration.
 
-- [ ] **Step 5:** Update `replace_files()` to populate all `*_key` via `text_sort_key`.
+- [x] **Step 5:** Update `replace_files()` to populate all `*_key` via `text_sort_key`.
 
 **Verify:** pytest — insert files, assert keys non-empty; projection table exists.
 
