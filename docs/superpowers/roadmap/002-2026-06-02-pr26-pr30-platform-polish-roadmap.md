@@ -69,7 +69,7 @@ flowchart TD
 |----|------|------|----------|-----------------|-----------------|--------|
 | **PR-26** | Snapshot invalidation events | F | No | `specs/014-2026-06-02-snapshot-invalidation-design.md` | `plans/020-2026-06-02-pr26-snapshot-invalidation.md` | **Done** (2026-06-02) |
 | **PR-27** | Quality grid parity with Resolve | F | No | `specs/015-2026-06-02-quality-grid-parity-design.md` | `plans/021-2026-06-02-pr27-quality-grid-parity.md` | **Done** (2026-06-02) |
-| **PR-28** | Settings/Logs v1 (minimal subset) | F | Limited | `specs/016-2026-06-02-settings-logs-design.md` | `plans/022-2026-06-02-pr28-settings-logs.md` | **Proposed** |
+| **PR-28** | Settings/Logs v1 (minimal subset) | F | Limited | `specs/016-2026-06-02-settings-logs-design.md` | `plans/022-2026-06-02-pr28-settings-logs.md` | Spec + plan **approved** (2026-06-02) |
 | **PR-29** | `queryFileRows` advanced / library grid | F | No | `specs/017-2026-06-02-query-file-rows-advanced-design.md` | `plans/023-2026-06-02-pr29-query-file-rows-advanced.md` | **Proposed** |
 | **PR-30** | Bridge / app hygiene refactor | G | No | `specs/018-2026-06-02-bridge-hygiene-design.md` | `plans/024-2026-06-02-pr30-bridge-hygiene.md` | **Proposed** |
 
@@ -394,7 +394,7 @@ python scripts/verify_phase_completion.py
 - [ ] PR-26 event payload locked to **snapshot invalidation only** (LOCK-26)
 - [ ] PR-26 fallback locked: **idle 10 s poll + event refresh** (or stricter in spec)
 - [x] PR-27 sort field **whitelist** named in spec 015
-- [ ] PR-28 Settings v1 subset locked (LOCK-28); Logs **one** source of truth chosen
+- [x] PR-28 Settings v1 subset locked (LOCK-28); Logs **one** source of truth chosen (spec 016 grill 2026-06-02: `queryLogEntries` + artifact metadata only)
 - [ ] PR-29 SQLite rebuild: **full rescan rebuild** default documented in spec 017
 - [ ] PR-30: characterization test plan in spec 018 before any extraction task
 - [ ] 001 closed-track stale checklist cleaned (hygiene)
@@ -405,7 +405,8 @@ python scripts/verify_phase_completion.py
 - [ ] PR-26 plan 020 approved
 - [x] PR-27 spec 015 approved (2026-06-02)
 - [x] PR-27 plan 021 approved + implemented (2026-06-02)
-- [ ] PR-28 spec 016 → **grill required** (LOCK-28; log source)
+- [x] PR-28 spec 016 approved (2026-06-02)
+- [x] PR-28 plan 022 approved (2026-06-02)
 - [ ] PR-29 spec 017 → grill-me (index rebuild; no dock ownership move)
 - [ ] PR-30 spec 018 → grill-me (early-pull rules + characterization gate)
 - [ ] No PR-29 scope creep into PR-25 shell ownership

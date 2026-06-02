@@ -25,6 +25,7 @@ Use installed Superpowers skills as the primary workflow layer for **non-trivial
 ## Rules
 
 - Do not skip design/spec/planning gates for **non-trivial** work; simple tasks may skip Superpowers entirely.
+- **Plan execution continuity:** after plan approval, `executing-plans` / `subagent-driven-development` runs through all plan tasks without pausing between tasks until the **final review stage** (all tasks done → verification → final review → `finishing-a-development-branch`). Stop only on plan breakpoints, blockers, scope/safety issues, user redirect, or policy blocks (see AGENTS.md).
 - **Plan scope freeze:** when plan tasks are done, stop — no C-2/C-3 scope creep without new spec/plan cycle.
 - If the user says design is already approved, locate the spec/plan file before coding.
 - Persona briefings run **immediately before** implementation; they do not replace brainstorming, `grill-me`, or writing-plans.

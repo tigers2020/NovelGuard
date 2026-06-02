@@ -15,11 +15,14 @@ from app.bridge_contract import (
     RepairApplyError,
     clamp_query_limit,
     validate_app_info,
+    validate_app_setting_response,
     validate_app_snapshot,
     validate_duplicate_group_detail,
     validate_file_rows_page,
     validate_finalize_result,
     validate_finalize_summary,
+    validate_log_entries_page,
+    validate_logs_artifacts_response,
     validate_move_preview,
     validate_quality_issue_detail,
     validate_quality_repair_preview,
@@ -27,6 +30,13 @@ from app.bridge_contract import (
     validate_review_rows_page,
     validate_selection_scope,
 )
+from app.runtime_paths import logs_dir
+from application.app_settings import (
+    InvalidSettingValueError,
+    UnknownSettingKeyError,
+)
+from application.log_query import LogQueryError
+from application.scan_settings import SettingsValidationError
 from app.build_preview_plan import BuildPreviewPlanUseCase
 from app.build_quality_repair_plan import BuildQualityRepairPlanUseCase
 from app.preview_apply_guard import PreviewApplyGuard
@@ -216,11 +226,36 @@ class BridgeApi:
         validate_app_info(payload)
         return payload
 
-    def get_app_setting(self, key: str) -> bool:
-        return self._session.get_app_setting(key)
+    def get_app_setting(self, key: str) -> dict[str, Any]:
+        try:
+            payload = self._session.get_app_setting(key)
+        except UnknownSettingKeyError as exc:
+            raise PreviewApplyError("INVALID_SETTING_VALUE", str(exc)) from exc
+        validate_app_setting_response(payload)
+        return payload
 
-    def set_app_setting(self, key: str, value: bool) -> None:
-        self._session.set_app_setting(key, value)
+    def set_app_setting(self, key: str, value: Any) -> dict[str, Any]:
+        try:
+            payload = self._session.set_app_setting(key, value)
+        except (UnknownSettingKeyError, InvalidSettingValueError, SettingsValidationError) as exc:
+            raise PreviewApplyError("INVALID_SETTING_VALUE", str(exc)) from exc
+        validate_app_setting_response(payload)
+        return payload
+
+    def query_log_entries(self, query: dict[str, Any]) -> dict[str, Any]:
+        try:
+            payload = self._session.query_log_entries(query if isinstance(query, dict) else {})
+        except LogQueryError as exc:
+            raise PreviewApplyError(exc.reason, str(exc)) from exc
+        validate_log_entries_page(payload)
+        return payload
+
+    def get_logs_artifacts(self) -> dict[str, Any]:
+        payload = self._session.get_logs_artifacts(
+            packaging_log_path=logs_dir() / "novelguard.log",
+        )
+        validate_logs_artifacts_response(payload)
+        return payload
 
     def discard_move_preview(self, payload: dict[str, Any]) -> None:
         token = (payload.get("previewToken") or "").strip()

@@ -14,10 +14,14 @@ from app.preview_apply_guard import PreviewApplyGuard
 from app.quality_repair_guard import QualityRepairGuard
 from app.runtime_paths import (
     LibraryRuntimePaths,
+    config_dir,
     ensure_library_state_dirs,
     library_runtime_paths,
     pending_library_runtime_paths,
 )
+from application.app_settings import AppSettings
+from application.log_buffer import attach_session_log_handler
+from application.settings_store import SettingsStore
 from application.audit_log import AuditLog
 from application.library_session import LibrarySession
 from application.ports.filesystem_apply import FilesystemApplyPort
@@ -50,6 +54,7 @@ def _scan_with_content_hash(
     cancel_check: Callable[..., bool],
     out: Callable[..., None],
     extensions: set[str] | None = None,
+    include_hidden: bool = False,
     content_hash_fn: Callable[..., str] | None = None,
 ) -> None:
     _ = content_hash_fn
@@ -59,6 +64,7 @@ def _scan_with_content_hash(
         cancel_check=cancel_check,
         out=out,
         extensions=extensions,
+        include_hidden=include_hidden,
         content_hash_fn=hash_file,
     )
 
@@ -72,11 +78,19 @@ def bind_library_runtime(session: LibrarySession, folder: str) -> LibraryRuntime
     return paths
 
 
+def _create_app_settings() -> AppSettings:
+    settings_dir = config_dir()
+    settings_dir.mkdir(parents=True, exist_ok=True)
+    store = SettingsStore(settings_dir / "settings.json")
+    return AppSettings(store)
+
+
 def create_library_session(
     index: LibraryIndexPort | None = None,
     *,
     db_path: Path | None = None,
     audit_log_path: Path | None = None,
+    settings: AppSettings | None = None,
 ) -> LibrarySession:
     pending = pending_library_runtime_paths()
     ensure_library_state_dirs(pending)
@@ -90,6 +104,7 @@ def create_library_session(
         index,
         scan_folder=_scan_with_content_hash,
         on_library_selected=bind_library_runtime,
+        settings=settings or _create_app_settings(),
     )
     paths = pending
     if audit_log_path is not None:
@@ -141,6 +156,7 @@ def create_bridge_api(
         audit,
         repair_fs,
     )
+    attach_session_log_handler()
     return BridgeApi(
         resolved_session,
         guard=move_guard,

@@ -82,6 +82,7 @@ def build_snapshot(
     finalize_blocker_count: int = 0,
     finalize_warning_count: int = 0,
     connection: str = "Library session (Python)",
+    scan_options: list[str] | None = None,
 ) -> dict[str, Any]:
     return {
         "route": "work",
@@ -95,7 +96,7 @@ def build_snapshot(
             "duplicateGroups": duplicate_group_count,
             "integrityIssues": integrity_issue_count,
             "lastRun": scan_last_run,
-            "scanOptions": [".txt", ".md", "하위 폴더 포함"],
+            "scanOptions": scan_options or [".txt,.md", "하위 폴더 포함", "숨김 제외"],
         },
         "pipeline": {
             "phase": pipeline_phase,

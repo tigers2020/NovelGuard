@@ -37,3 +37,4 @@ Index: [persona/README.md](mdc:persona/README.md).
 
 - Do not enter step 3 without an approved plan for non-trivial work (`docs/superpowers/plans/`).
 - Simon blocks step 3 until spec/plan approval when required.
+- During an approved plan run (`executing-plans` / `subagent-driven-development`): brief once before first code edit; do not repeat step 2 between every plan task unless the plan marks a breakpoint ([AGENTS.md](mdc:AGENTS.md) — Plan execution continuity).

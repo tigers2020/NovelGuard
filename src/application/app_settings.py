@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from domain.settings_keys import (
     ALL_SETTING_KEYS,
@@ -16,6 +16,9 @@ from domain.settings_keys import (
     SETTINGS_KEY_SCAN_INCLUDE_SYMLINKS,
     STRING_SETTING_KEYS,
 )
+
+if TYPE_CHECKING:
+    from application.settings_store import SettingsStore
 
 SettingsSource = Literal["default", "persisted"]
 SettingValue = str | bool
@@ -39,11 +42,15 @@ class InvalidSettingValueError(ValueError):
 
 
 class AppSettings:
-    """Typed in-memory settings. Persistence is added in PR-28 Task 2."""
+    """Typed settings with optional JSON persistence."""
 
-    def __init__(self) -> None:
-        self._values: dict[str, SettingValue] = dict(_DEFAULTS)
-        self._sources: dict[str, SettingsSource] = dict.fromkeys(_DEFAULTS, "default")
+    def __init__(self, store: SettingsStore | None = None) -> None:
+        self._store = store
+        if store is not None:
+            self._values, self._sources = store.load_merged()
+        else:
+            self._values = dict(_DEFAULTS)
+            self._sources = dict.fromkeys(_DEFAULTS, "default")
 
     def get_value(self, key: str) -> tuple[SettingValue, SettingsSource]:
         self._validate_key(key)
@@ -54,6 +61,8 @@ class AppSettings:
         self._validate_value_type(key, value)
         self._values[key] = value
         self._sources[key] = "persisted"
+        if self._store is not None:
+            self._store.persist_values(self._values)
         return value, "persisted"
 
     def get_bool(self, key: str, default: bool = False) -> bool:

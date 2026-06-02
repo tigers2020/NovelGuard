@@ -131,12 +131,14 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
       callBridge(() => call<UpdateReviewDecisionsResult>(api, "update_review_decisions", request), {
         method: "update_review_decisions",
       }),
-    getAppSetting: (key: string) =>
-      callBridge(() => call<boolean>(api, "get_app_setting", key), { method: "get_app_setting" }),
-    setAppSetting: (key: string, value: boolean) =>
-      callBridge(() => call(api, "set_app_setting", key, value).then(() => undefined), {
-        method: "set_app_setting",
-      }),
+    getAppSetting: (key) =>
+      callBridge(() => call(api, "get_app_setting", key), { method: "get_app_setting" }),
+    setAppSetting: (key, value) =>
+      callBridge(() => call(api, "set_app_setting", key, value), { method: "set_app_setting" }),
+    queryLogEntries: (query) =>
+      callBridge(() => call(api, "query_log_entries", query), { method: "query_log_entries" }),
+    getLogsArtifacts: () =>
+      callBridge(() => call(api, "get_logs_artifacts"), { method: "get_logs_artifacts" }),
     getFinalizeSummary: () =>
       callBridge(() => call<FinalizeSummary>(api, "get_finalize_summary"), {
         method: "get_finalize_summary",
