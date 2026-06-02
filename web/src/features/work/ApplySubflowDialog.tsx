@@ -42,6 +42,7 @@ function applyErrorMessage(err: unknown): {
       INVALID_PREVIEW_TOKEN: "미리보기 토큰이 유효하지 않습니다.",
       APPLY_FAILED: formatApplyFailedMessage(details),
       LIBRARY_BUSY: "스캔 또는 적용이 진행 중입니다. 완료 후 다시 시도하세요.",
+      REPAIR_PREVIEW_ACTIVE: "품질 복구 미리보기가 활성 상태입니다. 먼저 닫으세요.",
     };
     if (reason) {
       return { message: byReason[reason], reason, details };

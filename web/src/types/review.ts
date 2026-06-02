@@ -2,6 +2,9 @@ export type ReviewViewMode = "action" | "groups" | "move" | "all" | "conflicts";
 
 export type ReviewStatus = "unreviewed" | "approved" | "conflict" | "excluded";
 
+export type RelationKind = "same_title_series" | "chapter_sequence" | "version_variant";
+export type ConfidenceLabel = "low" | "medium" | "high";
+
 export type ReviewRowType = "exact" | "near" | "relation" | "move_only";
 
 export type ProposedAction = "keep" | "move_duplicate" | "move_organized" | "ignore";
@@ -28,6 +31,8 @@ export interface ReviewRow {
   proposedAction: ProposedAction;
   targetFolder?: string;
   confidence?: number;
+  confidenceLabel?: ConfidenceLabel;
+  relationKind?: RelationKind;
   sizeBytes?: number;
   encoding?: string;
   integrity?: string;
@@ -52,7 +57,7 @@ export interface ReviewRowsPage {
   };
 }
 
-export type DuplicateMatchKind = "exact_content_hash" | "near_ngram_v1";
+export type DuplicateMatchKind = "exact_content_hash" | "near_ngram_v1" | "relation_filename_v1";
 
 export interface MemberIntegrity {
   status: "ok" | "issue";
@@ -108,7 +113,23 @@ export interface DuplicateGroupDetailNearOk extends DuplicateGroupDetailOkBase {
   };
 }
 
-export type DuplicateGroupDetailOk = DuplicateGroupDetailExactOk | DuplicateGroupDetailNearOk;
+export interface DuplicateGroupDetailRelationOk extends DuplicateGroupDetailOkBase {
+  type: "relation";
+  evidence: {
+    matchKind: "relation_filename_v1";
+    relationKind: RelationKind;
+    confidenceLabel: ConfidenceLabel;
+    normalizedNames: string[];
+    matchedTokens: string[];
+    differingTokens: string[];
+    memberCount: number;
+  };
+}
+
+export type DuplicateGroupDetailOk =
+  | DuplicateGroupDetailExactOk
+  | DuplicateGroupDetailNearOk
+  | DuplicateGroupDetailRelationOk;
 
 export interface DuplicateGroupDetailNotFound {
   status: "not_found";

@@ -10,10 +10,19 @@ export const NOVEL_GUARD_BRIDGE_METHODS = [
   "queryQualityRows",
   "getDuplicateGroupDetail",
   "getQualityIssueDetail",
+  "getQualityRepairPreview",
+  "applyQualityRepair",
+  "discardQualityRepairPreview",
   "getMovePreview",
   "applyResolvedActions",
   "discardMovePreview",
   "updateReviewDecisions",
+  "getAppSetting",
+  "setAppSetting",
+  "getFinalizeSummary",
+  "runFinalizeVerification",
+  "getFinalizeReport",
+  "cancelFinalize",
 ] as const satisfies readonly (keyof NovelGuardBridge)[];
 
 export const PYWEBVIEW_API_METHODS = [
@@ -26,10 +35,19 @@ export const PYWEBVIEW_API_METHODS = [
   "query_quality_rows",
   "get_duplicate_group_detail",
   "get_quality_issue_detail",
+  "get_quality_repair_preview",
+  "apply_quality_repair",
+  "discard_quality_repair_preview",
   "get_move_preview",
   "apply_resolved_actions",
   "discard_move_preview",
   "update_review_decisions",
+  "get_app_setting",
+  "set_app_setting",
+  "get_finalize_summary",
+  "run_finalize_verification",
+  "get_finalize_report",
+  "cancel_finalize",
 ] as const;
 
 export function assertBridgeParity(bridge: NovelGuardBridge): void {

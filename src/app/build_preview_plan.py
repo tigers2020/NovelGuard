@@ -8,8 +8,12 @@ from uuid import uuid4
 
 from app.bridge_contract import PreviewApplyError
 from app.preview_apply_guard import PreviewApplyGuard
+from app.quality_repair_guard import QualityRepairGuard
 from app.selection_fingerprint import selection_fingerprint
-from app.selection_guards import selection_includes_near_rows
+from app.selection_guards import (
+    selection_includes_near_rows,
+    selection_includes_relation_rows,
+)
 from app.selection_resolve import resolve_selection_rows
 from application.audit_log import AuditLog
 from application.library_session import LibrarySession
@@ -29,15 +33,19 @@ class BuildPreviewPlanUseCase:
         self,
         session: LibrarySession,
         guard: PreviewApplyGuard,
+        repair_guard: QualityRepairGuard,
         audit: AuditLog,
         filesystem: FilesystemApplyPort,
     ) -> None:
         self._session = session
         self._guard = guard
+        self._repair_guard = repair_guard
         self._audit = audit
         self._filesystem = filesystem
 
     def execute(self, selection: dict[str, Any]) -> dict[str, Any]:
+        if self._repair_guard.get() is not None:
+            raise PreviewApplyError("REPAIR_PREVIEW_ACTIVE")
         root = self._session.library_root_path()
         if root is None:
             return self._empty_preview(selection)
@@ -45,6 +53,8 @@ class BuildPreviewPlanUseCase:
         selected_rows = resolve_selection_rows(self._session.review_rows_snapshot(), selection)
         if selection_includes_near_rows(selected_rows):
             raise PreviewApplyError("NEAR_DUPLICATE_APPLY_UNSUPPORTED")
+        if selection_includes_relation_rows(selected_rows):
+            raise PreviewApplyError("RELATION_APPLY_UNSUPPORTED")
         operations: list[PreviewOperation] = []
         preview_rows: list[dict[str, str]] = []
         conflict_count = 0

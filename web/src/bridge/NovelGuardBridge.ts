@@ -1,6 +1,12 @@
 import type { AppSnapshot, WorkMode } from "../types/snapshot";
 import type { DuplicateGroupDetail, ReviewRowsPage, ReviewRowsQuery } from "../types/review";
-import type { QualityIssueDetail, QualityRowsPage, QualityRowsQuery } from "../types/quality";
+import type { QualityIssueDetailResponse, QualityRowsPage, QualityRowsQuery } from "../types/quality";
+import type {
+  ApplyQualityRepairRequest,
+  DiscardQualityRepairPreviewRequest,
+  QualityRepairPreviewRequest,
+  QualityRepairPreviewResult,
+} from "../types/qualityRepair";
 import type {
   ApplyResolvedActionsRequest,
   DiscardMovePreviewRequest,
@@ -10,6 +16,12 @@ import type {
   UpdateReviewDecisionsRequest,
   UpdateReviewDecisionsResult,
 } from "../types/reviewDecisions";
+import type {
+  FinalizeReportDocument,
+  FinalizeResult,
+  FinalizeSummary,
+  RunFinalizeRequest,
+} from "../types/finalize";
 import type { SelectionScope } from "../types/selection";
 
 export interface NovelGuardBridge {
@@ -21,11 +33,22 @@ export interface NovelGuardBridge {
   queryReviewRows(query: ReviewRowsQuery): Promise<ReviewRowsPage>;
   queryQualityRows(query: QualityRowsQuery): Promise<QualityRowsPage>;
   getDuplicateGroupDetail(groupId: string): Promise<DuplicateGroupDetail>;
-  getQualityIssueDetail(issueId: string): Promise<QualityIssueDetail>;
+  getQualityIssueDetail(issueId: string): Promise<QualityIssueDetailResponse>;
+  getQualityRepairPreview(
+    request: QualityRepairPreviewRequest,
+  ): Promise<QualityRepairPreviewResult>;
+  applyQualityRepair(request: ApplyQualityRepairRequest): Promise<void>;
+  discardQualityRepairPreview(request: DiscardQualityRepairPreviewRequest): Promise<void>;
   getMovePreview(selection: SelectionScope): Promise<MovePreviewResult>;
   applyResolvedActions(request: ApplyResolvedActionsRequest): Promise<void>;
   discardMovePreview(request: DiscardMovePreviewRequest): Promise<void>;
   updateReviewDecisions(
     request: UpdateReviewDecisionsRequest,
   ): Promise<UpdateReviewDecisionsResult>;
+  getAppSetting(key: string): Promise<boolean>;
+  setAppSetting(key: string, value: boolean): Promise<void>;
+  getFinalizeSummary(): Promise<FinalizeSummary>;
+  runFinalizeVerification(request: RunFinalizeRequest): Promise<FinalizeResult>;
+  getFinalizeReport(reportId: string): Promise<FinalizeReportDocument>;
+  cancelFinalize(): Promise<void>;
 }

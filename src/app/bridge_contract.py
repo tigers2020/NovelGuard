@@ -39,6 +39,18 @@ class PreviewApplyError(ValueError):
         super().__init__(message or reason)
 
 
+class RepairPreviewError(ValueError):
+    def __init__(self, reason: str, message: str | None = None) -> None:
+        self.reason = reason
+        super().__init__(message or reason)
+
+
+class RepairApplyError(ValueError):
+    def __init__(self, reason: str, message: str | None = None) -> None:
+        self.reason = reason
+        super().__init__(message or reason)
+
+
 class ApplyFailedError(ValueError):
     def __init__(
         self,
@@ -153,8 +165,8 @@ def validate_duplicate_group_detail(payload: Any) -> None:
             raise PageContractError(f"DuplicateGroupDetail ok variant missing {key}")
 
     detail_type = payload.get("type")
-    if detail_type not in ("exact", "near"):
-        raise PageContractError("DuplicateGroupDetail.type must be exact or near")
+    if detail_type not in ("exact", "near", "relation"):
+        raise PageContractError("DuplicateGroupDetail.type must be exact, near, or relation")
     if payload.get("groupStatus") not in _REVIEW_STATUSES:
         raise PageContractError("DuplicateGroupDetail.groupStatus invalid")
 
@@ -167,13 +179,27 @@ def validate_duplicate_group_detail(payload: Any) -> None:
         move_plan = payload.get("movePlan")
         if not isinstance(move_plan, dict):
             raise PageContractError("DuplicateGroupDetail.movePlan must be a dict")
-    else:
+    elif detail_type == "near":
         if evidence.get("matchKind") != "near_ngram_v1":
             raise PageContractError("evidence.matchKind must be near_ngram_v1")
         if not isinstance(evidence.get("maxSimilarity"), (int, float)):
             raise PageContractError("evidence.maxSimilarity must be a number")
         if not isinstance(evidence.get("threshold"), (int, float)):
             raise PageContractError("evidence.threshold must be a number")
+    else:
+        if evidence.get("matchKind") != "relation_filename_v1":
+            raise PageContractError("evidence.matchKind must be relation_filename_v1")
+        if evidence.get("relationKind") not in (
+            "same_title_series",
+            "chapter_sequence",
+            "version_variant",
+        ):
+            raise PageContractError("evidence.relationKind invalid")
+        if evidence.get("confidenceLabel") not in ("low", "medium", "high"):
+            raise PageContractError("evidence.confidenceLabel invalid")
+        for list_key in ("normalizedNames", "matchedTokens", "differingTokens"):
+            if not isinstance(evidence.get(list_key), list):
+                raise PageContractError(f"evidence.{list_key} must be a list")
 
     if not isinstance(evidence.get("memberCount"), int):
         raise PageContractError("evidence.memberCount must be int")
@@ -207,6 +233,180 @@ def validate_duplicate_group_detail(payload: Any) -> None:
             raise PageContractError("member integrity.label must be string")
         if not isinstance(integrity.get("issueCount"), int):
             raise PageContractError("member integrity.issueCount must be int")
+
+
+_QUALITY_KINDS = frozenset({"empty_file", "tiny_file", "invalid_utf8", "read_error"})
+_REPAIR_REASONS = frozenset(
+    {"repair_not_implemented", "issue_not_repairable", "read_error", "ready"}
+)
+_ENCODING_CONFIDENCE = frozenset({"high", "low"})
+
+
+def validate_quality_issue_detail(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise PageContractError("QualityIssueDetailResponse must be a dict")
+    status = payload.get("status")
+    if status == "stale":
+        raise PageContractError("QualityIssueDetailResponse must not use status stale in PR-21")
+    if status == "not_found":
+        if payload.get("message") != "quality_issue_not_found":
+            raise PageContractError("not_found message must be quality_issue_not_found")
+        if not isinstance(payload.get("id"), str):
+            raise PageContractError("not_found id must be a string")
+        return
+    if status != "ok":
+        raise PageContractError("QualityIssueDetailResponse.status must be ok or not_found")
+
+    detail = payload.get("detail")
+    if not isinstance(detail, dict):
+        raise PageContractError("ok response requires detail object")
+
+    for key in (
+        "id",
+        "libraryRevision",
+        "issueType",
+        "name",
+        "path",
+        "encoding",
+        "integrity",
+        "severity",
+        "suggestedAction",
+        "file",
+        "evidence",
+        "repairEligibility",
+    ):
+        if key not in detail:
+            raise PageContractError(f"QualityIssueDetail.detail missing {key}")
+
+    if detail.get("issueType") not in ("integrity", "encoding", "small_file"):
+        raise PageContractError("detail.issueType invalid")
+    if detail.get("severity") not in ("warning", "error"):
+        raise PageContractError("detail.severity invalid")
+    if not isinstance(detail.get("libraryRevision"), int):
+        raise PageContractError("detail.libraryRevision must be int")
+
+    file_block = detail.get("file")
+    if not isinstance(file_block, dict):
+        raise PageContractError("detail.file must be a dict")
+    for key in ("fileId", "sizeBytes", "modifiedAtNs", "extension", "contentSha256"):
+        if key not in file_block:
+            raise PageContractError(f"detail.file missing {key}")
+
+    evidence = detail.get("evidence")
+    if not isinstance(evidence, dict):
+        raise PageContractError("detail.evidence must be a dict")
+    kind = evidence.get("kind")
+    if kind not in _QUALITY_KINDS:
+        raise PageContractError("detail.evidence.kind invalid")
+    for key in ("message", "severity", "sizeBytes"):
+        if key not in evidence:
+            raise PageContractError(f"detail.evidence missing {key}")
+    if kind == "tiny_file" and "thresholdBytes" not in evidence:
+        raise PageContractError("tiny_file evidence requires thresholdBytes")
+
+    repair = detail.get("repairEligibility")
+    if not isinstance(repair, dict):
+        raise PageContractError("detail.repairEligibility must be a dict")
+    if not isinstance(repair.get("eligible"), bool):
+        raise PageContractError("detail.repairEligibility.eligible must be bool")
+    if repair.get("reason") not in _REPAIR_REASONS:
+        raise PageContractError("detail.repairEligibility.reason invalid")
+    if not isinstance(repair.get("label"), str):
+        raise PageContractError("detail.repairEligibility.label must be string")
+
+
+def validate_quality_repair_preview(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise PageContractError("QualityRepairPreviewResult must be a dict")
+    for key in (
+        "repairPreviewToken",
+        "libraryRevision",
+        "issueSelectionFingerprint",
+        "hasPendingQualityRepair",
+        "rows",
+        "summary",
+    ):
+        if key not in payload:
+            raise PageContractError(f"QualityRepairPreviewResult missing {key}")
+    if payload.get("hasPendingQualityRepair") is not True:
+        raise PageContractError("hasPendingQualityRepair must be true")
+    if not isinstance(payload.get("libraryRevision"), int):
+        raise PageContractError("libraryRevision must be int")
+    summary = payload.get("summary")
+    if not isinstance(summary, dict):
+        raise PageContractError("summary must be a dict")
+    for key in ("issueCount", "operationCount"):
+        if not isinstance(summary.get(key), int):
+            raise PageContractError(f"summary.{key} must be int")
+    rows = payload.get("rows")
+    if not isinstance(rows, list):
+        raise PageContractError("rows must be a list")
+    for row in rows:
+        if not isinstance(row, dict):
+            raise PageContractError("preview row must be a dict")
+        for key in ("issueId", "action", "relativePath", "sourceEncoding", "encodingConfidence"):
+            if key not in row:
+                raise PageContractError(f"preview row missing {key}")
+        if row.get("action") != "utf8_convert":
+            raise PageContractError("preview row action must be utf8_convert")
+        if row.get("encodingConfidence") not in _ENCODING_CONFIDENCE:
+            raise PageContractError("encodingConfidence invalid")
+        if row.get("encodingConfidence") == "low" and not isinstance(
+            row.get("encodingWarning"), str
+        ):
+            raise PageContractError("low confidence row requires encodingWarning")
+
+
+class FinalizeError(Exception):
+    def __init__(self, reason: str, details: str = "") -> None:
+        self.reason = reason
+        self.details = details
+        super().__init__(reason)
+
+    def __str__(self) -> str:
+        return json.dumps({"reason": self.reason, "details": self.details}, ensure_ascii=False)
+
+
+def validate_finalize_summary(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise PageContractError("FinalizeSummary must be a dict")
+    resolve = payload.get("resolve")
+    if not isinstance(resolve, dict):
+        raise PageContractError("FinalizeSummary.resolve must be a dict")
+    if not isinstance(resolve.get("exactUnresolvedQueueCount"), int):
+        raise PageContractError("exactUnresolvedQueueCount must be int")
+    if not isinstance(payload.get("blockers"), list) or not isinstance(
+        payload.get("warnings"), list
+    ):
+        raise PageContractError("FinalizeSummary blockers/warnings must be lists")
+
+
+def validate_finalize_result(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise PageContractError("FinalizeResult must be a dict")
+    status = payload.get("status")
+    if status not in (
+        "complete",
+        "complete_with_warnings",
+        "blocked",
+        "cancelled",
+        "error",
+    ):
+        raise PageContractError("FinalizeResult.status invalid")
+    if status in ("complete", "complete_with_warnings", "blocked"):
+        if not isinstance(payload.get("reportId"), str) or not isinstance(
+            payload.get("reportPath"), str
+        ):
+            raise PageContractError("FinalizeResult report fields required")
+    else:
+        if payload.get("reportId") is not None or payload.get("reportPath") is not None:
+            raise PageContractError("FinalizeResult report fields must be null")
+    cleanup = payload.get("cleanup")
+    if not isinstance(cleanup, dict):
+        raise PageContractError("FinalizeResult.cleanup must be a dict")
+    for key in ("previewedEmptyDirs", "removedEmptyDirs"):
+        if not isinstance(cleanup.get(key), list):
+            raise PageContractError(f"cleanup.{key} must be a list")
 
 
 def validate_selection_scope(selection: Any) -> None:

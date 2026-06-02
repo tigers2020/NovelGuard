@@ -177,7 +177,11 @@ export function DetailPanel({
           <div className="rounded-md border border-outline bg-surface p-4">
             <p className="text-sm font-semibold text-on-surface">Evidence</p>
             <p className="mt-2 text-xs text-on-surface-variant">
-              {detail.type === "near" ? "Near duplicate" : detail.evidence.matchKind}
+              {detail.type === "near"
+                ? "Near duplicate"
+                : detail.type === "relation"
+                  ? `Relation (${detail.evidence.relationKind})`
+                  : detail.evidence.matchKind}
             </p>
             {detail.type === "near" ? (
               <>
@@ -187,9 +191,21 @@ export function DetailPanel({
                 </p>
                 <p className="mt-1 text-xs text-muted">{detail.evidence.comparisonMethod}</p>
               </>
+            ) : detail.type === "relation" ? (
+              <>
+                <p className="mt-1 text-sm text-on-surface">
+                  Confidence: {detail.evidence.confidenceLabel}
+                </p>
+                <p className="mt-1 text-xs text-muted">
+                  Matched: {detail.evidence.matchedTokens.join(", ") || "—"}
+                </p>
+                <p className="mt-1 text-xs text-muted">
+                  Differs: {detail.evidence.differingTokens.join(", ") || "—"}
+                </p>
+              </>
             ) : (
               <p className="mt-1 break-all font-mono text-xs text-muted">
-                {detail.evidence.contentSha256 || "—"}
+                {"contentSha256" in detail.evidence ? detail.evidence.contentSha256 || "—" : "—"}
               </p>
             )}
           </div>

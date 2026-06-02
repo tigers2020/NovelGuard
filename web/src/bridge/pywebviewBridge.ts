@@ -1,7 +1,7 @@
 import type { NovelGuardBridge } from "./NovelGuardBridge";
 import type { AppSnapshot } from "../types/snapshot";
 import type { DuplicateGroupDetail, ReviewRowsPage, ReviewRowsQuery } from "../types/review";
-import type { QualityIssueDetail, QualityRowsPage, QualityRowsQuery } from "../types/quality";
+import type { QualityIssueDetailResponse, QualityRowsPage, QualityRowsQuery } from "../types/quality";
 import { validateQualityRowsPage } from "../contracts/qualityPageContract";
 import type {
   ApplyResolvedActionsRequest,
@@ -13,6 +13,7 @@ import type {
   UpdateReviewDecisionsResult,
 } from "../types/reviewDecisions";
 import type { SelectionScope } from "../types/selection";
+import type { FinalizeReportDocument, FinalizeResult, FinalizeSummary, RunFinalizeRequest } from "../types/finalize";
 import type { WorkMode } from "../types/snapshot";
 import { BridgeCallError } from "./bridgeErrors";
 import { callBridge } from "./callBridge";
@@ -88,8 +89,20 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
         method: "get_duplicate_group_detail",
       }),
     getQualityIssueDetail: (issueId: string) =>
-      callBridge(() => call<QualityIssueDetail>(api, "get_quality_issue_detail", issueId), {
+      callBridge(() => call<QualityIssueDetailResponse>(api, "get_quality_issue_detail", issueId), {
         method: "get_quality_issue_detail",
+      }),
+    getQualityRepairPreview: (request) =>
+      callBridge(() => call(api, "get_quality_repair_preview", request), {
+        method: "get_quality_repair_preview",
+      }),
+    applyQualityRepair: (request) =>
+      callBridge(() => call(api, "apply_quality_repair", request).then(() => undefined), {
+        method: "apply_quality_repair",
+      }),
+    discardQualityRepairPreview: (request) =>
+      callBridge(() => call(api, "discard_quality_repair_preview", request).then(() => undefined), {
+        method: "discard_quality_repair_preview",
       }),
     getMovePreview: (selection: SelectionScope) =>
       callBridge(() => call<MovePreviewResult>(api, "get_move_preview", selection), {
@@ -106,6 +119,28 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
     updateReviewDecisions: (request: UpdateReviewDecisionsRequest) =>
       callBridge(() => call<UpdateReviewDecisionsResult>(api, "update_review_decisions", request), {
         method: "update_review_decisions",
+      }),
+    getAppSetting: (key: string) =>
+      callBridge(() => call<boolean>(api, "get_app_setting", key), { method: "get_app_setting" }),
+    setAppSetting: (key: string, value: boolean) =>
+      callBridge(() => call(api, "set_app_setting", key, value).then(() => undefined), {
+        method: "set_app_setting",
+      }),
+    getFinalizeSummary: () =>
+      callBridge(() => call<FinalizeSummary>(api, "get_finalize_summary"), {
+        method: "get_finalize_summary",
+      }),
+    runFinalizeVerification: (request: RunFinalizeRequest) =>
+      callBridge(() => call<FinalizeResult>(api, "run_finalize_verification", request), {
+        method: "run_finalize_verification",
+      }),
+    getFinalizeReport: (reportId: string) =>
+      callBridge(() => call<FinalizeReportDocument>(api, "get_finalize_report", reportId), {
+        method: "get_finalize_report",
+      }),
+    cancelFinalize: () =>
+      callBridge(() => call(api, "cancel_finalize").then(() => undefined), {
+        method: "cancel_finalize",
       }),
   };
 }

@@ -8,12 +8,14 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from application.app_settings import AppSettings
 from application.dto_mapper import (
     build_snapshot,
     scan_timestamp,
 )
 from application.ports.library_index import LibraryIndexPort
 from application.quality_analyzer import analyze_quality
+from application.quality_issue_detail import build_quality_issue_detail
 from application.quality_query import query_quality_page
 from application.quality_rows_builder import build_quality_rows
 from application.review_query import query_review_page
@@ -22,7 +24,9 @@ from application.review_snapshot_counts import file_row_status_counts
 from application.review_state_merge import rebuild_rows_with_review_state
 from domain.duplicate_exact import find_exact_duplicate_groups
 from domain.duplicate_near import NearDuplicateGroup
+from domain.filename_relation import RelationGroup
 from domain.models import FileRecord
+from domain.settings_keys import SETTINGS_KEY_INCLUDE_RELATION
 
 _MAX_QUERY_LIMIT = 200
 _DEFAULT_QUERY_LIMIT = 100
@@ -65,7 +69,17 @@ class LibrarySession:
         self._small_file_anomaly_count = 0
         self._total_quality_issue_count = 0
         self._apply_in_progress = False
+        self._has_pending_quality_repair = False
+        self._finalize_last_report_id: str | None = None
+        self._finalize_last_status = "idle"
+        self._finalize_last_run_at: str | None = None
+        self._finalize_blocker_count = 0
+        self._finalize_warning_count = 0
+        self._finalize_last_report_path: str | None = None
+        self._finalize_runner: Any = None
         self._near_groups_by_id: dict[str, NearDuplicateGroup] = {}
+        self._relation_groups_by_id: dict[str, RelationGroup] = {}
+        self._settings = AppSettings()
 
     def select_folder(self, path: str | None = None) -> None:
         folder = path
@@ -128,7 +142,7 @@ class LibrarySession:
 
     def set_work_mode(self, mode: str) -> None:
         with self._lock:
-            if mode in ("scan", "resolve", "quality"):
+            if mode in ("scan", "resolve", "quality", "finalize"):
                 self._active_mode = mode
 
     def get_snapshot(self) -> dict[str, Any]:
@@ -154,6 +168,12 @@ class LibrarySession:
                 encoding_issue_count=self._encoding_issue_count,
                 small_file_anomaly_count=self._small_file_anomaly_count,
                 total_quality_issue_count=self._total_quality_issue_count,
+                has_pending_quality_repair=self._has_pending_quality_repair,
+                finalize_last_report_id=self._finalize_last_report_id,
+                finalize_last_status=self._finalize_last_status,
+                finalize_last_run_at=self._finalize_last_run_at,
+                finalize_blocker_count=self._finalize_blocker_count,
+                finalize_warning_count=self._finalize_warning_count,
             )
 
     def query_review_rows(self, query: dict[str, Any]) -> dict[str, Any]:
@@ -175,6 +195,17 @@ class LibrarySession:
 
         with self._lock:
             quality_by_path = index_quality_rows_by_path(self._quality_rows_cache)
+            if group_id.startswith("relation:"):
+                from application.relation_group_detail import build_relation_group_detail
+
+                relation_group = self._relation_groups_by_id.get(group_id)
+                return build_relation_group_detail(
+                    group_id,
+                    relation_group=relation_group,
+                    review_rows=self._review_rows_cache,
+                    files_by_id=self._files_by_id,
+                    quality_by_path=quality_by_path,
+                )
             if group_id.startswith("near:"):
                 near_group = self._near_groups_by_id.get(group_id)
                 return build_near_group_detail(
@@ -193,31 +224,75 @@ class LibrarySession:
 
     def get_quality_issue_detail(self, issue_id: str) -> dict[str, Any]:
         with self._lock:
-            row = next((r for r in self._quality_rows_cache if r.get("id") == issue_id), None)
-            if row is None:
-                return {
-                    "id": issue_id,
-                    "issueType": "integrity",
-                    "name": "Unknown",
-                    "integrity": "Unknown",
-                }
-            return {
-                "id": row["id"],
-                "issueType": row["issueType"],
-                "name": row["name"],
-                "path": row.get("path"),
-                "encoding": row.get("encoding"),
-                "integrity": row["integrity"],
-                "evidence": {"severity": row.get("severity")},
-            }
+            return build_quality_issue_detail(
+                issue_id,
+                quality_rows=self._quality_rows_cache,
+                quality_issues=self._index.quality_issues(),
+                files_by_id=self._files_by_id,
+                library_revision=self._library_revision,
+            )
+
+    def get_app_setting(self, key: str) -> bool:
+        with self._lock:
+            return self._settings.get_bool(key)
+
+    def set_app_setting(self, key: str, value: bool) -> None:
+        with self._lock:
+            self._settings.set_bool(key, value)
 
     def library_revision(self) -> int:
         with self._lock:
             return self._library_revision
 
+    def has_pending_apply(self) -> bool:
+        with self._lock:
+            return self._has_pending_apply
+
     def set_has_pending_apply(self, value: bool) -> None:
         with self._lock:
             self._has_pending_apply = value
+
+    def set_has_pending_quality_repair(self, value: bool) -> None:
+        with self._lock:
+            self._has_pending_quality_repair = value
+
+    def has_pending_quality_repair(self) -> bool:
+        with self._lock:
+            return self._has_pending_quality_repair
+
+    def repair_session_id(self) -> str:
+        import hashlib
+
+        with self._lock:
+            folder = self._index.folder_path or ""
+        return hashlib.sha256(folder.encode("utf-8")).hexdigest()[:16]
+
+    def quality_issues(self) -> list[Any]:
+        with self._lock:
+            return list(self._index.quality_issues())
+
+    def file_record_for_quality_issue(self, issue: Any) -> FileRecord | None:
+        with self._lock:
+            return self._files_by_id.get(issue.file_id)
+
+    def reanalyze_quality_for_file_ids(self, file_ids: list[str]) -> None:
+        with self._lock:
+            folder = self._index.folder_path
+            if not folder:
+                return
+            target_ids = set(file_ids)
+            remaining = [
+                issue for issue in self._index.quality_issues() if issue.file_id not in target_ids
+            ]
+            new_issues: list[Any] = []
+            for file_id in file_ids:
+                record = self._files_by_id.get(file_id)
+                if record is None:
+                    continue
+                new_issues.extend(analyze_quality(folder, [record]))
+            merged = remaining + new_issues
+            self._index.replace_quality_issues(folder, merged)
+            self._apply_quality_cache(merged)
 
     def first_file_id(self) -> str | None:
         with self._lock:
@@ -272,6 +347,14 @@ class LibrarySession:
             )
             if updated > 0:
                 self._rebuild_review_index(list(self._files_by_id.values()))
+                folder = self._index.folder_path
+                if folder:
+                    try:
+                        self._run_post_scan_detection_phases(
+                            folder, list(self._files_by_id.values())
+                        )
+                    except Exception:
+                        _LOGGER.exception("post-scan detection failed after review update")
                 self._library_revision += 1
             return {
                 "updatedCount": updated,
@@ -285,6 +368,160 @@ class LibrarySession:
     def is_apply_or_scan_busy(self) -> bool:
         with self._lock:
             return self._apply_in_progress or self._pipeline_running
+
+    def configure_finalize(self, runner: Any) -> None:
+        with self._lock:
+            self._finalize_runner = runner
+
+    def scan_state(self) -> str:
+        with self._lock:
+            return self._scan_state
+
+    def queue_count(self) -> int:
+        with self._lock:
+            return self._queue_count
+
+    def conflict_count(self) -> int:
+        with self._lock:
+            return self._conflict_count
+
+    def approved_count(self) -> int:
+        with self._lock:
+            return self._approved_count
+
+    def encoding_issue_count(self) -> int:
+        with self._lock:
+            return self._encoding_issue_count
+
+    def integrity_issue_count(self) -> int:
+        with self._lock:
+            return self._integrity_issue_count
+
+    def small_file_anomaly_count(self) -> int:
+        with self._lock:
+            return self._small_file_anomaly_count
+
+    def refresh_resolve_counts(self) -> None:
+        with self._lock:
+            self._refresh_resolve_counts()
+
+    def finalize_session_id(self) -> str:
+        return self.repair_session_id()
+
+    def set_finalize_counts(self, blocker_count: int, warning_count: int) -> None:
+        with self._lock:
+            self._finalize_blocker_count = blocker_count
+            self._finalize_warning_count = warning_count
+
+    def set_finalize_last_run(
+        self,
+        *,
+        report_id: str | None,
+        last_status: str,
+        report_path: str | None,
+    ) -> None:
+        with self._lock:
+            self._finalize_last_report_id = report_id
+            self._finalize_last_status = last_status
+            self._finalize_last_report_path = report_path
+            if last_status != "running":
+                self._finalize_last_run_at = scan_timestamp()
+
+    def get_finalize_summary(self, audit_log_path: Path) -> dict[str, Any]:
+        from application.finalize_summary import build_finalize_summary
+
+        with self._lock:
+            return build_finalize_summary(
+                library_revision=self._library_revision,
+                scan_state=self._scan_state,
+                review_rows=list(self._review_rows_cache),
+                queue_count=self._queue_count,
+                conflict_count=self._conflict_count,
+                approved_count=self._approved_count,
+                has_pending_apply=self._has_pending_apply,
+                has_pending_quality_repair=self._has_pending_quality_repair,
+                encoding_issue_count=self._encoding_issue_count,
+                integrity_issue_count=self._integrity_issue_count,
+                small_file_anomaly_count=self._small_file_anomaly_count,
+                audit_log_path=audit_log_path,
+            )
+
+    def run_finalize_verification(self, request: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            if not self._index.folder_path:
+                raise RuntimeError("NO_LIBRARY")
+            if self._apply_in_progress or self._pipeline_running:
+                raise RuntimeError("LIBRARY_BUSY")
+            if self._finalize_runner is None:
+                raise RuntimeError("FINALIZE_NOT_CONFIGURED")
+            runner = self._finalize_runner
+            include_cleanup = bool(request.get("includeCleanup"))
+            self._cancel_requested = False
+            self._pipeline_running = True
+            self._pipeline_phase = "finalize"
+            self._pipeline_percent = 0
+            self._pipeline_label = "사전 조건 확인"
+            self._pipeline_cancellable = True
+            self._finalize_last_status = "running"
+
+        result: dict[str, Any] = {}
+        error: str | None = None
+
+        def _run() -> None:
+            nonlocal result, error
+            try:
+
+                def on_step(step: str, pct: int, label: str) -> None:
+                    with self._lock:
+                        self._pipeline_percent = pct
+                        self._pipeline_label = label
+
+                def cancel_check() -> bool:
+                    with self._lock:
+                        return self._cancel_requested
+
+                result = runner.run(
+                    self,
+                    include_cleanup=include_cleanup,
+                    cancel_check=cancel_check,
+                    on_step=on_step,
+                )
+            except Exception as exc:
+                error = str(exc)
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+        thread.join()
+
+        with self._lock:
+            self._pipeline_running = False
+            self._pipeline_cancellable = False
+            self._pipeline_phase = "idle"
+            self._pipeline_percent = 0
+            self._pipeline_label = "대기 중"
+            if error is not None:
+                self._finalize_last_status = "error"
+                return {
+                    "status": "error",
+                    "reportId": None,
+                    "reportPath": None,
+                    "libraryRevision": self._library_revision,
+                    "blockers": [],
+                    "warnings": [],
+                    "cleanup": {"previewedEmptyDirs": [], "removedEmptyDirs": []},
+                    "errorMessage": error,
+                }
+            return result
+
+    def cancel_finalize(self) -> None:
+        with self._lock:
+            if self._pipeline_phase == "finalize" and self._pipeline_running:
+                self._cancel_requested = True
+
+    def read_finalize_report(self, save_root: Path, report_id: str) -> dict[str, Any]:
+        from application.finalize_report import read_finalize_report
+
+        return read_finalize_report(save_root, self.finalize_session_id(), report_id)
 
     def refresh_index_from_disk(self) -> None:
         with self._lock:
@@ -310,13 +547,14 @@ class LibrarySession:
             self._rebuild_review_index(collected)
             self._rebuild_quality_index(folder, collected)
             try:
-                self._run_near_duplicate_phase(folder, collected)
+                self._run_post_scan_detection_phases(folder, collected)
             except Exception:
-                _LOGGER.exception("near duplicate detection failed")
+                _LOGGER.exception("post-scan detection failed")
 
     def _clear_review_cache(self) -> None:
         self._review_rows_cache = []
         self._near_groups_by_id = {}
+        self._relation_groups_by_id = {}
         self._duplicate_group_count = 0
         self._queue_count = 0
         self._approved_count = 0
@@ -356,6 +594,64 @@ class LibrarySession:
         self._review_rows_cache = [
             row for row in self._review_rows_cache if row.get("type") != "near"
         ]
+
+    def _strip_relation_rows(self) -> None:
+        self._review_rows_cache = [
+            row for row in self._review_rows_cache if row.get("type") != "relation"
+        ]
+
+    def _run_post_scan_detection_phases(self, folder: str, files: list[FileRecord]) -> None:
+        self._run_near_duplicate_phase(folder, files)
+        self._run_relation_phase(folder, files)
+
+    def _run_relation_phase(self, folder: str, files: list[FileRecord]) -> None:
+        from application.relation_batch_id import filename_set_digest, make_relation_batch_id
+        from application.relation_membership import (
+            build_exact_membership_by_file_id,
+            build_near_membership_by_file_id,
+        )
+        from application.relation_review_rows_builder import build_relation_review_rows
+        from application.review_state_merge import merge_review_state
+        from domain.duplicate_exact import find_exact_duplicate_groups
+        from domain.filename_relation import detect_filename_relations
+
+        self._strip_relation_rows()
+        self._relation_groups_by_id = {}
+
+        if not self._settings.get_bool(SETTINGS_KEY_INCLUDE_RELATION):
+            return
+
+        relation_batch_id = make_relation_batch_id(
+            library_revision=self._library_revision,
+            filename_set_digest_value=filename_set_digest(files),
+        )
+        result = detect_filename_relations(
+            files,
+            exact_membership_by_file_id=build_exact_membership_by_file_id(files),
+            near_membership_by_file_id=build_near_membership_by_file_id(self._near_groups_by_id),
+            relation_batch_id=relation_batch_id,
+        )
+        self._relation_groups_by_id = {group.group_id: group for group in result.groups}
+
+        relation_skeleton = build_relation_review_rows(list(result.groups), self._files_by_id)
+        stored = self._index.load_review_state(folder)
+        exact_groups = find_exact_duplicate_groups(files)
+        relation_rows = merge_review_state(
+            relation_skeleton,
+            stored,
+            groups=exact_groups,
+            files_by_id=self._files_by_id,
+        )
+        self._review_rows_cache.extend(relation_rows)
+
+        valid_group_ids = (
+            {group.group_id for group in exact_groups}
+            | set(self._near_groups_by_id.keys())
+            | set(self._relation_groups_by_id.keys())
+        )
+        valid_file_ids = {file_record.id for file_record in files}
+        self._index.prune_review_state(folder, valid_group_ids, valid_file_ids)
+        self._refresh_resolve_counts()
 
     def _run_near_duplicate_phase(self, folder: str, files: list[FileRecord]) -> None:
         from application.near_batch_id import content_set_digest, make_near_batch_id
@@ -408,6 +704,9 @@ class LibrarySession:
     def _rebuild_quality_index(self, folder: str, files: list[FileRecord]) -> None:
         issues = analyze_quality(folder, files)
         self._index.replace_quality_issues(folder, issues)
+        self._apply_quality_cache(issues)
+
+    def _apply_quality_cache(self, issues: list[Any]) -> None:
         self._quality_rows_cache = build_quality_rows(issues, self._files_by_id)
         self._integrity_issue_count = sum(
             1 for row in self._quality_rows_cache if row.get("issueType") == "integrity"
@@ -468,9 +767,9 @@ class LibrarySession:
             self._rebuild_review_index(collected)
             self._rebuild_quality_index(folder, collected)
             try:
-                self._run_near_duplicate_phase(folder, collected)
+                self._run_post_scan_detection_phases(folder, collected)
             except Exception:
-                _LOGGER.exception("near duplicate detection failed")
+                _LOGGER.exception("post-scan detection failed")
             self._scan_state = "success"
             self._scan_last_run = scan_timestamp()
             self._library_revision += 1

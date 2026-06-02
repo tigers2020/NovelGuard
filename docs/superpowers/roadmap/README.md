@@ -20,7 +20,8 @@ Roadmap entries are **proposed** until a matching spec is approved. Do not treat
 
 | File | Scope |
 |------|--------|
-| [000-2026-06-01-novelguard-master-roadmap.md](./000-2026-06-01-novelguard-master-roadmap.md) | PR-0..18 (done); **next:** PR-19 plan — [007 spec](../specs/007-2026-06-01-near-duplicate-detection-design.md) (approved) |
+| [000-2026-06-01-novelguard-master-roadmap.md](./000-2026-06-01-novelguard-master-roadmap.md) | PR-0..19 (done); program waves A–G |
+| [001-2026-06-02-pr20-pr25-development-roadmap.md](./001-2026-06-02-pr20-pr25-development-roadmap.md) | **Active track:** PR-20..25 — **next:** PR-20 spec `008` |
 
 ## Adding a roadmap file
 

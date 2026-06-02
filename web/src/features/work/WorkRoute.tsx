@@ -6,6 +6,7 @@ import { WorkModeTabs } from "./WorkModeTabs";
 import { ScanWorkspace } from "./ScanWorkspace";
 import { ResolveAndOrganizeWorkspace } from "./ResolveAndOrganizeWorkspace";
 import { QualityWorkspace } from "./QualityWorkspace";
+import { FinalizeWorkspace } from "./FinalizeWorkspace";
 
 export function WorkRoute({ onOpenPreview }: { onOpenPreview: (selection: SelectionScope) => void }) {
   const bridge = useBridge();
@@ -37,6 +38,7 @@ export function WorkRoute({ onOpenPreview }: { onOpenPreview: (selection: Select
         )}
         {mode === "resolve" && <ResolveAndOrganizeWorkspace onOpenPreview={onOpenPreview} />}
         {mode === "quality" && <QualityWorkspace />}
+        {mode === "finalize" && <FinalizeWorkspace />}
       </div>
     </div>
   );
