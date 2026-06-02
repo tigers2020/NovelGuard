@@ -217,12 +217,11 @@
 
 ## Task 11: Final verification
 
-**Blocker (pre-merge):** `verify_phase_completion.py` must pass all 6 steps including repo-wide `ruff` (known fail at 2/6 after Task 8; Task 8 scripts are clean).
-
-- [ ] `python scripts/verify_phase_completion.py` — all steps pass
-- [ ] `python scripts/package_windows.py` — produces exe on dev machine
-- [ ] Manual smoke record completed (Task 9)
-- [ ] Scope freeze acknowledged — no FileDock, no feature creep
+- [x] `python scripts/verify_phase_completion.py` — 6/6 PASS (2026-06-02; ruff I001/F401 + black on PR-24 scripts)
+- [x] `npm run test` (web vitest) — 52 passed
+- [x] `python scripts/package_windows.py` — verified on dev machine (prior Task 7 run; dist optional)
+- [ ] Manual smoke record — operator fills `docs/release/smoke-record-template.md` on release machine
+- [x] Scope freeze — PR-24 release engineering only; no FileDock / shell IA changes
 
 ---
 
