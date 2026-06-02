@@ -10,7 +10,7 @@
 
 **Spec:** [013-2026-06-02-shell-filedock-design.md](../specs/013-2026-06-02-shell-filedock-design.md) (**approved** 2026-06-02 — LOCK-B1..B5, LOCK-1..10)
 
-**Plan status:** **Implemented** (2026-06-02) — Tasks 1–10 complete; Task 11 (docs) separate
+**Plan status:** **Complete** (2026-06-02) — Tasks 1–10 done (`verify_phase_completion.py` PASS); Task 11 docs separate commit
 
 **Prerequisite:** Spec 013 approved; PR-24 merged to `main` (`ac5ad5a` or later includes spec 013 commit)
 
@@ -300,8 +300,8 @@ cd web && npm run build
 
 ## Task 10: Final verification
 
-- [x] `pytest` 99 passed; `ruff` passed; `web` test 55 passed, build passed
-- [x] `npm run lint` passes (ShellFileDock effect uses rAF deferral)
+- [x] `python scripts/verify_phase_completion.py` — **6/6 PASS** (2026-06-02, after `webview_main` importlib fix)
+- [x] `pytest` 99; `web` test 55; build; lint (1 pre-existing grid warning)
 - [ ] Manual smoke: work → logs → work — user
 - [x] No `fileList` on snapshot; PR-29 backend not added
 
@@ -349,7 +349,7 @@ PR-25 implementation complete when:
 - [x] `queryFileRows` v1 on mock + pywebview/Python
 - [x] Search + basic/review presets + density work
 - [x] `novelguard.shellFileDock.v1.*` persistence (not search)
-- [x] pytest + web test/build pass; full verify fails on pre-existing `mypy webview` stub
+- [x] `verify_phase_completion.py` PASS
 - [x] Scope freeze respected
 
 ---
