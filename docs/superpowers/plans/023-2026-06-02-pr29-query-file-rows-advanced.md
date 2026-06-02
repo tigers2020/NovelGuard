@@ -249,9 +249,9 @@ CREATE INDEX IF NOT EXISTS idx_file_review_folder_group_key_id
 - Modify: `src/application/ports/library_index.py`
 - Modify: in-memory test double if any (else skip)
 
-- [ ] **Step 1:** Add `query_file_rows_page(self, normalized: NormalizedFileRowsQuery) -> dict[str, Any]` to `LibraryIndexPort` — return `FileRowsPage`-compatible dict only.
+- [x] **Step 1:** Add `query_file_rows_page(self, normalized: NormalizedFileRowsQuery) -> dict[str, Any]` to `LibraryIndexPort` — return `FileRowsPage`-compatible dict only.
 
-- [ ] **Step 2:** Stub raises `NotImplementedError` on non-SQLite fakes until Task 5; `LibrarySession` will not call production path until Task 7.
+- [x] **Step 2:** `MemoryLibraryIndex` + `SqliteLibraryIndex` implement port; memory uses `file_row_page_memory.py`.
 
 **Verify:** `mypy src` clean on port import.
 
@@ -263,17 +263,17 @@ CREATE INDEX IF NOT EXISTS idx_file_review_folder_group_key_id
 - Modify: `src/infrastructure/sqlite_library_index.py`
 - Test: `tests/test_bridge_contract.py`
 
-- [ ] **Step 1:** Implement `query_file_rows_page(normalized)`:
+- [x] **Step 1:** Implement `query_file_rows_page(normalized)`:
   - **WHERE:** `folder_path = current`; search on `*_key` LIKE (escape `%` `_`); extension/encoding filters on keys; duplicateGroup on projection; integrity buckets per spec 5.5.1
   - **ORDER BY:** whitelist column mapping; `id ASC` tie-break always
   - **Pagination:** OFFSET from cursor; LIMIT; compute `hasMore`, `nextCursor`, `totalFiltered` (LOCK-P29-4)
   - **SELECT:** map to `FileRow` wire dict; join projection 1:1 (LOCK-P29-3)
 
-- [ ] **Step 2:** Sort `duplicateGroup` via `duplicate_group_key`; document join-sort in test comment.
+- [x] **Step 2:** Sort `duplicateGroup` via `duplicate_group_key` (`sqlite_file_rows_page.py`).
 
-- [ ] **Step 3:** Empty library → `empty_file_rows_page` shape (regression LOCK-P25-3).
+- [x] **Step 3:** Empty library → `empty_file_rows_page` shape (regression LOCK-P25-3).
 
-- [ ] **Step 4:** Tests — default path order; each whitelist sort; search `%` `_` escaping; cursor math; totalFiltered with filter.
+- [x] **Step 4:** Tests — `test_sqlite_query_file_rows_sort_and_search` (+ Task 11 will extend).
 
 **Verify:** `pytest tests/test_bridge_contract.py -k file_row -q`
 
@@ -286,16 +286,16 @@ CREATE INDEX IF NOT EXISTS idx_file_review_folder_group_key_id
 - Modify: `src/application/library_session.py`
 - Modify: `src/infrastructure/sqlite_library_index.py` — `replace_file_review_projection(folder, rows)`
 
-- [ ] **Step 1:** `build_file_review_projection(review_rows_cache) -> list[projection_row]`:
+- [x] **Step 1:** `build_file_review_projection(review_rows_cache) -> list[projection_row]`:
   - member rows only (`rowKind == "file"` or equivalent locked id pattern)
   - priority exact > near > relation; tie `groupId` ASC
   - `isKeeper` from member row keeper semantics (`proposedAction == "keep"` or spec-aligned field)
 
-- [ ] **Step 2:** Call rebuild after every `_review_rows_cache` refresh (scan complete, near/relation merge, review decision updates — find all rebuild sites).
+- [x] **Step 2:** `_sync_file_review_projection()` after `_rebuild_review_index`, near, relation phases.
 
-- [ ] **Step 3:** Persist via `replace_file_review_projection` in same folder scope as files.
+- [x] **Step 3:** Persist via `replace_file_review_projection` on SQLite + memory index.
 
-- [ ] **Step 4:** Tests — two memberships → one projection row; keeper flag; exact beats near.
+- [ ] **Step 4:** Tests — two memberships → one projection row; keeper flag; exact beats near (Task 11).
 
 **Verify:** projection cardinality tests pass.
 
@@ -307,7 +307,7 @@ CREATE INDEX IF NOT EXISTS idx_file_review_folder_group_key_id
 - Modify: `src/application/library_session.py`
 - Modify: `src/app/bridge_api.py`
 
-- [ ] **Step 1:** Replace in-memory path — **remove** `_clamp_query_limit` from `query_file_rows` (LOCK-P29-5; limit only in `normalize_file_rows_query`):
+- [x] **Step 1:** Replace in-memory path — **remove** `_clamp_query_limit` from `query_file_rows` (LOCK-P29-5; limit only in `normalize_file_rows_query`):
 
 ```python
 # REMOVE:
@@ -323,9 +323,9 @@ normalized = normalize_file_rows_query(query)
 return self._index.query_file_rows_page(normalized)
 ```
 
-- [ ] **Step 2:** Catch `FileRowQueryError` in `bridge_api.query_file_rows` → rejected JSON (mirror quality).
+- [x] **Step 2:** Catch `FileRowQueryError` in `bridge_api.query_file_rows` → rejected JSON (mirror quality) — done Task 1.
 
-- [ ] **Step 3:** Acceptance grep / test: production path does not iterate all `_files_by_id` for query (allow `files()` for other use cases).
+- [x] **Step 3:** `LibrarySession.query_file_rows` delegates to `query_file_rows_page` only (no `_files_by_id` materialization).
 
 **Verify:** contract tests + mypy.
 

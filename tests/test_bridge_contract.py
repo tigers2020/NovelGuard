@@ -515,6 +515,30 @@ def test_sqlite_library_index_has_file_review_projection_table(tmp_path: Path) -
     assert found is not None
 
 
+def test_sqlite_query_file_rows_sort_and_search(tmp_path: Path) -> None:
+    folder = tmp_path / "lib"
+    folder.mkdir()
+    (folder / "beta.txt").write_text("b", encoding="utf-8")
+    (folder / "alpha.txt").write_text("a", encoding="utf-8")
+    session = create_library_session(SqliteLibraryIndex(tmp_path / "lib.db"))
+    session.select_folder(str(folder))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+
+    by_path = api.query_file_rows({"sort": {"field": "path", "direction": "asc"}, "limit": 10})
+    paths = [row["path"] for row in by_path["rows"]]
+    assert paths == sorted(paths)
+
+    by_name_desc = api.query_file_rows({"sort": {"field": "name", "direction": "desc"}, "limit": 10})
+    names = [row["name"] for row in by_name_desc["rows"]]
+    assert names == sorted(names, reverse=True)
+
+    search = api.query_file_rows({"search": "alpha", "limit": 10})
+    assert search["pageInfo"]["totalFiltered"] == 1
+    assert search["rows"][0]["name"] == "alpha.txt"
+
+
 def test_sqlite_library_index_legacy_db_backfills_file_keys(tmp_path: Path) -> None:
     db = tmp_path / "legacy.db"
     folder = str(tmp_path / "lib")

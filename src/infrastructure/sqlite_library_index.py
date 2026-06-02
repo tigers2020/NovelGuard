@@ -7,7 +7,9 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-from application.file_row_query import text_sort_key
+from application.dto_mapper import empty_file_rows_page
+from application.file_row_query import NormalizedFileRowsQuery, text_sort_key
+from infrastructure.sqlite_file_rows_page import query_sqlite_file_rows_page
 from application.ports.review_state import LoadedReviewState
 from domain.duplicate_near import (
     NearDuplicateGroup,
@@ -268,6 +270,12 @@ class SqliteLibraryIndex:
                     for file_id, duplicate_group_id, is_keeper, duplicate_group_key in rows
                 ],
             )
+
+    def query_file_rows_page(self, normalized: NormalizedFileRowsQuery) -> dict[str, Any]:
+        if self._current_folder is None:
+            return empty_file_rows_page(normalized.wire_cursor)
+        with self._connect() as conn:
+            return query_sqlite_file_rows_page(conn, self._current_folder, normalized)
 
     @property
     def folder_path(self) -> str | None:

@@ -13,7 +13,7 @@ from application.dto_mapper import (
     build_snapshot,
     scan_timestamp,
 )
-from application.file_query import file_record_to_row, query_file_page
+from application.file_row_query import normalize_file_rows_query
 from application.log_buffer import query_log_entries
 from application.logs_artifacts import list_logs_artifacts
 from application.ports.library_index import LibraryIndexPort
@@ -258,9 +258,8 @@ class LibrarySession:
 
     def query_file_rows(self, query: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
-            limit = _clamp_query_limit(query)
-            rows = [file_record_to_row(record) for record in self._files_by_id.values()]
-            return query_file_page(rows, query, limit=limit)
+            normalized = normalize_file_rows_query(query)
+            return self._index.query_file_rows_page(normalized)
 
     def get_duplicate_group_detail(self, group_id: str) -> dict[str, Any]:
         from application.duplicate_group_detail import (
@@ -692,6 +691,16 @@ class LibrarySession:
             self._review_rows_cache = build_review_rows(groups, self._files_by_id)
         self._duplicate_group_count = len(groups)
         self._refresh_resolve_counts()
+        self._sync_file_review_projection()
+
+    def _sync_file_review_projection(self) -> None:
+        folder = self._index.folder_path
+        if not folder:
+            return
+        from application.file_review_projection import build_file_review_projection
+
+        rows = build_file_review_projection(self._review_rows_cache)
+        self._index.replace_file_review_projection(folder, rows)
 
     def _refresh_resolve_counts(self) -> None:
         queue, approved, conflict = file_row_status_counts(self._review_rows_cache)
@@ -761,6 +770,7 @@ class LibrarySession:
         valid_file_ids = {file_record.id for file_record in files}
         self._index.prune_review_state(folder, valid_group_ids, valid_file_ids)
         self._refresh_resolve_counts()
+        self._sync_file_review_projection()
 
     def _run_near_duplicate_phase(self, folder: str, files: list[FileRecord]) -> None:
         from application.near_batch_id import content_set_digest, make_near_batch_id
@@ -809,6 +819,7 @@ class LibrarySession:
         valid_file_ids = {file_record.id for file_record in files}
         self._index.prune_review_state(folder, valid_group_ids, valid_file_ids)
         self._refresh_resolve_counts()
+        self._sync_file_review_projection()
 
     def _rebuild_quality_index(self, folder: str, files: list[FileRecord]) -> None:
         issues = analyze_quality(folder, files)

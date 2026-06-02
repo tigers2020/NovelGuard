@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from application.file_row_page_memory import query_file_rows_page_memory
+from application.file_row_query import NormalizedFileRowsQuery
 from application.ports.review_state import LoadedReviewState
 from domain.duplicate_near import NearDuplicateResult
 from domain.models import FileRecord
@@ -14,6 +16,7 @@ class MemoryLibraryIndex:
         self._review_groups: dict[str, dict[str, tuple[str | None, str | None]]] = {}
         self._review_members: dict[str, dict[str, str]] = {}
         self._near_results: dict[str, NearDuplicateResult] = {}
+        self._file_review_projection: dict[str, tuple[str | None, bool]] = {}
 
     def clear(self) -> None:
         self._current_folder = None
@@ -22,6 +25,7 @@ class MemoryLibraryIndex:
         self._review_groups = {}
         self._review_members = {}
         self._near_results = {}
+        self._file_review_projection = {}
 
     def replace_files(self, folder_path: str, files: list[FileRecord]) -> None:
         self._current_folder = folder_path
@@ -121,3 +125,21 @@ class MemoryLibraryIndex:
 
     def clear_near_duplicate_results(self, folder_path: str) -> None:
         self._near_results.pop(folder_path, None)
+
+    def replace_file_review_projection(
+        self,
+        folder_path: str,
+        rows: list[tuple[str, str | None, bool, str | None]],
+    ) -> None:
+        _ = folder_path
+        self._file_review_projection = {
+            file_id: (duplicate_group_id, is_keeper)
+            for file_id, duplicate_group_id, is_keeper, _group_key in rows
+        }
+
+    def query_file_rows_page(self, normalized: NormalizedFileRowsQuery) -> dict[str, Any]:
+        return query_file_rows_page_memory(
+            self._files,
+            normalized,
+            projection_by_file_id=self._file_review_projection,
+        )

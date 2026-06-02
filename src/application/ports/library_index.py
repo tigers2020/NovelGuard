@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
 
+from application.file_row_query import NormalizedFileRowsQuery
 from application.ports.review_state import LoadedReviewState
 from domain.duplicate_near import NearDuplicateResult
 from domain.models import FileRecord
@@ -61,3 +62,11 @@ class LibraryIndexPort(Protocol):
     def load_near_duplicate_result(self, folder_path: str) -> NearDuplicateResult | None: ...
 
     def clear_near_duplicate_results(self, folder_path: str) -> None: ...
+
+    def replace_file_review_projection(
+        self,
+        folder_path: str,
+        rows: list[tuple[str, str | None, bool, str | None]],
+    ) -> None: ...
+
+    def query_file_rows_page(self, normalized: NormalizedFileRowsQuery) -> dict[str, Any]: ...
