@@ -5,6 +5,6 @@
 3. **Plan** — `plans/YYYY-MM-DD-<topic>.md` → human approval
 4. **Implement** — `executing-plans` / TDD per [AGENTS.md](../../AGENTS.md)
 
-**Current program status:** [Master roadmap](./roadmap/000-2026-06-01-novelguard-master-roadmap.md) — PR-0..23 **Done** (PR #14); **next:** PR-24 — [spec 012](./specs/012-2026-06-02-packaging-distribution-design.md) (**approved**) → [plan 018](./plans/018-2026-06-02-pr24-packaging-distribution.md) (**approved**, implement).
+**Current program status:** [Master roadmap](./roadmap/000-2026-06-01-novelguard-master-roadmap.md) — PR-0..24 **Done** (packaging merged); PR-25 **Done** on `main` — [spec 013](./specs/013-2026-06-02-shell-filedock-design.md) → [plan 019](./plans/019-2026-06-02-pr25-shell-filedock.md). **Next:** program wave after PR-25 (see master roadmap).
 
 Historical specs and plans from before the full reset were removed with the codebase.

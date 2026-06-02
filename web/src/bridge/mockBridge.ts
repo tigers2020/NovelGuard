@@ -1,4 +1,7 @@
 import type { NovelGuardBridge } from "./NovelGuardBridge";
+import type { FileRowsQuery } from "../types/fileRows";
+import { validateFileRowsPage, clampFileRowsLimit } from "../contracts/fileRowsPageContract";
+import { queryMockFileRows } from "./mockFileRows";
 import type { AppSnapshot, WorkMode } from "../types/snapshot";
 import type { ReviewRowsQuery } from "../types/review";
 import type { SelectionScope } from "../types/selection";
@@ -396,6 +399,13 @@ export const mockBridge: NovelGuardBridge = {
       },
     };
     validateReviewRowsPage(page);
+    return page;
+  },
+
+  async queryFileRows(query: FileRowsQuery) {
+    clampFileRowsLimit(query);
+    const page = queryMockFileRows(query);
+    validateFileRowsPage(page);
     return page;
   },
 

@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
+import importlib
 import sys
+from typing import Any
 
 from app.runtime_paths import frontend_asset_root
 
 
+def _load_webview() -> Any:
+    """Optional GUI dependency (pywebview); resolved at runtime."""
+    return importlib.import_module("webview")
+
+
 def main() -> int:
     try:
-        import webview  # type: ignore[import-not-found]
+        webview = _load_webview()
     except ImportError:
         print(
             "Install pywebview: pip install 'novelguard[gui]' or pip install pywebview",

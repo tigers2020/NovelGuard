@@ -9,7 +9,7 @@ import {
 import { AppShell } from "../components/layout/AppShell";
 import { AppHeader } from "../components/layout/AppHeader";
 import { AppSidebar } from "../components/layout/AppSidebar";
-import { FileSummaryStrip } from "../components/layout/FileSummaryStrip";
+import { ShellFileDock } from "../components/layout/ShellFileDock";
 import { GlobalCommandBar } from "../components/layout/GlobalCommandBar";
 import { PlaceholderRoute } from "../features/PlaceholderRoute";
 import { WorkRoute } from "../features/work/WorkRoute";
@@ -63,9 +63,7 @@ function AppContent() {
           <AppHeader route={route} connection={connectionLabel} health={bridgeHealth} />
         }
         sidebar={<AppSidebar route={route} onRouteChange={setRoute} />}
-        strip={
-          <FileSummaryStrip library={snapshot.library} onOpenResolve={() => void handleOpenResolve()} />
-        }
+        fileDock={<ShellFileDock onOpenResolve={() => void handleOpenResolve()} />}
         commandBar={
           <GlobalCommandBar
             pipeline={snapshot.pipeline}

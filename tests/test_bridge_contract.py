@@ -20,6 +20,7 @@ from app.bridge_contract import (
     validate_app_info,
     validate_app_snapshot,
     validate_duplicate_group_detail,
+    validate_file_rows_page,
     validate_finalize_result,
     validate_finalize_summary,
     validate_move_preview,
@@ -88,6 +89,7 @@ def test_pywebview_api_methods_match_locked_contract() -> None:
         "cancel_run",
         "set_work_mode",
         "query_review_rows",
+        "query_file_rows",
         "query_quality_rows",
         "get_duplicate_group_detail",
         "get_quality_issue_detail",
@@ -124,6 +126,15 @@ def test_get_app_info_returns_required_keys() -> None:
     assert info["buildType"] in ("dev", "production", "packaged")
     assert info["frontendBuild"] == "web/build"
     assert isinstance(info["pythonRuntime"], str)
+
+
+def test_query_file_rows_empty_library_shape() -> None:
+    api = _memory_api()
+    page = api.query_file_rows({"cursor": None, "limit": 50})
+    validate_file_rows_page(page)
+    assert page["rows"] == []
+    assert page["pageInfo"]["totalFiltered"] == 0
+    assert page["pageInfo"]["hasMore"] is False
 
 
 def test_bridge_api_get_snapshot_valid() -> None:

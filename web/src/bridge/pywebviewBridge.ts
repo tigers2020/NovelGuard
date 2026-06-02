@@ -16,6 +16,8 @@ import type { SelectionScope } from "../types/selection";
 import type { FinalizeReportDocument, FinalizeResult, FinalizeSummary, RunFinalizeRequest } from "../types/finalize";
 import type { AppInfo } from "../types/appInfo";
 import type { WorkMode } from "../types/snapshot";
+import type { FileRowsPage, FileRowsQuery } from "../types/fileRows";
+import { validateFileRowsPage } from "../contracts/fileRowsPageContract";
 import { BridgeCallError } from "./bridgeErrors";
 import { callBridge } from "./callBridge";
 
@@ -81,6 +83,12 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
       callBridge(() => call<ReviewRowsPage>(api, "query_review_rows", query), {
         method: "query_review_rows",
       }),
+    queryFileRows: (query: FileRowsQuery) =>
+      callBridge(async () => {
+        const page = await call<FileRowsPage>(api, "query_file_rows", query);
+        validateFileRowsPage(page);
+        return page;
+      }, { method: "query_file_rows" }),
     queryQualityRows: (query: QualityRowsQuery) =>
       callBridge(async () => {
         const page = await call<QualityRowsPage>(api, "query_quality_rows", query);

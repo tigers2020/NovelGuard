@@ -13,6 +13,7 @@ from application.dto_mapper import (
     build_snapshot,
     scan_timestamp,
 )
+from application.file_query import file_record_to_row, query_file_page
 from application.ports.library_index import LibraryIndexPort
 from application.quality_analyzer import analyze_quality
 from application.quality_issue_detail import build_quality_issue_detail
@@ -237,6 +238,12 @@ class LibrarySession:
         with self._lock:
             limit = _clamp_query_limit(query)
             return query_quality_page(self._quality_rows_cache, query, limit=limit)
+
+    def query_file_rows(self, query: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            limit = _clamp_query_limit(query)
+            rows = [file_record_to_row(record) for record in self._files_by_id.values()]
+            return query_file_page(rows, query, limit=limit)
 
     def get_duplicate_group_detail(self, group_id: str) -> dict[str, Any]:
         from application.duplicate_group_detail import (

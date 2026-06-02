@@ -10,6 +10,7 @@ PYWEBVIEW_API_METHODS: tuple[str, ...] = (
     "cancel_run",
     "set_work_mode",
     "query_review_rows",
+    "query_file_rows",
     "query_quality_rows",
     "get_duplicate_group_detail",
     "get_quality_issue_detail",
