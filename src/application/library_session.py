@@ -8,12 +8,14 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from application.app_settings import AppSettings
+from application.app_settings import AppSettings, InvalidSettingValueError
 from application.dto_mapper import (
     build_snapshot,
     scan_timestamp,
 )
 from application.file_query import file_record_to_row, query_file_page
+from application.log_buffer import query_log_entries
+from application.logs_artifacts import list_logs_artifacts
 from application.ports.library_index import LibraryIndexPort
 from application.quality_analyzer import analyze_quality
 from application.quality_issue_detail import build_quality_issue_detail
@@ -23,11 +25,16 @@ from application.review_query import query_review_page
 from application.review_rows_builder import build_review_rows
 from application.review_snapshot_counts import file_row_status_counts
 from application.review_state_merge import rebuild_rows_with_review_state
+from application.scan_settings import build_scan_options_labels, parse_extension_filter
 from domain.duplicate_exact import find_exact_duplicate_groups
 from domain.duplicate_near import NearDuplicateGroup
 from domain.filename_relation import RelationGroup
 from domain.models import FileRecord
-from domain.settings_keys import SETTINGS_KEY_INCLUDE_RELATION
+from domain.settings_keys import (
+    SETTINGS_KEY_INCLUDE_RELATION,
+    SETTINGS_KEY_SCAN_EXTENSION_FILTER,
+    SETTINGS_KEY_SCAN_INCLUDE_HIDDEN,
+)
 
 _MAX_QUERY_LIMIT = 200
 _DEFAULT_QUERY_LIMIT = 100
@@ -41,6 +48,7 @@ class LibrarySession:
         *,
         scan_folder: Callable[..., None],
         on_library_selected: Callable[["LibrarySession", str], Any] | None = None,
+        settings: AppSettings | None = None,
     ) -> None:
         self._lock = threading.RLock()
         self._index = index
@@ -83,7 +91,7 @@ class LibrarySession:
         self._finalize_runner: Any = None
         self._near_groups_by_id: dict[str, NearDuplicateGroup] = {}
         self._relation_groups_by_id: dict[str, RelationGroup] = {}
-        self._settings = AppSettings()
+        self._settings = settings or AppSettings()
 
     @property
     def index(self) -> LibraryIndexPort:
@@ -198,6 +206,14 @@ class LibrarySession:
             if mode in ("scan", "resolve", "quality", "finalize"):
                 self._active_mode = mode
 
+    def _scan_options_labels(self) -> list[str]:
+        extension_filter, _ = self._settings.get_value(SETTINGS_KEY_SCAN_EXTENSION_FILTER)
+        include_hidden = self._settings.get_bool(SETTINGS_KEY_SCAN_INCLUDE_HIDDEN)
+        return build_scan_options_labels(
+            extension_filter=str(extension_filter),
+            include_hidden=include_hidden,
+        )
+
     def get_snapshot(self) -> dict[str, Any]:
         with self._lock:
             return build_snapshot(
@@ -227,6 +243,7 @@ class LibrarySession:
                 finalize_last_run_at=self._finalize_last_run_at,
                 finalize_blocker_count=self._finalize_blocker_count,
                 finalize_warning_count=self._finalize_warning_count,
+                scan_options=self._scan_options_labels(),
             )
 
     def query_review_rows(self, query: dict[str, Any]) -> dict[str, Any]:
@@ -291,13 +308,39 @@ class LibrarySession:
                 library_revision=self._library_revision,
             )
 
-    def get_app_setting(self, key: str) -> bool:
+    def get_app_setting(self, key: str) -> dict[str, Any]:
         with self._lock:
-            return self._settings.get_bool(key)
+            value, source = self._settings.get_value(key)
+            return {"key": key, "value": value, "source": source}
 
-    def set_app_setting(self, key: str, value: bool) -> None:
+    def set_app_setting(self, key: str, value: Any) -> dict[str, Any]:
         with self._lock:
-            self._settings.set_bool(key, value)
+            if key == SETTINGS_KEY_SCAN_EXTENSION_FILTER:
+                if not isinstance(value, str):
+                    raise InvalidSettingValueError("scan.extensionFilter requires str")
+                parse_extension_filter(value)
+            stored, source = self._settings.set_value(key, value)
+            return {"key": key, "value": stored, "source": source}
+
+    def query_log_entries(self, query: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            return query_log_entries(query)
+
+    def get_logs_artifacts(self, *, packaging_log_path: Path | None = None) -> dict[str, Any]:
+        with self._lock:
+            audit_path: Path | None = None
+            finalize_root: Path | None = None
+            if self._runtime_paths is not None:
+                audit_path = self._runtime_paths.audit_log_path
+                finalize_root = self._runtime_paths.finalize_save_root
+            if self._index.folder_path is None:
+                return {"artifacts": []}
+            return list_logs_artifacts(
+                audit_log_path=audit_path,
+                finalize_save_root=finalize_root,
+                finalize_session_id=self.finalize_session_id(),
+                packaging_log_path=packaging_log_path,
+            )
 
     def library_revision(self) -> int:
         with self._lock:
@@ -797,12 +840,17 @@ class LibrarySession:
         def cancel_check() -> bool:
             return self._cancel_requested
 
+        extension_raw, _ = self._settings.get_value(SETTINGS_KEY_SCAN_EXTENSION_FILTER)
+        include_hidden = self._settings.get_bool(SETTINGS_KEY_SCAN_INCLUDE_HIDDEN)
         try:
+            extensions = parse_extension_filter(str(extension_raw))
             self._scan_folder(
                 folder,
                 on_progress=on_progress,
                 cancel_check=cancel_check,
                 out=collected.append,
+                extensions=extensions,
+                include_hidden=include_hidden,
             )
         except Exception as exc:
             scan_error = str(exc)

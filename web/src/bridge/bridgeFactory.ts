@@ -20,6 +20,16 @@ export type PywebviewWindow = {
   };
 };
 
+function preferPywebviewWait(win: PywebviewWindow | undefined): boolean {
+  if (typeof window === "undefined" || !win?.pywebview || win.pywebview.api) {
+    return false;
+  }
+  return Boolean(
+    (window as unknown as { __NOVELGUARD_FORCE_PYWEBVIEW_WAIT__?: boolean })
+      .__NOVELGUARD_FORCE_PYWEBVIEW_WAIT__,
+  );
+}
+
 export function resolveBridge(
   env: BridgeResolveEnv = import.meta.env,
   win: PywebviewWindow | undefined =
@@ -35,7 +45,7 @@ export function resolveBridge(
     throw new BridgeUnavailableError(BRIDGE_ERROR_CODES.productionUnavailable);
   }
 
-  if (env.VITE_USE_MOCK_BRIDGE === "true") {
+  if (env.VITE_USE_MOCK_BRIDGE === "true" && !preferPywebviewWait(win)) {
     return { bridge: mockBridge, kind: "mock" };
   }
 
@@ -60,7 +70,7 @@ export async function resolveBridgeAsync(
     return { bridge: createPywebviewBridge(readyApi), kind: "pywebview" };
   }
 
-  if (env.VITE_USE_MOCK_BRIDGE === "true") {
+  if (env.VITE_USE_MOCK_BRIDGE === "true" && !preferPywebviewWait(win)) {
     return { bridge: mockBridge, kind: "mock" };
   }
 

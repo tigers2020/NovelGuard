@@ -25,6 +25,8 @@ import type {
 import type { SelectionScope } from "../types/selection";
 import type { AppInfo } from "../types/appInfo";
 import type { FileRowsPage, FileRowsQuery } from "../types/fileRows";
+import type { LogEntriesPage, LogEntriesQuery, LogsArtifactsResponse } from "../types/logs";
+import type { AppSettingKey, AppSettingResponse, AppSettingValue } from "../types/settings";
 
 export interface NovelGuardBridge {
   getAppInfo(): Promise<AppInfo>;
@@ -49,8 +51,10 @@ export interface NovelGuardBridge {
   updateReviewDecisions(
     request: UpdateReviewDecisionsRequest,
   ): Promise<UpdateReviewDecisionsResult>;
-  getAppSetting(key: string): Promise<boolean>;
-  setAppSetting(key: string, value: boolean): Promise<void>;
+  getAppSetting(key: AppSettingKey): Promise<AppSettingResponse>;
+  setAppSetting(key: AppSettingKey, value: AppSettingValue): Promise<AppSettingResponse>;
+  queryLogEntries(query: LogEntriesQuery): Promise<LogEntriesPage>;
+  getLogsArtifacts(): Promise<LogsArtifactsResponse>;
   getFinalizeSummary(): Promise<FinalizeSummary>;
   runFinalizeVerification(request: RunFinalizeRequest): Promise<FinalizeResult>;
   getFinalizeReport(reportId: string): Promise<FinalizeReportDocument>;

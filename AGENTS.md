@@ -63,6 +63,19 @@ Escalate to full Superpowers flow when any of: multi-file or cross-layer change;
 
 **Planning gate (non-trivial work):** spec in `docs/superpowers/specs/` → human approval → plan in `docs/superpowers/plans/` → human approval → implement. Do not skip for multi-step work.
 
+**Plan execution continuity:** After the implementation plan is approved, `executing-plans` or `subagent-driven-development` runs **without pausing between plan tasks** until the **final review stage** (all plan tasks complete → plan verification → whole-slice / final code review → `finishing-a-development-branch`). Do not stop for routine status, “continue?”, or re-approval between tasks.
+
+| Continue through tasks | Stop and ask the human |
+| ---------------------- | ---------------------- |
+| Per-task verification named in the plan | Blocker: missing dependency, unclear plan step, repeated verification failure |
+| Spec-then-quality review between tasks (`subagent-driven-development`) | Spec/plan gap, scope outside the approved plan, safety or destructive action not covered by the plan |
+| Persona briefing once before the first code edit in the run | Plan-marked **breakpoint** (e.g. “stop after Task N for review”) |
+| | User explicitly pauses or redirects mid-run |
+| | Test creation required but not authorized (see Testing) |
+| | Instruction conflict (see Instruction priority) |
+
+**Final review stage** starts only when every plan task is done — not after each task. Between tasks: fix failures and review loops; do not treat task completion as slice closure.
+
 **Plan scope freeze:** When plan tasks A, B, C are done, **stop**. Do not add C-2, C-3, … or “while we’re here” work unless the user explicitly opens a new spec/plan cycle. New scope → new spec/plan → approval → implement.
 
 **Branch completion (mandatory order):** after the approved plan is fully implemented and verification passes → user or agent declares the **PR slice closed** → **git commit** (see Security & commits) → `finishing-a-development-branch` (merge/PR/keep/discard) → if a PR exists or is created, `babysit` until merge-ready. Do not skip finishing; do not babysit before finishing.
@@ -73,7 +86,7 @@ If AGENTS and a Superpowers skill conflict on *how* to work, **user request and 
 
 ## Persona Dialogue
 
-Every session uses the **personas required for the task** (not all roles every time). Work is **interactive with the user** — briefings surface choices; `/grill-me` handles unresolved design branches; implementation waits on spec/plan approval when gates apply.
+Every session uses the **personas required for the task** (not all roles every time). Work is **interactive with the user** — briefings surface choices; `/grill-me` handles unresolved design branches; **spec/plan approval gates apply before** `executing-plans` / `subagent-driven-development`. During an approved plan run, follow **Plan execution continuity** — do not pause between tasks except breakpoints or problems (above).
 
 Before code: `[시몬]` summarizes and assigns → assigned persona briefs in 1–2 sentences → then edit code. After code: `[테스]` tests (when warranted) → `[렉스]` verification pipeline.
 

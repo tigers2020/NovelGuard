@@ -29,6 +29,7 @@ async function clickApplyPreviewRun(page: import("@playwright/test").Page) {
 async function selectExecutableMoveRow(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Move Plan" }).click();
   const row = page.getByTestId("grid-row-row-2");
+  await expect(row).toBeVisible({ timeout: 15_000 });
   await row.scrollIntoViewIfNeeded();
   await row.click();
 }
@@ -101,6 +102,7 @@ test.describe("NovelGuard smoke", () => {
         "getMovePreview";
     });
     await openResolveWorkspace(page);
+    await selectExecutableMoveRow(page);
     await openApplyDialog(page);
     await clickApplyPreviewRun(page);
     await expect(page.getByTestId("apply-preview-error")).toBeVisible();
@@ -161,10 +163,15 @@ test.describe("NovelGuard smoke", () => {
 
   test("pywebview host without api shows unavailable", async ({ page }) => {
     await page.addInitScript(() => {
-      (window as unknown as { pywebview?: { api?: unknown } }).pywebview = {};
+      const w = window as unknown as {
+        pywebview?: { api?: unknown };
+        __NOVELGUARD_FORCE_PYWEBVIEW_WAIT__?: boolean;
+      };
+      w.pywebview = {};
+      w.__NOVELGUARD_FORCE_PYWEBVIEW_WAIT__ = true;
     });
     await page.goto("/");
-    await expect(page.getByTestId("bridge-unavailable")).toBeVisible();
+    await expect(page.getByTestId("bridge-unavailable")).toBeVisible({ timeout: 15_000 });
   });
 
   test("quality grid header sort shows sort indicator", async ({ page }) => {
@@ -183,5 +190,20 @@ test.describe("NovelGuard smoke", () => {
     await page.getByTestId("quality-column-chooser").locator("summary").click();
     await page.getByTestId("column-toggle-path").check();
     await expect(page.getByTestId("quality-grid-header-path")).toBeVisible();
+  });
+
+  test("Settings route loads diagnostics", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("nav-settings").click();
+    await expect(page.getByTestId("settings-route")).toBeVisible();
+    await expect(page.getByTestId("app-info-diagnostics")).toBeVisible();
+  });
+
+  test("Logs route loads live and artifacts sections", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("nav-logs").click();
+    await expect(page.getByTestId("logs-route")).toBeVisible();
+    await expect(page.getByTestId("logs-live-list")).toBeVisible();
+    await expect(page.getByTestId("logs-artifacts-list")).toBeVisible();
   });
 });

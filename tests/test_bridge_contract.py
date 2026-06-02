@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from pathlib import Path
 
@@ -32,8 +33,10 @@ from app.bridge_contract import (
 from app.bridge_parity import PYWEBVIEW_API_METHODS
 from app.selection_fingerprint import selection_fingerprint
 from app.session_factory import create_bridge_api, create_library_session
+from application.app_settings import AppSettings
 from application.ports.filesystem_apply import ApplyRowResult
 from application.quality_analyzer import analyze_quality
+from application.scan_settings import SettingsValidationError, parse_extension_filter
 from domain.apply_models import PreviewOperation
 from domain.apply_path_policy import build_move_duplicate_dest_relative, validate_move_operation
 from domain.duplicate_exact import find_exact_duplicate_groups
@@ -48,7 +51,9 @@ from tests.fixtures.bridge_contract_fixtures import VALID_SNAPSHOT
 
 
 def _memory_api() -> BridgeApi:
-    return create_bridge_api(create_library_session(MemoryLibraryIndex()))
+    return create_bridge_api(
+        create_library_session(MemoryLibraryIndex(), settings=AppSettings()),
+    )
 
 
 @pytest.mark.parametrize(
@@ -102,6 +107,8 @@ def test_pywebview_api_methods_match_locked_contract() -> None:
         "update_review_decisions",
         "get_app_setting",
         "set_app_setting",
+        "query_log_entries",
+        "get_logs_artifacts",
         "get_finalize_summary",
         "run_finalize_verification",
         "get_finalize_report",
@@ -219,6 +226,69 @@ def test_scan_folder_finds_txt_and_md(tmp_path: Path) -> None:
     assert all(f.content_sha256 is None for f in files)
 
 
+def test_scan_folder_include_hidden_finds_dotfile(tmp_path: Path) -> None:
+    (tmp_path / ".hidden.txt").write_text("secret", encoding="utf-8")
+    (tmp_path / "visible.txt").write_text("ok", encoding="utf-8")
+    files: list[FileRecord] = []
+
+    filesystem_scanner.scan_folder(
+        str(tmp_path),
+        on_progress=lambda _p, _l: None,
+        cancel_check=lambda: False,
+        out=files.append,
+        include_hidden=True,
+    )
+    assert {f.name for f in files} == {".hidden.txt", "visible.txt"}
+
+
+def test_parse_extension_filter_rejects_invalid() -> None:
+    with pytest.raises(SettingsValidationError):
+        parse_extension_filter("")
+    with pytest.raises(SettingsValidationError):
+        parse_extension_filter("txt")
+    with pytest.raises(SettingsValidationError):
+        parse_extension_filter(".")
+    with pytest.raises(SettingsValidationError):
+        parse_extension_filter("*.txt")
+
+
+def test_query_log_entries_contract_probe_and_warning_filter() -> None:
+    api = _memory_api()
+    logging.getLogger("application.contract_probe").info("contract probe")
+    page = api.query_log_entries({"limit": 10})
+    assert any("contract probe" in entry["message"] for entry in page["entries"])
+    logging.getLogger("application.contract_probe").info("info level msg")
+    logging.getLogger("application.contract_probe").warning("warn level msg")
+    page_warn = api.query_log_entries({"level": "WARNING", "limit": 50})
+    assert any(entry["message"] == "warn level msg" for entry in page_warn["entries"])
+    assert not any(entry["message"] == "info level msg" for entry in page_warn["entries"])
+
+
+def test_get_logs_artifacts_audit_tail_metadata(tmp_path: Path) -> None:
+    session = create_library_session(MemoryLibraryIndex(), settings=AppSettings())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    audit_path = session.audit_log_path()
+    audit_path.parent.mkdir(parents=True, exist_ok=True)
+    audit_path.write_text('{"event":"test"}\n', encoding="utf-8")
+    payload = api.get_logs_artifacts()
+    kinds = {item["kind"] for item in payload["artifacts"]}
+    assert "audit_tail" in kinds
+
+
+def test_scan_include_hidden_setting(tmp_path: Path) -> None:
+    (tmp_path / ".secret.txt").write_text("x", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex(), settings=AppSettings())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.set_app_setting("scan.includeHidden", True)
+    api.start_scan()
+    _scan_until_idle(api)
+    page = api.query_file_rows({"limit": 50})
+    names = {row["name"] for row in page["rows"]}
+    assert ".secret.txt" in names
+
+
 def test_query_review_rows_empty_valid_14a() -> None:
     api = _memory_api()
     page = api.query_review_rows({"viewMode": "action", "limit": 50})
@@ -247,7 +317,7 @@ def test_bridge_api_scan_populates_file_count(tmp_path: Path) -> None:
 
 def test_cancel_scan_discards_partial(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     (tmp_path / "a.txt").write_text("x", encoding="utf-8")
-    session = create_library_session(MemoryLibraryIndex())
+    session = create_library_session(MemoryLibraryIndex(), settings=AppSettings())
     session.select_folder(str(tmp_path))
     api = create_bridge_api(session)
     api.start_scan()
@@ -271,7 +341,9 @@ def test_cancel_scan_discards_partial(monkeypatch: pytest.MonkeyPatch, tmp_path:
         cancel_check,
         out,
         extensions=None,
+        include_hidden=False,
     ) -> None:
+        _ = include_hidden
         for i in range(50):
             if cancel_check():
                 cancel_flag["hit"] = True
@@ -1356,10 +1428,12 @@ def test_relation_groups_generic_chapter_in_same_parent() -> None:
 def test_include_relation_false_skips_relation_rows(tmp_path: Path) -> None:
     (tmp_path / "Novel 01.txt").write_text("x", encoding="utf-8")
     (tmp_path / "Novel 02.txt").write_text("y", encoding="utf-8")
-    session = create_library_session(MemoryLibraryIndex())
+    session = create_library_session(MemoryLibraryIndex(), settings=AppSettings())
     session.select_folder(str(tmp_path))
     api = create_bridge_api(session)
-    assert api.get_app_setting("include_relation") is False
+    payload = api.get_app_setting("include_relation")
+    assert payload["value"] is False
+    assert payload["source"] == "default"
     api.start_scan()
     _scan_until_idle(api)
     page = api.query_review_rows(
@@ -1374,7 +1448,7 @@ def test_query_review_rows_relation_after_enabled_scan(tmp_path: Path) -> None:
     session = create_library_session(MemoryLibraryIndex())
     session.select_folder(str(tmp_path))
     api = create_bridge_api(session)
-    api.set_app_setting("include_relation", True)
+    api.set_app_setting("include_relation", True)  # type: ignore[arg-type]
     api.start_scan()
     _scan_until_idle(api)
     relation_page = api.query_review_rows(
@@ -1396,7 +1470,7 @@ def test_get_relation_group_detail(tmp_path: Path) -> None:
     session = create_library_session(MemoryLibraryIndex())
     session.select_folder(str(tmp_path))
     api = create_bridge_api(session)
-    api.set_app_setting("include_relation", True)
+    api.set_app_setting("include_relation", True)  # type: ignore[arg-type]
     api.start_scan()
     _scan_until_idle(api)
     relation_page = api.query_review_rows(
@@ -1417,7 +1491,7 @@ def test_preview_rejects_relation_rows(tmp_path: Path) -> None:
     session = create_library_session(MemoryLibraryIndex())
     session.select_folder(str(tmp_path))
     api = create_bridge_api(session)
-    api.set_app_setting("include_relation", True)
+    api.set_app_setting("include_relation", True)  # type: ignore[arg-type]
     api.start_scan()
     _scan_until_idle(api)
     relation_page = api.query_review_rows(

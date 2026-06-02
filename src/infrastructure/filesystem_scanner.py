@@ -24,6 +24,7 @@ def scan_folder(
     cancel_check: CancelCheck,
     out: RecordSink,
     extensions: set[str] | None = None,
+    include_hidden: bool = False,
     content_hash_fn: ContentHashFn | None = None,
 ) -> None:
     root = Path(folder_path).resolve()
@@ -35,9 +36,10 @@ def scan_folder(
     for dirpath, dirnames, filenames in os.walk(root):
         if cancel_check():
             return
-        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        if not include_hidden:
+            dirnames[:] = [d for d in dirnames if not d.startswith(".")]
         for name in filenames:
-            if name.startswith("."):
+            if not include_hidden and name.startswith("."):
                 continue
             path = Path(dirpath) / name
             if path.suffix.lower() in allowed:

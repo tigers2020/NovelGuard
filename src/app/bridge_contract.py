@@ -390,6 +390,61 @@ class FinalizeError(Exception):
         return json.dumps({"reason": self.reason, "details": self.details}, ensure_ascii=False)
 
 
+def validate_app_setting_response(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise PageContractError("AppSettingResponse must be a dict")
+    for key in ("key", "value", "source"):
+        if key not in payload:
+            raise PageContractError(f"AppSettingResponse missing {key}")
+    if payload["source"] not in ("default", "persisted"):
+        raise PageContractError("AppSettingResponse.source invalid")
+    value = payload["value"]
+    if not isinstance(value, (str, bool)):
+        raise PageContractError("AppSettingResponse.value must be str or bool")
+
+
+def validate_log_entries_page(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise PageContractError("LogEntriesPage must be a dict")
+    entries = payload.get("entries")
+    if not isinstance(entries, list):
+        raise PageContractError("LogEntriesPage.entries must be a list")
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise PageContractError("LogEntry must be a dict")
+        for key in ("timestamp", "level", "message"):
+            if key not in entry:
+                raise PageContractError(f"LogEntry missing {key}")
+        if entry["level"] not in ("DEBUG", "INFO", "WARNING", "ERROR"):
+            raise PageContractError("LogEntry.level invalid")
+    page_info = payload.get("pageInfo")
+    if not isinstance(page_info, dict):
+        raise PageContractError("LogEntriesPage.pageInfo must be a dict")
+    if page_info.get("hasMore") is not False:
+        raise PageContractError("LogEntriesPage.pageInfo.hasMore must be false")
+
+
+def validate_logs_artifacts_response(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise PageContractError("LogsArtifactsResponse must be a dict")
+    artifacts = payload.get("artifacts")
+    if not isinstance(artifacts, list):
+        raise PageContractError("LogsArtifactsResponse.artifacts must be a list")
+    for item in artifacts:
+        if not isinstance(item, dict):
+            raise PageContractError("LogsArtifact must be a dict")
+        for key in ("id", "kind", "label", "path"):
+            if key not in item:
+                raise PageContractError(f"LogsArtifact missing {key}")
+        if item["kind"] not in (
+            "audit_tail",
+            "finalize_report",
+            "packaging_log",
+            "unknown",
+        ):
+            raise PageContractError("LogsArtifact.kind invalid")
+
+
 def validate_app_info(payload: Any) -> None:
     if not isinstance(payload, dict):
         raise PageContractError("AppInfo must be a dict")

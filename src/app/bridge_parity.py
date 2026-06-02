@@ -23,6 +23,8 @@ PYWEBVIEW_API_METHODS: tuple[str, ...] = (
     "update_review_decisions",
     "get_app_setting",
     "set_app_setting",
+    "query_log_entries",
+    "get_logs_artifacts",
     "get_finalize_summary",
     "run_finalize_verification",
     "get_finalize_report",

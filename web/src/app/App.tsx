@@ -11,7 +11,8 @@ import { AppHeader } from "../components/layout/AppHeader";
 import { AppSidebar } from "../components/layout/AppSidebar";
 import { ShellFileDock } from "../components/layout/ShellFileDock";
 import { GlobalCommandBar } from "../components/layout/GlobalCommandBar";
-import { PlaceholderRoute } from "../features/PlaceholderRoute";
+import { LogsRoute } from "../features/logs/LogsRoute";
+import { SettingsRoute } from "../features/settings/SettingsRoute";
 import { WorkRoute } from "../features/work/WorkRoute";
 import { ApplySubflowDialog } from "../features/work/ApplySubflowDialog";
 import { PreflightPipelineDialog } from "../features/work/PreflightPipelineDialog";
@@ -51,9 +52,9 @@ function AppContent() {
   if (route === "work") {
     main = <WorkRoute onOpenPreview={handleOpenPreview} />;
   } else if (route === "settings") {
-    main = <PlaceholderRoute title="Settings" />;
+    main = <SettingsRoute />;
   } else {
-    main = <PlaceholderRoute title="Logs" />;
+    main = <LogsRoute />;
   }
 
   return (

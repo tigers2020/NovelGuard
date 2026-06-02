@@ -59,6 +59,9 @@ import type {
   SnapshotInvalidationEvent,
   SnapshotInvalidationReason,
 } from "../types/snapshotInvalidation";
+import type { LogEntry, LogEntriesPage, LogEntriesQuery, LogsArtifactsResponse } from "../types/logs";
+import type { AppSettingKey, AppSettingResponse, AppSettingValue } from "../types/settings";
+import { filterByMinLevel } from "./logLevel";
 
 const state = {
   activeMode: "resolve" as WorkMode,
@@ -107,6 +110,45 @@ let pendingPreview: {
 
 let applyInProgress = false;
 let includeRelation = false;
+
+const mockSettingDefaults: Record<AppSettingKey, AppSettingValue> = {
+  include_relation: false,
+  "scan.extensionFilter": ".txt,.md",
+  "scan.includeSubdirs": true,
+  "scan.includeHidden": false,
+  "scan.incrementalScan": false,
+  "scan.includeSymlinks": false,
+};
+
+const mockSettingValues: Record<string, AppSettingValue> = { ...mockSettingDefaults };
+const mockSettingPersisted = new Set<string>();
+
+const mockLogBuffer: LogEntry[] = [];
+
+function appendMockLog(level: LogEntry["level"], message: string): void {
+  mockLogBuffer.push({
+    timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+    level,
+    message,
+    logger: "mockBridge",
+  });
+  if (mockLogBuffer.length > 2000) {
+    mockLogBuffer.splice(0, mockLogBuffer.length - 2000);
+  }
+}
+
+appendMockLog("DEBUG", "mock log seed debug");
+appendMockLog("INFO", "mock log seed info");
+
+function mockScanOptionsLabels(): string[] {
+  const extensionFilter = String(mockSettingValues["scan.extensionFilter"] ?? ".txt,.md");
+  const includeHidden = Boolean(mockSettingValues["scan.includeHidden"]);
+  return [
+    extensionFilter,
+    "하위 폴더 포함",
+    includeHidden ? "숨김 파일 포함" : "숨김 제외",
+  ];
+}
 
 let pendingRepair: {
   token: string;
@@ -177,7 +219,7 @@ function buildSnapshot(): AppSnapshot {
       duplicateGroups: 37,
       integrityIssues: 12,
       lastRun: "2026-06-01 10:42",
-      scanOptions: [".txt", "하위 폴더 포함", "숨김 제외", "증분 스캔"],
+      scanOptions: mockScanOptionsLabels(),
     },
     pipeline: {
       phase: state.pipelineRunning ? "scan" : "idle",
@@ -397,6 +439,7 @@ export const mockBridge: NovelGuardBridge = {
       rejectApply("start_scan", "LIBRARY_BUSY");
     }
     stopScanSimulation();
+    appendMockLog("INFO", "Mock scan started");
     state.pipelineRunning = true;
     emitSnapshotInvalidation("pipelinePhase", { pipelinePhase: "scan" });
     let pct = 0;
@@ -694,17 +737,66 @@ export const mockBridge: NovelGuardBridge = {
     }
   },
 
-  async getAppSetting(key: string) {
+  async getAppSetting(key: AppSettingKey): Promise<AppSettingResponse> {
     if (key === "include_relation") {
-      return includeRelation;
+      return {
+        key,
+        value: includeRelation,
+        source: mockSettingPersisted.has(key) ? "persisted" : "default",
+      };
     }
-    return false;
+    const value = mockSettingValues[key] ?? mockSettingDefaults[key];
+    return {
+      key,
+      value,
+      source: mockSettingPersisted.has(key) ? "persisted" : "default",
+    };
   },
 
-  async setAppSetting(key: string, value: boolean) {
+  async setAppSetting(key: AppSettingKey, value: AppSettingValue): Promise<AppSettingResponse> {
     if (key === "include_relation") {
+      if (typeof value !== "boolean") {
+        throw new BridgeCallError("INVALID_SETTING_VALUE", "include_relation requires boolean");
+      }
       includeRelation = value;
+    } else {
+      mockSettingValues[key] = value;
     }
+    mockSettingPersisted.add(key);
+    return {
+      key,
+      value: key === "include_relation" ? includeRelation : mockSettingValues[key],
+      source: "persisted",
+    };
+  },
+
+  async queryLogEntries(query: LogEntriesQuery): Promise<LogEntriesPage> {
+    const limit = Math.min(Math.max(query.limit ?? 200, 1), 500);
+    const filtered = filterByMinLevel(mockLogBuffer, query.level);
+    const entries = filtered.slice(-limit);
+    return { entries, pageInfo: { limit, hasMore: false } };
+  },
+
+  async getLogsArtifacts(): Promise<LogsArtifactsResponse> {
+    if (!state.folderPath) {
+      return { artifacts: [] };
+    }
+    return {
+      artifacts: [
+        {
+          id: "mock-audit",
+          kind: "audit_tail",
+          label: "Apply audit log (mock)",
+          path: `${state.folderPath}/.novelguard/apply-audit.jsonl`,
+        },
+        {
+          id: "mock-finalize",
+          kind: "finalize_report",
+          label: "finalize_mock.json",
+          path: `${state.folderPath}/SAVE/finalize/mock/finalize_mock.json`,
+        },
+      ],
+    };
   },
 
   async getFinalizeSummary() {
