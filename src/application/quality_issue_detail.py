@@ -159,10 +159,10 @@ def _build_evidence(issue: QualityIssue, record: FileRecord) -> dict[str, Any]:
 def _repair_eligibility_for_kind(kind: QualityKind) -> dict[str, Any]:
     if kind == "invalid_utf8":
         return {
-            "eligible": False,
-            "reason": "repair_not_implemented",
+            "eligible": True,
+            "reason": "ready",
             "futureAction": "utf8_convert",
-            "label": "UTF-8 repair planned (PR-22)",
+            "label": "UTF-8 repair available",
         }
     if kind == "read_error":
         return {

@@ -1,6 +1,7 @@
 import type { SelectionScope } from "./selection";
 
 export type PreviewApplyErrorCode =
+  | "REPAIR_PREVIEW_ACTIVE"
   | "MISSING_PREVIEW_TOKEN"
   | "INVALID_PREVIEW_TOKEN"
   | "NO_PENDING_APPLY"

@@ -12,11 +12,14 @@ from app.bridge_contract import (
     EmptySelectionError,
     InvalidSelectionScopeError,
     PreviewApplyError,
+    RepairApplyError,
+    RepairPreviewError,
     SnapshotContractError,
     clamp_query_limit,
     validate_app_snapshot,
     validate_duplicate_group_detail,
     validate_move_preview,
+    validate_quality_repair_preview,
     validate_quality_rows_page,
     validate_review_rows_page,
     validate_selection_scope,
@@ -84,6 +87,9 @@ def test_pywebview_api_methods_match_locked_contract() -> None:
         "query_quality_rows",
         "get_duplicate_group_detail",
         "get_quality_issue_detail",
+        "get_quality_repair_preview",
+        "apply_quality_repair",
+        "discard_quality_repair_preview",
         "get_move_preview",
         "apply_resolved_actions",
         "discard_move_preview",
@@ -571,7 +577,8 @@ def test_get_quality_issue_detail_invalid_utf8_evidence(tmp_path: Path) -> None:
     inner = detail["detail"]
     assert inner["evidence"]["kind"] == "invalid_utf8"
     assert inner["repairEligibility"]["futureAction"] == "utf8_convert"
-    assert inner["repairEligibility"]["eligible"] is False
+    assert inner["repairEligibility"]["eligible"] is True
+    assert inner["repairEligibility"]["reason"] == "ready"
 
 
 def test_get_quality_issue_detail_id_without_prefix(tmp_path: Path) -> None:
@@ -1315,3 +1322,118 @@ def test_preview_rejects_relation_rows(tmp_path: Path) -> None:
     with pytest.raises(PreviewApplyError) as exc_info:
         api.get_move_preview({"type": "explicit_rows", "rowIds": [file_row["id"]]})
     assert exc_info.value.reason == "RELATION_APPLY_UNSUPPORTED"
+
+
+def _encoding_issue_row(api: BridgeApi) -> dict:
+    page = api.query_quality_rows({"issueType": "encoding", "limit": 20})
+    assert page["rows"], "expected encoding quality row"
+    return page["rows"][0]
+
+
+def test_quality_repair_preview_cp949_success(tmp_path: Path) -> None:
+    text = "안녕하세요"
+    (tmp_path / "korean.txt").write_bytes(text.encode("cp949"))
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    row = _encoding_issue_row(api)
+    preview = api.get_quality_repair_preview({"issueIds": [row["id"]]})
+    validate_quality_repair_preview(preview)
+    assert preview["summary"]["operationCount"] == 1
+    assert preview["rows"][0]["sourceEncoding"] == "cp949"
+    assert preview["rows"][0]["encodingConfidence"] == "high"
+    api.apply_quality_repair(
+        {"issueIds": [row["id"]], "repairPreviewToken": preview["repairPreviewToken"]}
+    )
+    repaired = (tmp_path / "korean.txt").read_text(encoding="utf-8")
+    assert repaired == text
+    page = api.query_quality_rows({"issueType": "encoding", "limit": 20})
+    assert all(r["id"] != row["id"] for r in page["rows"])
+
+
+def test_quality_repair_rejects_empty_file_issue(tmp_path: Path) -> None:
+    (tmp_path / "empty.txt").write_bytes(b"")
+    (tmp_path / "korean.txt").write_bytes("x".encode("cp949"))
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    small = api.query_quality_rows({"issueType": "small_file", "limit": 5})["rows"][0]
+    with pytest.raises(RepairPreviewError) as exc_info:
+        api.get_quality_repair_preview({"issueIds": [small["id"]]})
+    assert exc_info.value.reason == "MIXED_OR_INELIGIBLE_SELECTION"
+
+
+def test_quality_repair_batch_limit(tmp_path: Path) -> None:
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    with pytest.raises(RepairPreviewError) as exc_info:
+        api.get_quality_repair_preview({"issueIds": [f"quality:{i}" for i in range(11)]})
+    assert exc_info.value.reason == "BATCH_LIMIT_EXCEEDED"
+
+
+def test_move_preview_blocked_when_repair_pending(tmp_path: Path) -> None:
+    (tmp_path / "korean.txt").write_bytes("안녕".encode("cp949"))
+    (tmp_path / "a.txt").write_text("a", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("b", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    enc_row = _encoding_issue_row(api)
+    api.get_quality_repair_preview({"issueIds": [enc_row["id"]]})
+    dup_page = api.query_review_rows({"viewMode": "action", "limit": 50})
+    file_rows = [r for r in dup_page["rows"] if r.get("rowKind") == "file"]
+    if not file_rows:
+        return
+    with pytest.raises(PreviewApplyError) as exc_info:
+        api.get_move_preview({"type": "explicit_rows", "rowIds": [file_rows[0]["id"]]})
+    assert exc_info.value.reason == "REPAIR_PREVIEW_ACTIVE"
+
+
+def test_repair_preview_blocked_when_move_pending(tmp_path: Path) -> None:
+    (tmp_path / "korean.txt").write_bytes("안녕".encode("cp949"))
+    (tmp_path / "a.txt").write_text("a", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("b", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    dup_page = api.query_review_rows({"viewMode": "action", "limit": 50})
+    file_rows = [
+        r
+        for r in dup_page["rows"]
+        if r.get("rowKind") == "file" and r.get("proposedAction") == "move_duplicate"
+    ]
+    if len(file_rows) < 1:
+        return
+    api.get_move_preview({"type": "explicit_rows", "rowIds": [file_rows[0]["id"]]})
+    enc_row = _encoding_issue_row(api)
+    with pytest.raises(RepairPreviewError) as exc_info:
+        api.get_quality_repair_preview({"issueIds": [enc_row["id"]]})
+    assert exc_info.value.reason == "MOVE_PREVIEW_ACTIVE"
+
+
+def test_quality_repair_stale_file_drift(tmp_path: Path) -> None:
+    path = tmp_path / "korean.txt"
+    path.write_bytes("안녕".encode("cp949"))
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    row = _encoding_issue_row(api)
+    preview = api.get_quality_repair_preview({"issueIds": [row["id"]]})
+    path.write_bytes(b"changed-by-user")
+    with pytest.raises(RepairApplyError) as exc_info:
+        api.apply_quality_repair(
+            {"issueIds": [row["id"]], "repairPreviewToken": preview["repairPreviewToken"]}
+        )
+    assert exc_info.value.reason == "STALE_REPAIR_PREVIEW"
+    assert "changed-by-user" in path.read_bytes().decode("latin-1")

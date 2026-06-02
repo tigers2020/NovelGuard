@@ -7,6 +7,7 @@ import type {
 } from "../../types/quality";
 import { StatChip } from "../../components/ui/StatChip";
 import { QualityIssueGrid } from "./quality/QualityIssueGrid";
+import { RepairSubflowDialog } from "./RepairSubflowDialog";
 
 const issueTabs: { id: QualityIssueType; label: string }[] = [
   { id: "integrity", label: "무결성" },
@@ -29,6 +30,7 @@ export function QualityWorkspace() {
   const [detail, setDetail] = useState<QualityIssueDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [repairOpen, setRepairOpen] = useState(false);
 
   const detailStale = useMemo(
     () => detail !== null && detail.libraryRevision !== libraryRevision,
@@ -121,7 +123,7 @@ export function QualityWorkspace() {
     >
       <section className="shrink-0 rounded-md border border-outline bg-surface p-5">
         <h1 className="text-xl font-bold text-on-surface">품질 · 무결성</h1>
-        <p className="mt-1 text-sm text-on-surface-variant">v1: read-only issue list · repair stub</p>
+        <p className="mt-1 text-sm text-on-surface-variant">품질 이슈 검토 · UTF-8 복구 (단건)</p>
         <div className="mt-4 grid gap-2 sm:grid-cols-3">
           <StatChip label="Integrity" value={quality.integrityIssueCount} tone="danger" />
           <StatChip label="Encoding" value={quality.encodingIssueCount} tone="warn" />
@@ -227,6 +229,16 @@ export function QualityWorkspace() {
                 <dt className="text-muted">Repair</dt>
                 <dd>{detail.repairEligibility.label}</dd>
               </div>
+              {detail.repairEligibility.eligible && !detailStale && (
+                <button
+                  type="button"
+                  data-testid="quality-repair-open"
+                  className="mt-3 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-background hover:bg-primary/90"
+                  onClick={() => setRepairOpen(true)}
+                >
+                  복구 미리보기
+                </button>
+              )}
               {import.meta.env.DEV && (
                 <div>
                   <dt className="text-muted">Raw (dev)</dt>
@@ -244,6 +256,18 @@ export function QualityWorkspace() {
           )}
         </aside>
       </div>
+      <RepairSubflowDialog
+        open={repairOpen}
+        issueId={selected?.id ?? null}
+        snapshotLibraryRevision={libraryRevision}
+        onClose={() => setRepairOpen(false)}
+        onSuccess={() => {
+          void loadPage(null, false);
+          if (selected) {
+            loadDetail(selected);
+          }
+        }}
+      />
     </main>
   );
 }

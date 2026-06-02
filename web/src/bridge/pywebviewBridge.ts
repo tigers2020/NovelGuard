@@ -91,6 +91,18 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
       callBridge(() => call<QualityIssueDetailResponse>(api, "get_quality_issue_detail", issueId), {
         method: "get_quality_issue_detail",
       }),
+    getQualityRepairPreview: (request) =>
+      callBridge(() => call(api, "get_quality_repair_preview", request), {
+        method: "get_quality_repair_preview",
+      }),
+    applyQualityRepair: (request) =>
+      callBridge(() => call(api, "apply_quality_repair", request).then(() => undefined), {
+        method: "apply_quality_repair",
+      }),
+    discardQualityRepairPreview: (request) =>
+      callBridge(() => call(api, "discard_quality_repair_preview", request).then(() => undefined), {
+        method: "discard_quality_repair_preview",
+      }),
     getMovePreview: (selection: SelectionScope) =>
       callBridge(() => call<MovePreviewResult>(api, "get_move_preview", selection), {
         method: "get_move_preview",

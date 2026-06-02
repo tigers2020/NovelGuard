@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from app.bridge_contract import PreviewApplyError
 from app.preview_apply_guard import PreviewApplyGuard
+from app.quality_repair_guard import QualityRepairGuard
 from app.selection_fingerprint import selection_fingerprint
 from app.selection_guards import (
     selection_includes_near_rows,
@@ -32,15 +33,19 @@ class BuildPreviewPlanUseCase:
         self,
         session: LibrarySession,
         guard: PreviewApplyGuard,
+        repair_guard: QualityRepairGuard,
         audit: AuditLog,
         filesystem: FilesystemApplyPort,
     ) -> None:
         self._session = session
         self._guard = guard
+        self._repair_guard = repair_guard
         self._audit = audit
         self._filesystem = filesystem
 
     def execute(self, selection: dict[str, Any]) -> dict[str, Any]:
+        if self._repair_guard.get() is not None:
+            raise PreviewApplyError("REPAIR_PREVIEW_ACTIVE")
         root = self._session.library_root_path()
         if root is None:
             return self._empty_preview(selection)

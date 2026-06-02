@@ -69,6 +69,7 @@ class LibrarySession:
         self._small_file_anomaly_count = 0
         self._total_quality_issue_count = 0
         self._apply_in_progress = False
+        self._has_pending_quality_repair = False
         self._near_groups_by_id: dict[str, NearDuplicateGroup] = {}
         self._relation_groups_by_id: dict[str, RelationGroup] = {}
         self._settings = AppSettings()
@@ -233,6 +234,48 @@ class LibrarySession:
     def set_has_pending_apply(self, value: bool) -> None:
         with self._lock:
             self._has_pending_apply = value
+
+    def set_has_pending_quality_repair(self, value: bool) -> None:
+        with self._lock:
+            self._has_pending_quality_repair = value
+
+    def has_pending_quality_repair(self) -> bool:
+        with self._lock:
+            return self._has_pending_quality_repair
+
+    def repair_session_id(self) -> str:
+        import hashlib
+
+        with self._lock:
+            folder = self._index.folder_path or ""
+        return hashlib.sha256(folder.encode("utf-8")).hexdigest()[:16]
+
+    def quality_issues(self) -> list[Any]:
+        with self._lock:
+            return list(self._index.quality_issues())
+
+    def file_record_for_quality_issue(self, issue: Any) -> FileRecord | None:
+        with self._lock:
+            return self._files_by_id.get(issue.file_id)
+
+    def reanalyze_quality_for_file_ids(self, file_ids: list[str]) -> None:
+        with self._lock:
+            folder = self._index.folder_path
+            if not folder:
+                return
+            target_ids = set(file_ids)
+            remaining = [
+                issue for issue in self._index.quality_issues() if issue.file_id not in target_ids
+            ]
+            new_issues: list[Any] = []
+            for file_id in file_ids:
+                record = self._files_by_id.get(file_id)
+                if record is None:
+                    continue
+                new_issues.extend(analyze_quality(folder, [record]))
+            merged = remaining + new_issues
+            self._index.replace_quality_issues(folder, merged)
+            self._apply_quality_cache(merged)
 
     def first_file_id(self) -> str | None:
         with self._lock:
@@ -490,6 +533,9 @@ class LibrarySession:
     def _rebuild_quality_index(self, folder: str, files: list[FileRecord]) -> None:
         issues = analyze_quality(folder, files)
         self._index.replace_quality_issues(folder, issues)
+        self._apply_quality_cache(issues)
+
+    def _apply_quality_cache(self, issues: list[Any]) -> None:
         self._quality_rows_cache = build_quality_rows(issues, self._files_by_id)
         self._integrity_issue_count = sum(
             1 for row in self._quality_rows_cache if row.get("issueType") == "integrity"

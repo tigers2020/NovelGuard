@@ -36,6 +36,15 @@ import type { DuplicateGroupDetail, ReviewRow } from "../types/review";
 import { buildMockDuplicateGroupDetail } from "./mockDuplicateGroupDetail";
 import { buildMockQualityIssueDetail } from "./mockQualityIssueDetail";
 import type { UpdateReviewDecisionsRequest } from "../types/reviewDecisions";
+import type {
+  ApplyQualityRepairRequest,
+  DiscardQualityRepairPreviewRequest,
+  QualityRepairPreviewRequest,
+  QualityRepairPreviewResult,
+  RepairApplyErrorCode,
+  RepairPreviewErrorCode,
+} from "../types/qualityRepair";
+import { issueSelectionFingerprint, normalizeRepairIssueIds } from "./issueSelectionFingerprint";
 
 const state = {
   activeMode: "resolve" as WorkMode,
@@ -58,12 +67,34 @@ let pendingPreview: {
 let applyInProgress = false;
 let includeRelation = false;
 
+let pendingRepair: {
+  token: string;
+  libraryRevision: number;
+  issueSelectionFingerprint: string;
+  issueIds: string[];
+} | null = null;
+
 function rejectApply(method: string, reason: PreviewApplyErrorCode): never {
   throw new BridgeCallError(`Apply rejected: ${reason}`, {
     code: "rejected",
     method,
     reason,
   });
+}
+
+function rejectRepair(
+  method: string,
+  reason: RepairApplyErrorCode | RepairPreviewErrorCode,
+): never {
+  throw new BridgeCallError(`Repair rejected: ${reason}`, {
+    code: "rejected",
+    method,
+    reason,
+  });
+}
+
+function clearPendingRepair(): void {
+  pendingRepair = null;
 }
 
 function clearPendingPreview(): void {
@@ -325,7 +356,95 @@ export const mockBridge: NovelGuardBridge = {
     return buildMockQualityIssueDetail(issueId, buildQualityRows(), libraryRevision);
   },
 
+  async getQualityRepairPreview(request: QualityRepairPreviewRequest) {
+    const method = "getQualityRepairPreview";
+    if (pendingPreview) {
+      rejectRepair(method, "MOVE_PREVIEW_ACTIVE");
+    }
+    const ids = request.issueIds ?? [];
+    if (ids.length < 1) {
+      rejectRepair(method, "EMPTY_SELECTION");
+    }
+    if (ids.length > 10) {
+      rejectRepair(method, "BATCH_LIMIT_EXCEEDED");
+    }
+    const normalized = normalizeRepairIssueIds(ids.map(String));
+    if (normalized.length !== ids.length) {
+      rejectRepair(method, "MIXED_OR_INELIGIBLE_SELECTION");
+    }
+    const rows = buildQualityRows().filter((r) => normalized.includes(r.id));
+    if (rows.length !== normalized.length) {
+      rejectRepair(method, "MIXED_OR_INELIGIBLE_SELECTION");
+    }
+    for (const row of rows) {
+      if (row.issueType !== "encoding") {
+        rejectRepair(method, "MIXED_OR_INELIGIBLE_SELECTION");
+      }
+    }
+    const token = `repair-preview-${globalThis.crypto.randomUUID()}`;
+    const fp = issueSelectionFingerprint(normalized);
+    pendingRepair = {
+      token,
+      libraryRevision,
+      issueSelectionFingerprint: fp,
+      issueIds: normalized,
+    };
+    const result: QualityRepairPreviewResult = {
+      repairPreviewToken: token,
+      libraryRevision,
+      issueSelectionFingerprint: fp,
+      hasPendingQualityRepair: true,
+      rows: rows.map((row) => ({
+        issueId: row.id,
+        action: "utf8_convert",
+        relativePath: row.path ?? row.name,
+        sourceEncoding: "cp949",
+        encodingConfidence: "high",
+      })),
+      summary: { issueCount: rows.length, operationCount: rows.length },
+    };
+    console.info("[mockBridge] getQualityRepairPreview", normalized);
+    return result;
+  },
+
+  async applyQualityRepair(request: ApplyQualityRepairRequest) {
+    const method = "applyQualityRepair";
+    const token = request.repairPreviewToken?.trim() ?? "";
+    if (!token) {
+      rejectRepair(method, "MISSING_REPAIR_PREVIEW_TOKEN");
+    }
+    if (!pendingRepair) {
+      rejectRepair(method, "NO_PENDING_REPAIR");
+    }
+    if (token !== pendingRepair.token) {
+      rejectRepair(method, "INVALID_REPAIR_PREVIEW_TOKEN");
+    }
+    const fp = issueSelectionFingerprint((request.issueIds ?? []).map(String));
+    if (fp !== pendingRepair.issueSelectionFingerprint) {
+      clearPendingRepair();
+      rejectRepair(method, "ISSUE_SELECTION_CHANGED");
+    }
+    if (libraryRevision !== pendingRepair.libraryRevision) {
+      clearPendingRepair();
+      rejectRepair(method, "STALE_REPAIR_PREVIEW");
+    }
+    clearPendingRepair();
+    libraryRevision += 1;
+    console.info("[mockBridge] applyQualityRepair", request.issueIds);
+  },
+
+  async discardQualityRepairPreview(request: DiscardQualityRepairPreviewRequest) {
+    if (pendingRepair && request.repairPreviewToken === pendingRepair.token) {
+      clearPendingRepair();
+    } else {
+      pendingRepair = null;
+    }
+  },
+
   async getMovePreview(selection) {
+    if (pendingRepair) {
+      rejectApply("getMovePreview", "REPAIR_PREVIEW_ACTIVE" as PreviewApplyErrorCode);
+    }
     const fp = selectionFingerprint(selection);
     const token = `preview-${globalThis.crypto.randomUUID()}`;
     const rev = libraryRevision;

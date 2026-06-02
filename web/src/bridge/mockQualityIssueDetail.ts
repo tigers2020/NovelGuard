@@ -78,10 +78,10 @@ function evidenceForRow(row: QualityRow, kind: QualityKind): IssueEvidence {
 function repairEligibilityForKind(kind: QualityKind) {
   if (kind === "invalid_utf8") {
     return {
-      eligible: false as const,
-      reason: "repair_not_implemented" as const,
+      eligible: true as const,
+      reason: "ready" as const,
       futureAction: "utf8_convert" as const,
-      label: "UTF-8 repair planned (PR-22)",
+      label: "UTF-8 repair available",
     };
   }
   if (kind === "read_error") {

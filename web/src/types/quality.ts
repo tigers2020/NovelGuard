@@ -63,7 +63,7 @@ export type IssueEvidence =
 
 export interface RepairEligibility {
   eligible: false;
-  reason: "repair_not_implemented" | "issue_not_repairable" | "read_error";
+  reason: "repair_not_implemented" | "issue_not_repairable" | "read_error" | "ready";
   futureAction?: "utf8_convert";
   label: string;
 }

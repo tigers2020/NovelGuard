@@ -39,6 +39,18 @@ class PreviewApplyError(ValueError):
         super().__init__(message or reason)
 
 
+class RepairPreviewError(ValueError):
+    def __init__(self, reason: str, message: str | None = None) -> None:
+        self.reason = reason
+        super().__init__(message or reason)
+
+
+class RepairApplyError(ValueError):
+    def __init__(self, reason: str, message: str | None = None) -> None:
+        self.reason = reason
+        super().__init__(message or reason)
+
+
 class ApplyFailedError(ValueError):
     def __init__(
         self,
@@ -224,7 +236,10 @@ def validate_duplicate_group_detail(payload: Any) -> None:
 
 
 _QUALITY_KINDS = frozenset({"empty_file", "tiny_file", "invalid_utf8", "read_error"})
-_REPAIR_REASONS = frozenset({"repair_not_implemented", "issue_not_repairable", "read_error"})
+_REPAIR_REASONS = frozenset(
+    {"repair_not_implemented", "issue_not_repairable", "read_error", "ready"}
+)
+_ENCODING_CONFIDENCE = frozenset({"high", "low"})
 
 
 def validate_quality_issue_detail(payload: Any) -> None:
@@ -292,12 +307,54 @@ def validate_quality_issue_detail(payload: Any) -> None:
     repair = detail.get("repairEligibility")
     if not isinstance(repair, dict):
         raise PageContractError("detail.repairEligibility must be a dict")
-    if repair.get("eligible") is not False:
-        raise PageContractError("detail.repairEligibility.eligible must be false in PR-21")
+    if not isinstance(repair.get("eligible"), bool):
+        raise PageContractError("detail.repairEligibility.eligible must be bool")
     if repair.get("reason") not in _REPAIR_REASONS:
         raise PageContractError("detail.repairEligibility.reason invalid")
     if not isinstance(repair.get("label"), str):
         raise PageContractError("detail.repairEligibility.label must be string")
+
+
+def validate_quality_repair_preview(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise PageContractError("QualityRepairPreviewResult must be a dict")
+    for key in (
+        "repairPreviewToken",
+        "libraryRevision",
+        "issueSelectionFingerprint",
+        "hasPendingQualityRepair",
+        "rows",
+        "summary",
+    ):
+        if key not in payload:
+            raise PageContractError(f"QualityRepairPreviewResult missing {key}")
+    if payload.get("hasPendingQualityRepair") is not True:
+        raise PageContractError("hasPendingQualityRepair must be true")
+    if not isinstance(payload.get("libraryRevision"), int):
+        raise PageContractError("libraryRevision must be int")
+    summary = payload.get("summary")
+    if not isinstance(summary, dict):
+        raise PageContractError("summary must be a dict")
+    for key in ("issueCount", "operationCount"):
+        if not isinstance(summary.get(key), int):
+            raise PageContractError(f"summary.{key} must be int")
+    rows = payload.get("rows")
+    if not isinstance(rows, list):
+        raise PageContractError("rows must be a list")
+    for row in rows:
+        if not isinstance(row, dict):
+            raise PageContractError("preview row must be a dict")
+        for key in ("issueId", "action", "relativePath", "sourceEncoding", "encodingConfidence"):
+            if key not in row:
+                raise PageContractError(f"preview row missing {key}")
+        if row.get("action") != "utf8_convert":
+            raise PageContractError("preview row action must be utf8_convert")
+        if row.get("encodingConfidence") not in _ENCODING_CONFIDENCE:
+            raise PageContractError("encodingConfidence invalid")
+        if row.get("encodingConfidence") == "low" and not isinstance(
+            row.get("encodingWarning"), str
+        ):
+            raise PageContractError("low confidence row requires encodingWarning")
 
 
 def validate_selection_scope(selection: Any) -> None:
