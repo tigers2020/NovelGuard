@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { validQualityRowsPage } from "./fixtures";
 import { PageContractError } from "./reviewPageContract";
-import { validateQualityRowsPage } from "./qualityPageContract";
+import { clampQualityQueryLimit, validateQualityRowsPage } from "./qualityPageContract";
+
+describe("clampQualityQueryLimit", () => {
+  it("caps limit at 200", () => {
+    expect(clampQualityQueryLimit({ issueType: "integrity", limit: 999 })).toBe(200);
+  });
+});
 
 describe("validateQualityRowsPage", () => {
   it("accepts valid page", () => {

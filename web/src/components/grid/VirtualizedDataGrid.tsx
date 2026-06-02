@@ -223,7 +223,7 @@ export function VirtualizedDataGrid<T>({
                   key={row.id}
                   role="button"
                   tabIndex={0}
-                  data-testid={`grid-row-${String(original.id)}`}
+                  data-testid={`grid-row-${row.id}`}
                   onClick={() => onSelectRow?.(original)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {

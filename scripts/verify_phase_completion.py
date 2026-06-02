@@ -1,4 +1,4 @@
-"""Verification pipeline: pytest → ruff → mypy → black → npm lint (fail-fast)."""
+"""Verification pipeline: pytest → ruff → mypy → black → npm lint → npm build (fail-fast)."""
 
 from __future__ import annotations
 
