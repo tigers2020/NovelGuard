@@ -47,6 +47,14 @@ class ApplyResolvedActionsUseCase:
             self._session.set_has_pending_apply(False)
             raise PreviewApplyError("STALE_PREVIEW")
 
+        rows_by_id = {
+            row["id"]: row for row in self._session.review_rows_snapshot() if row.get("id")
+        }
+        for operation in operations:
+            row = rows_by_id.get(operation.row_id)
+            if row is not None and row.get("type") == "near":
+                raise PreviewApplyError("NEAR_DUPLICATE_APPLY_UNSUPPORTED")
+
         root = self._session.library_root_path()
         if root is None:
             self._finish_empty()

@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AppSnapshot } from "../../types/snapshot";
 import type { NovelGuardBridge } from "../../bridge/NovelGuardBridge";
-import { BridgeCallError } from "../../bridge/bridgeErrors";
 import type { BridgeHealth, BridgeKind } from "../../bridge/bridgeHealth";
 import { mockBridge } from "../../bridge/mockBridge";
 import {
@@ -9,6 +8,7 @@ import {
   BridgeKindContext,
   HealthContext,
   SnapshotContext,
+  SnapshotRefreshContext,
 } from "./snapshotContexts";
 import {
   createPywebviewBridge,
@@ -50,6 +50,22 @@ export function SnapshotProvider({
     pyState === "broken" ? "pywebview.api is missing" : undefined,
   );
 
+  const refreshSnapshot = useCallback(async () => {
+    if (pyState === "broken") {
+      return;
+    }
+    try {
+      const next = await bridge.getSnapshot();
+      setSnapshot(next);
+      setHealth("ok");
+      setConnectionDetail(undefined);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Snapshot failed";
+      setHealth("degraded");
+      setConnectionDetail(message);
+    }
+  }, [bridge, pyState]);
+
   useEffect(() => {
     if (pyState === "broken") {
       return;
@@ -58,22 +74,10 @@ export function SnapshotProvider({
     let alive = true;
 
     const tick = async () => {
-      try {
-        const next = await bridge.getSnapshot();
-        if (!alive) {
-          return;
-        }
-        setSnapshot(next);
-        setHealth("ok");
-        setConnectionDetail(undefined);
-      } catch (err) {
-        if (!alive) {
-          return;
-        }
-        const message = err instanceof Error ? err.message : "Snapshot failed";
-        setHealth(err instanceof BridgeCallError && err.code === "timeout" ? "degraded" : "degraded");
-        setConnectionDetail(message);
+      if (!alive) {
+        return;
       }
+      await refreshSnapshot();
     };
 
     void tick();
@@ -82,7 +86,7 @@ export function SnapshotProvider({
       alive = false;
       window.clearInterval(id);
     };
-  }, [bridge, pyState]);
+  }, [pyState, refreshSnapshot]);
 
   if (pyState === "broken") {
     return (
@@ -114,11 +118,13 @@ export function SnapshotProvider({
 
   return (
     <BridgeContext.Provider value={bridge}>
-      <SnapshotContext.Provider value={snapshot}>
-        <HealthContext.Provider value={health}>
-          <BridgeKindContext.Provider value={kind}>{children}</BridgeKindContext.Provider>
-        </HealthContext.Provider>
-      </SnapshotContext.Provider>
+      <SnapshotRefreshContext.Provider value={refreshSnapshot}>
+        <SnapshotContext.Provider value={snapshot}>
+          <HealthContext.Provider value={health}>
+            <BridgeKindContext.Provider value={kind}>{children}</BridgeKindContext.Provider>
+          </HealthContext.Provider>
+        </SnapshotContext.Provider>
+      </SnapshotRefreshContext.Provider>
     </BridgeContext.Provider>
   );
 }

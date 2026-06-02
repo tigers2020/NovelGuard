@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import threading
 from collections.abc import Callable
 from pathlib import Path
@@ -20,10 +21,12 @@ from application.review_rows_builder import build_review_rows
 from application.review_snapshot_counts import file_row_status_counts
 from application.review_state_merge import rebuild_rows_with_review_state
 from domain.duplicate_exact import find_exact_duplicate_groups
+from domain.duplicate_near import NearDuplicateGroup
 from domain.models import FileRecord
 
 _MAX_QUERY_LIMIT = 200
 _DEFAULT_QUERY_LIMIT = 100
+_LOGGER = logging.getLogger(__name__)
 
 
 class LibrarySession:
@@ -62,6 +65,7 @@ class LibrarySession:
         self._small_file_anomaly_count = 0
         self._total_quality_issue_count = 0
         self._apply_in_progress = False
+        self._near_groups_by_id: dict[str, NearDuplicateGroup] = {}
 
     def select_folder(self, path: str | None = None) -> None:
         folder = path
@@ -86,6 +90,7 @@ class LibrarySession:
             self._index.replace_files(folder, [])
             self._index.replace_quality_issues(folder, [])
             self._index.clear_review_state(folder)
+            self._index.clear_near_duplicate_results(folder)
             self._library_revision += 1
             self._scan_state = "ready"
             self._scan_last_run = None
@@ -166,9 +171,19 @@ class LibrarySession:
             build_duplicate_group_detail,
             index_quality_rows_by_path,
         )
+        from application.near_group_detail import build_near_group_detail
 
         with self._lock:
             quality_by_path = index_quality_rows_by_path(self._quality_rows_cache)
+            if group_id.startswith("near:"):
+                near_group = self._near_groups_by_id.get(group_id)
+                return build_near_group_detail(
+                    group_id,
+                    near_group=near_group,
+                    review_rows=self._review_rows_cache,
+                    files_by_id=self._files_by_id,
+                    quality_by_path=quality_by_path,
+                )
             return build_duplicate_group_detail(
                 group_id,
                 review_rows=self._review_rows_cache,
@@ -219,14 +234,15 @@ class LibrarySession:
             return list(self._review_rows_cache)
 
     def file_record_for_review_row(self, row: dict[str, Any]) -> FileRecord | None:
+        from application.review_state_merge import _file_id_from_row_id
+
         with self._lock:
             row_id = str(row.get("id", ""))
-            if row_id.startswith("file:"):
-                parts = row_id.split(":", 2)
-                if len(parts) == 3:
-                    found = self._files_by_id.get(parts[2])
-                    if found is not None:
-                        return found
+            file_id = _file_id_from_row_id(row_id)
+            if file_id:
+                found = self._files_by_id.get(file_id)
+                if found is not None:
+                    return found
             path = row.get("path")
             if isinstance(path, str):
                 for record in self._files_by_id.values():
@@ -293,9 +309,14 @@ class LibrarySession:
             self._index.replace_files(folder, collected)
             self._rebuild_review_index(collected)
             self._rebuild_quality_index(folder, collected)
+            try:
+                self._run_near_duplicate_phase(folder, collected)
+            except Exception:
+                _LOGGER.exception("near duplicate detection failed")
 
     def _clear_review_cache(self) -> None:
         self._review_rows_cache = []
+        self._near_groups_by_id = {}
         self._duplicate_group_count = 0
         self._queue_count = 0
         self._approved_count = 0
@@ -330,6 +351,59 @@ class LibrarySession:
         self._queue_count = queue
         self._approved_count = approved
         self._conflict_count = conflict
+
+    def _strip_near_rows(self) -> None:
+        self._review_rows_cache = [
+            row for row in self._review_rows_cache if row.get("type") != "near"
+        ]
+
+    def _run_near_duplicate_phase(self, folder: str, files: list[FileRecord]) -> None:
+        from application.near_batch_id import content_set_digest, make_near_batch_id
+        from application.near_duplicate_detect import (
+            build_exact_group_by_file_id,
+            run_near_duplicate_detection,
+        )
+        from application.near_review_rows_builder import build_near_review_rows
+        from application.review_state_merge import merge_review_state
+        from domain.duplicate_exact import find_exact_duplicate_groups
+
+        root = Path(folder)
+        self._strip_near_rows()
+        self._near_groups_by_id = {}
+
+        near_batch_id = make_near_batch_id(
+            library_revision=self._library_revision,
+            folder_path=folder,
+            content_set_digest_value=content_set_digest(files),
+            scan_completed_at=self._scan_last_run,
+        )
+        exact_group_by_file_id = build_exact_group_by_file_id(files)
+        result = run_near_duplicate_detection(
+            root=root,
+            files=files,
+            near_batch_id=near_batch_id,
+            exact_group_by_file_id=exact_group_by_file_id,
+        )
+        self._index.replace_near_duplicate_results(folder, result)
+        self._near_groups_by_id = {group.group_id: group for group in result.groups}
+
+        near_skeleton = build_near_review_rows(list(result.groups), self._files_by_id)
+        stored = self._index.load_review_state(folder)
+        exact_groups = find_exact_duplicate_groups(files)
+        near_rows = merge_review_state(
+            near_skeleton,
+            stored,
+            groups=exact_groups,
+            files_by_id=self._files_by_id,
+        )
+        self._review_rows_cache.extend(near_rows)
+
+        valid_group_ids = {group.group_id for group in exact_groups} | set(
+            self._near_groups_by_id.keys()
+        )
+        valid_file_ids = {file_record.id for file_record in files}
+        self._index.prune_review_state(folder, valid_group_ids, valid_file_ids)
+        self._refresh_resolve_counts()
 
     def _rebuild_quality_index(self, folder: str, files: list[FileRecord]) -> None:
         issues = analyze_quality(folder, files)
@@ -393,6 +467,10 @@ class LibrarySession:
             self._index.replace_files(folder, collected)
             self._rebuild_review_index(collected)
             self._rebuild_quality_index(folder, collected)
+            try:
+                self._run_near_duplicate_phase(folder, collected)
+            except Exception:
+                _LOGGER.exception("near duplicate detection failed")
             self._scan_state = "success"
             self._scan_last_run = scan_timestamp()
             self._library_revision += 1

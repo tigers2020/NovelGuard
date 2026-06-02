@@ -2,7 +2,12 @@ import type { NovelGuardBridge } from "./NovelGuardBridge";
 import { BridgeCallError } from "./bridgeErrors";
 import { mockBridge } from "./mockBridge";
 
-export type TestBridgeFailMode = "none" | "snapshot" | "queryReviewRows" | "getMovePreview";
+export type TestBridgeFailMode =
+  | "none"
+  | "snapshot"
+  | "queryReviewRows"
+  | "queryQualityRows"
+  | "getMovePreview";
 
 export function createTestBridge(fail: TestBridgeFailMode): NovelGuardBridge {
   const base = mockBridge;
@@ -24,6 +29,12 @@ export function createTestBridge(fail: TestBridgeFailMode): NovelGuardBridge {
       }
       return base.queryReviewRows(query);
     },
+    async queryQualityRows(query) {
+      if (fail === "queryQualityRows") {
+        failCall("query_quality_rows");
+      }
+      return base.queryQualityRows(query);
+    },
     async getMovePreview(selection) {
       if (fail === "getMovePreview") {
         failCall("get_move_preview");
@@ -42,6 +53,7 @@ export function readTestBridgeFailMode(): TestBridgeFailMode {
   if (
     mode === "snapshot" ||
     mode === "queryReviewRows" ||
+    mode === "queryQualityRows" ||
     mode === "getMovePreview"
   ) {
     return mode;

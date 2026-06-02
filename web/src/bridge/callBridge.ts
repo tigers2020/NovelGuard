@@ -1,4 +1,5 @@
 import { BridgeCallError } from "./bridgeErrors";
+import { toBridgeCallError } from "./parseBridgeRejection";
 
 export async function callBridge<T>(
   fn: () => Promise<T>,
@@ -23,14 +24,7 @@ export async function callBridge<T>(
   try {
     return await Promise.race([fn(), timeoutPromise]);
   } catch (err) {
-    if (err instanceof BridgeCallError) {
-      throw err;
-    }
-    throw new BridgeCallError(`Bridge call failed: ${options.method}`, {
-      code: "rejected",
-      method: options.method,
-      cause: err,
-    });
+    throw toBridgeCallError(err, options.method);
   } finally {
     if (timer) {
       clearTimeout(timer);

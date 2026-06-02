@@ -13,6 +13,31 @@ describe("callBridge", () => {
     ).rejects.toBeInstanceOf(BridgeCallError);
   });
 
+  it("maps PreviewApplyError reason from pywebview message", async () => {
+    await expect(
+      callBridge(() => Promise.reject(new Error("STALE_PREVIEW")), {
+        method: "apply_resolved_actions",
+        timeoutMs: 50,
+      }),
+    ).rejects.toMatchObject({ reason: "STALE_PREVIEW", code: "rejected" });
+  });
+
+  it("maps ApplyFailedError JSON payload with details", async () => {
+    const payload = JSON.stringify({
+      reason: "APPLY_FAILED",
+      details: { partialSuccess: true, succeededCount: 2 },
+    });
+    await expect(
+      callBridge(() => Promise.reject(new Error(payload)), {
+        method: "apply_resolved_actions",
+        timeoutMs: 50,
+      }),
+    ).rejects.toMatchObject({
+      reason: "APPLY_FAILED",
+      details: { partialSuccess: true, succeededCount: 2 },
+    });
+  });
+
   it("times out slow calls", async () => {
     await expect(
       callBridge(

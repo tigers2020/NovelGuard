@@ -6,8 +6,10 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from app.bridge_contract import PreviewApplyError
 from app.preview_apply_guard import PreviewApplyGuard
 from app.selection_fingerprint import selection_fingerprint
+from app.selection_guards import selection_includes_near_rows
 from app.selection_resolve import resolve_selection_rows
 from application.audit_log import AuditLog
 from application.library_session import LibrarySession
@@ -41,6 +43,8 @@ class BuildPreviewPlanUseCase:
             return self._empty_preview(selection)
 
         selected_rows = resolve_selection_rows(self._session.review_rows_snapshot(), selection)
+        if selection_includes_near_rows(selected_rows):
+            raise PreviewApplyError("NEAR_DUPLICATE_APPLY_UNSUPPORTED")
         operations: list[PreviewOperation] = []
         preview_rows: list[dict[str, str]] = []
         conflict_count = 0

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from application.ports.review_state import LoadedReviewState
+from domain.duplicate_near import NearDuplicateResult
 from domain.models import FileRecord
 from domain.quality import QualityIssue
 
@@ -52,3 +53,11 @@ class LibraryIndexPort(Protocol):
         valid_group_ids: set[str],
         valid_file_ids: set[str],
     ) -> None: ...
+
+    def replace_near_duplicate_results(
+        self, folder_path: str, result: NearDuplicateResult
+    ) -> None: ...
+
+    def load_near_duplicate_result(self, folder_path: str) -> NearDuplicateResult | None: ...
+
+    def clear_near_duplicate_results(self, folder_path: str) -> None: ...

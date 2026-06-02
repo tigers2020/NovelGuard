@@ -16,7 +16,7 @@ parent_spec: docs/superpowers/specs/000-2026-06-01-novelguard-ui-overhaul-design
 | Contract / E2E / grid perf (PR-10..12) | **Done** |
 | Preview token & stale apply (PR-13) | **Done** |
 | Greenfield library session (PR-14a..14d) | **Done** |
-| **Next** | **PR-19** — Near duplicate detection (spec TBD) |
+| **Next** | **PR-20** — Relation / filename-blocking signals (spec TBD) |
 
 Verification baseline: `python scripts/verify_phase_completion.py` (recorded in completed plans).
 
@@ -81,7 +81,7 @@ Sources: [002 greenfield spec § Out of scope](../specs/002-2026-06-01-novelguar
 | **PR-16** | Resolve UI real apply outcome | UI shows real apply results; revision/errors after apply | A | **Done** — [004 spec](../specs/004-2026-06-01-resolve-ui-apply-outcome-design.md) |
 | **PR-17** | Review state persistence | Keeper / approved / conflict state saved; snapshot counts truthful | B | **Done** — [005 spec](../specs/005-2026-06-01-review-state-persistence-design.md) · [011 plan](../plans/011-2026-06-01-pr17-review-state-persistence.md) |
 | **PR-18** | Duplicate group detail panel | `getDuplicateGroupDetail` + DetailPanel on real group data | B | **Done** — [006 spec](../specs/006-2026-06-01-duplicate-group-detail-design.md) · [012 plan](../plans/012-2026-06-01-pr18-duplicate-group-detail.md) |
-| **PR-19** | Near duplicate detection | Similar-content duplicate candidates (algorithm TBD) | C | Not written |
+| **PR-19** | Near duplicate detection | Similar-content duplicate candidates (n-gram v1) | C | **Done** — [007 spec](../specs/007-2026-06-01-near-duplicate-detection-design.md) · [013 plan](../plans/013-2026-06-01-pr19-near-duplicate-detection.md) |
 | **PR-20** | Relation / filename-blocking signals | Title/filename relation grouping candidates | C | Not written |
 
 **Quality track (intentionally after PR-20):**
@@ -235,7 +235,7 @@ Adjust only via roadmap changelog + explicit product decision.
 |----------|----------|-------------------------|
 | **P0** | PR-15 real apply | `specs/003-2026-06-01-real-apply-use-cases-design.md` |
 | P1 | PR-17 review state | `specs/005-2026-06-01-review-state-persistence-design.md` (**draft**) |
-| P2 | PR-19 near duplicate | `specs/005-2026-06-01-near-duplicate-detection-design.md` (name TBD) |
+| **P0** | PR-19 near duplicate | [007 spec](../specs/007-2026-06-01-near-duplicate-detection-design.md) approved · [013 plan](../plans/013-2026-06-01-pr19-near-duplicate-detection.md) draft |
 | P3 | PR-24 packaging | `specs/006-2026-06-01-packaging-design.md` (name TBD) |
 
 PR-16 may share PR-15 spec or get a thin follow-on spec — decide in `003` spec review.
@@ -281,6 +281,8 @@ PR-17..20 Quality detail → repair preview → repair apply → finalize
 | 2026-06-01 | PR-18 spec `006` + plan `012` drafted (Wave B duplicate detail) |
 | 2026-06-01 | PR-18 grill-me: `not_found` union, `MemberIntegrity`, post-mutation refresh; spec+plan **approved** |
 | 2026-06-01 | PR-18 implemented: typed detail DTO, cache-based builder, DetailPanel + review commands |
+| 2026-06-01 | PR-19 spec `007` drafted (near-ngram-v1); awaiting grill-me + approval |
+| 2026-06-01 | PR-19 spec `007` **approved** after grill-me (post-scan, results-only, shared review, apply reject) |
 
 ---
 

@@ -7,6 +7,7 @@ import {
   BridgeKindContext,
   HealthContext,
   SnapshotContext,
+  SnapshotRefreshContext,
 } from "./snapshotContexts";
 
 export function useBridge(): NovelGuardBridge {
@@ -19,6 +20,14 @@ export function useSnapshot(): AppSnapshot {
     throw new Error("useSnapshot must be used within SnapshotProvider");
   }
   return snapshot;
+}
+
+export function useRefreshSnapshot(): () => Promise<void> {
+  const refresh = useContext(SnapshotRefreshContext);
+  if (!refresh) {
+    throw new Error("useRefreshSnapshot must be used within SnapshotProvider");
+  }
+  return refresh;
 }
 
 export function useBridgeHealth(): BridgeHealth {
