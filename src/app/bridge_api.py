@@ -142,6 +142,12 @@ class BridgeApi:
             self._invalidate_pending_apply()
         return result
 
+    def get_app_setting(self, key: str) -> bool:
+        return self._session.get_app_setting(key)
+
+    def set_app_setting(self, key: str, value: bool) -> None:
+        self._session.set_app_setting(key, value)
+
     def discard_move_preview(self, payload: dict[str, Any]) -> None:
         token = (payload.get("previewToken") or "").strip()
         pending = self._guard.get()

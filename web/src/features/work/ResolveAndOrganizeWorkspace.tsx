@@ -36,7 +36,7 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
   const resolve = snapshot.work.resolve;
 
   const [viewMode, setViewMode] = useState<ReviewViewMode>("action");
-  const [rowTypeFilter, setRowTypeFilter] = useState<"exact" | "near" | "all">("exact");
+  const [rowTypeFilter, setRowTypeFilter] = useState<"exact" | "near" | "relation" | "all">("exact");
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [filteredCount, setFilteredCount] = useState(0);
@@ -56,7 +56,8 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
   const rowTypeFilterTypes = useMemo((): ReviewRowType[] | undefined => {
     if (rowTypeFilter === "exact") return ["exact"];
     if (rowTypeFilter === "near") return ["near"];
-    return ["exact", "near"];
+    if (rowTypeFilter === "relation") return ["relation"];
+    return ["exact", "near", "relation"];
   }, [rowTypeFilter]);
 
   const currentQuery = useMemo<ReviewRowsQuery>(() => {
@@ -169,11 +170,23 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
       ? explicitSelection
       : { type: "current_query", query: currentQuery, excludeRowIds: [] };
 
-  const previewIncludesNear = useMemo(() => {
+  const previewBlockedReason = useMemo(() => {
     if (explicitIds.length > 0) {
-      return rows.some((row) => explicitIds.includes(row.id) && row.type === "near");
+      const selected = rows.filter((row) => explicitIds.includes(row.id));
+      if (selected.some((row) => row.type === "near")) {
+        return "Near duplicate groups are review-only in PR-19 and cannot be applied.";
+      }
+      if (selected.some((row) => row.type === "relation")) {
+        return "Relation groups are review-only in PR-20 and cannot be applied.";
+      }
+    } else if (rowTypeFilter === "near") {
+      return "Near duplicate groups are review-only in PR-19 and cannot be applied.";
+    } else if (rowTypeFilter === "relation") {
+      return "Relation groups are review-only in PR-20 and cannot be applied.";
+    } else if (rowTypeFilter === "all") {
+      return "Review-only row types are selected in the current filter.";
     }
-    return rowTypeFilter !== "exact";
+    return undefined;
   }, [explicitIds, rows, rowTypeFilter]);
 
   const runDetailReviewCommand = useCallback(
@@ -262,7 +275,8 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
             [
               ["exact", "Exact only"],
               ["near", "Near only"],
-              ["all", "Exact + Near"],
+              ["relation", "Relation only"],
+              ["all", "All types"],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -348,12 +362,8 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
         onApprove={() => void runBatchCommand("approve")}
         onExclude={() => void runBatchCommand("exclude")}
         onPreview={() => onOpenPreview(previewSelection)}
-        previewDisabled={previewIncludesNear}
-        previewDisabledReason={
-          previewIncludesNear
-            ? "Near duplicate groups are review-only in PR-19 and cannot be applied."
-            : undefined
-        }
+        previewDisabled={Boolean(previewBlockedReason)}
+        previewDisabledReason={previewBlockedReason}
       />
     </main>
   );

@@ -55,6 +55,7 @@ let pendingPreview: {
 } | null = null;
 
 let applyInProgress = false;
+let includeRelation = false;
 
 function rejectApply(method: string, reason: PreviewApplyErrorCode): never {
   throw new BridgeCallError(`Apply rejected: ${reason}`, {
@@ -427,6 +428,19 @@ export const mockBridge: NovelGuardBridge = {
     } else {
       state.hasPendingApply = false;
       pendingPreview = null;
+    }
+  },
+
+  async getAppSetting(key: string) {
+    if (key === "include_relation") {
+      return includeRelation;
+    }
+    return false;
+  },
+
+  async setAppSetting(key: string, value: boolean) {
+    if (key === "include_relation") {
+      includeRelation = value;
     }
   },
 };

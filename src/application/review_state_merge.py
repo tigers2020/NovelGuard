@@ -40,8 +40,10 @@ def merge_review_state(
 
         group = members_by_group.get(group_id)
         if group is None:
-            if isinstance(group_id, str) and group_id.startswith("near:"):
-                merged.append(_merge_near_row(updated, group_id, stored, files_by_id))
+            if isinstance(group_id, str) and (
+                group_id.startswith("near:") or group_id.startswith("relation:")
+            ):
+                merged.append(_merge_non_exact_row(updated, group_id, stored, files_by_id))
             else:
                 merged.append(updated)
             continue
@@ -84,7 +86,7 @@ def merge_review_state(
     return merged
 
 
-def _merge_near_row(
+def _merge_non_exact_row(
     row: dict[str, Any],
     group_id: str,
     stored: LoadedReviewState,
