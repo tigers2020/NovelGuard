@@ -1,0 +1,2 @@
+Beta fixture standalone file.
+Different content for non-duplicate smoke paths.
