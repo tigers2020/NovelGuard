@@ -1,4 +1,6 @@
 import type { NovelGuardBridge } from "./NovelGuardBridge";
+import { emptyFileRowsPage } from "../types/fileRows";
+import type { FileRowsQuery } from "../types/fileRows";
 import type { AppSnapshot, WorkMode } from "../types/snapshot";
 import type { ReviewRowsQuery } from "../types/review";
 import type { SelectionScope } from "../types/selection";
@@ -397,6 +399,10 @@ export const mockBridge: NovelGuardBridge = {
     };
     validateReviewRowsPage(page);
     return page;
+  },
+
+  async queryFileRows(query: FileRowsQuery) {
+    return emptyFileRowsPage(query.cursor ?? null);
   },
 
   async queryQualityRows(query) {

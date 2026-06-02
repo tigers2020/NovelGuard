@@ -24,6 +24,7 @@ import type {
 } from "../types/finalize";
 import type { SelectionScope } from "../types/selection";
 import type { AppInfo } from "../types/appInfo";
+import type { FileRowsPage, FileRowsQuery } from "../types/fileRows";
 
 export interface NovelGuardBridge {
   getAppInfo(): Promise<AppInfo>;
@@ -33,6 +34,7 @@ export interface NovelGuardBridge {
   cancelRun(): Promise<void>;
   setWorkMode(mode: WorkMode): Promise<void>;
   queryReviewRows(query: ReviewRowsQuery): Promise<ReviewRowsPage>;
+  queryFileRows(query: FileRowsQuery): Promise<FileRowsPage>;
   queryQualityRows(query: QualityRowsQuery): Promise<QualityRowsPage>;
   getDuplicateGroupDetail(groupId: string): Promise<DuplicateGroupDetail>;
   getQualityIssueDetail(issueId: string): Promise<QualityIssueDetailResponse>;
