@@ -33,11 +33,11 @@ npm run lint
 npm run build
 ```
 
-Output: `web/dist/`
+Output: `web/build/`
 
 ## Desktop (pywebview smoke)
 
-Requires built `web/dist/` and optional dependency:
+Requires built `web/build/` and optional dependency:
 
 ```bash
 pip install -e ".[gui]"
