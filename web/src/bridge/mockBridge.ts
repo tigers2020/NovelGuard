@@ -696,4 +696,16 @@ export const mockBridge: NovelGuardBridge = {
   async cancelFinalize() {
     state.pipelineRunning = false;
   },
+
+  async getAppInfo() {
+    return {
+      appName: "NovelGuard",
+      version: "0.24.0",
+      buildType: "dev",
+      gitCommit: null,
+      builtAt: null,
+      frontendBuild: "web/build",
+      pythonRuntime: "3.12.0",
+    };
+  },
 };

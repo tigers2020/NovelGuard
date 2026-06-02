@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from app import version
 from app.apply_quality_repair import ApplyQualityRepairUseCase
 from app.apply_resolved_actions import ApplyResolvedActionsUseCase
 from app.bridge_contract import (
@@ -12,6 +13,7 @@ from app.bridge_contract import (
     PreviewApplyError,
     RepairApplyError,
     clamp_query_limit,
+    validate_app_info,
     validate_app_snapshot,
     validate_duplicate_group_detail,
     validate_finalize_result,
@@ -197,6 +199,11 @@ class BridgeApi:
         if result.get("updatedCount", 0) > 0:
             self._invalidate_pending_apply()
         return result
+
+    def get_app_info(self) -> dict[str, Any]:
+        payload = version.get_app_info()
+        validate_app_info(payload)
+        return payload
 
     def get_app_setting(self, key: str) -> bool:
         return self._session.get_app_setting(key)

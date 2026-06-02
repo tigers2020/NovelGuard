@@ -31,10 +31,12 @@ describe("bridge parity", () => {
   });
 
   it("exports stable method list", () => {
+    expect(NOVEL_GUARD_BRIDGE_METHODS).toContain("getAppInfo");
     expect(NOVEL_GUARD_BRIDGE_METHODS).toContain("getSnapshot");
     expect(NOVEL_GUARD_BRIDGE_METHODS).toContain("queryQualityRows");
     expect(NOVEL_GUARD_BRIDGE_METHODS).toContain("applyResolvedActions");
     expect(NOVEL_GUARD_BRIDGE_METHODS).toContain("discardMovePreview");
+    expect(PYWEBVIEW_API_METHODS).toContain("get_app_info");
     expect(PYWEBVIEW_API_METHODS).toContain("get_snapshot");
     expect(PYWEBVIEW_API_METHODS).toContain("query_quality_rows");
     expect(PYWEBVIEW_API_METHODS).toContain("discard_move_preview");

@@ -23,8 +23,10 @@ import type {
   RunFinalizeRequest,
 } from "../types/finalize";
 import type { SelectionScope } from "../types/selection";
+import type { AppInfo } from "../types/appInfo";
 
 export interface NovelGuardBridge {
+  getAppInfo(): Promise<AppInfo>;
   getSnapshot(): Promise<AppSnapshot>;
   selectFolder(): Promise<void>;
   startScan(options?: Record<string, unknown>): Promise<void>;

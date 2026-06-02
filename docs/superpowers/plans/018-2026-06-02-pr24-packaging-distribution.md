@@ -148,10 +148,11 @@
 
 **Files:** `src/app/version.py`, generated/copied `web` artifact, bridge or snapshot field
 
-- [ ] `version.py` with `APP_VERSION`, `BUILD_TYPE`, optional git commit / built-at from package script
-- [ ] Bridge `get_app_info()` **or** snapshot `app.version` — pick one, document in packaging-windows.md
-- [ ] Package script stamps `builtAt` / `gitCommit` when available
-- [ ] UI: minimal About/diagnostics surface (existing settings or footer — no new IA)
+- [x] `src/app/version.py` — `get_app_info()`, `apply_build_stamp()` for Task 7
+- [x] Bridge `get_app_info()` + `validate_app_info`
+- [x] Frontend `AppInfo` type, parity, mock/pywebview adapters
+- [x] Settings placeholder: `AppInfoDiagnostics` read-only row
+- [x] Contract test `test_get_app_info_returns_required_keys`
 
 ---
 
