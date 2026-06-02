@@ -19,7 +19,7 @@ prerequisite: PR-24 packaging complete; PR-23 finalize UX stable
 
 ## Status
 
-**Approved** (2026-06-02) — grill-me **B1–B5** + **LOCK-B1..B5** + G1–G10 locked below. Implementation per plan 019 (not written).
+**Approved** (2026-06-02) — implemented per [plan 019](../plans/019-2026-06-02-pr25-shell-filedock.md); `verify_phase_completion.py` PASS (2026-06-02).
 
 ## Scope sentence
 
