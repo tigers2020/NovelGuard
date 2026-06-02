@@ -223,6 +223,83 @@ def validate_duplicate_group_detail(payload: Any) -> None:
             raise PageContractError("member integrity.issueCount must be int")
 
 
+_QUALITY_KINDS = frozenset({"empty_file", "tiny_file", "invalid_utf8", "read_error"})
+_REPAIR_REASONS = frozenset({"repair_not_implemented", "issue_not_repairable", "read_error"})
+
+
+def validate_quality_issue_detail(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise PageContractError("QualityIssueDetailResponse must be a dict")
+    status = payload.get("status")
+    if status == "stale":
+        raise PageContractError("QualityIssueDetailResponse must not use status stale in PR-21")
+    if status == "not_found":
+        if payload.get("message") != "quality_issue_not_found":
+            raise PageContractError("not_found message must be quality_issue_not_found")
+        if not isinstance(payload.get("id"), str):
+            raise PageContractError("not_found id must be a string")
+        return
+    if status != "ok":
+        raise PageContractError("QualityIssueDetailResponse.status must be ok or not_found")
+
+    detail = payload.get("detail")
+    if not isinstance(detail, dict):
+        raise PageContractError("ok response requires detail object")
+
+    for key in (
+        "id",
+        "libraryRevision",
+        "issueType",
+        "name",
+        "path",
+        "encoding",
+        "integrity",
+        "severity",
+        "suggestedAction",
+        "file",
+        "evidence",
+        "repairEligibility",
+    ):
+        if key not in detail:
+            raise PageContractError(f"QualityIssueDetail.detail missing {key}")
+
+    if detail.get("issueType") not in ("integrity", "encoding", "small_file"):
+        raise PageContractError("detail.issueType invalid")
+    if detail.get("severity") not in ("warning", "error"):
+        raise PageContractError("detail.severity invalid")
+    if not isinstance(detail.get("libraryRevision"), int):
+        raise PageContractError("detail.libraryRevision must be int")
+
+    file_block = detail.get("file")
+    if not isinstance(file_block, dict):
+        raise PageContractError("detail.file must be a dict")
+    for key in ("fileId", "sizeBytes", "modifiedAtNs", "extension", "contentSha256"):
+        if key not in file_block:
+            raise PageContractError(f"detail.file missing {key}")
+
+    evidence = detail.get("evidence")
+    if not isinstance(evidence, dict):
+        raise PageContractError("detail.evidence must be a dict")
+    kind = evidence.get("kind")
+    if kind not in _QUALITY_KINDS:
+        raise PageContractError("detail.evidence.kind invalid")
+    for key in ("message", "severity", "sizeBytes"):
+        if key not in evidence:
+            raise PageContractError(f"detail.evidence missing {key}")
+    if kind == "tiny_file" and "thresholdBytes" not in evidence:
+        raise PageContractError("tiny_file evidence requires thresholdBytes")
+
+    repair = detail.get("repairEligibility")
+    if not isinstance(repair, dict):
+        raise PageContractError("detail.repairEligibility must be a dict")
+    if repair.get("eligible") is not False:
+        raise PageContractError("detail.repairEligibility.eligible must be false in PR-21")
+    if repair.get("reason") not in _REPAIR_REASONS:
+        raise PageContractError("detail.repairEligibility.reason invalid")
+    if not isinstance(repair.get("label"), str):
+        raise PageContractError("detail.repairEligibility.label must be string")
+
+
 def validate_selection_scope(selection: Any) -> None:
     if not isinstance(selection, dict):
         raise InvalidSelectionScopeError("SelectionScope must be a dict")

@@ -527,8 +527,66 @@ def test_get_quality_issue_detail_from_cache(tmp_path: Path) -> None:
         row is not None
     ), f"expected small_file row for {target_name}, got {[r['name'] for r in page['rows']]}"
     detail = api.get_quality_issue_detail(row["id"])
-    assert detail["id"] == row["id"]
-    assert detail["name"] == target_name
+    assert detail["status"] == "ok"
+    inner = detail["detail"]
+    assert inner["id"] == row["id"]
+    assert inner["name"] == target_name
+    assert isinstance(inner["libraryRevision"], int)
+    assert inner["evidence"]["kind"] == "empty_file"
+    assert detail.get("status") != "stale"
+
+
+def test_get_quality_issue_detail_not_found_normalized_id(tmp_path: Path) -> None:
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    detail = api.get_quality_issue_detail("deadbeef")
+    assert detail["status"] == "not_found"
+    assert detail["message"] == "quality_issue_not_found"
+    assert detail["id"] == "quality:deadbeef"
+
+
+def test_get_quality_issue_detail_malformed_id_not_found(tmp_path: Path) -> None:
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    for bad_id in ("", "   ", "quality:quality:deadbeef"):
+        detail = api.get_quality_issue_detail(bad_id)
+        assert detail["status"] == "not_found"
+        assert detail["message"] == "quality_issue_not_found"
+
+
+def test_get_quality_issue_detail_invalid_utf8_evidence(tmp_path: Path) -> None:
+    (tmp_path / "bad.txt").write_bytes(b"\xff\xfe")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    page = api.query_quality_rows({"issueType": "encoding", "limit": 10})
+    assert len(page["rows"]) >= 1
+    row = page["rows"][0]
+    detail = api.get_quality_issue_detail(row["id"])
+    assert detail["status"] == "ok"
+    inner = detail["detail"]
+    assert inner["evidence"]["kind"] == "invalid_utf8"
+    assert inner["repairEligibility"]["futureAction"] == "utf8_convert"
+    assert inner["repairEligibility"]["eligible"] is False
+
+
+def test_get_quality_issue_detail_id_without_prefix(tmp_path: Path) -> None:
+    (tmp_path / "empty.txt").write_bytes(b"")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    page = api.query_quality_rows({"issueType": "small_file", "limit": 1})
+    row = page["rows"][0]
+    domain_id = row["id"].removeprefix("quality:")
+    detail = api.get_quality_issue_detail(domain_id)
+    assert detail["status"] == "ok"
+    assert detail["detail"]["id"] == row["id"]
 
 
 def test_query_quality_rows_unknown_issue_type_empty(tmp_path: Path) -> None:

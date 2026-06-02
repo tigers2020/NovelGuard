@@ -10,7 +10,7 @@
 
 **Spec:** [008-2026-06-02-relation-filename-blocking-design.md](../specs/008-2026-06-02-relation-filename-blocking-design.md) (**approved** 2026-06-02)
 
-**Plan status:** **Implemented** (2026-06-02) — verification PASS (73 pytest).
+**Plan status:** **Closed** (2026-06-02) — implemented + verification PASS. See [Plan closure](#plan-closure-pr-20-slice).
 
 **Parent:** [001 PR-20..25 roadmap](../roadmap/001-2026-06-02-pr20-pr25-development-roadmap.md) — Wave C PR-20
 
@@ -563,8 +563,51 @@ PR-20 matches spec 008 when all are true:
 
 ---
 
+## Plan closure (PR-20 slice)
+
+**Closed:** 2026-06-02  
+**Spec:** [008 relation filename blocking](../specs/008-2026-06-02-relation-filename-blocking-design.md) (approved)  
+**Scope freeze:** honored — no `title_prefix_overlap`, no relation SQLite, no relation apply, no quality-track work in this slice.
+
+### Verification evidence
+
+| Command | Result |
+|---------|--------|
+| `python -m pytest tests/test_bridge_contract.py -q` | **72 passed** (2026-06-02) |
+| `python scripts/verify_phase_completion.py` | PASS (noted in plan header at implement time) |
+| `cd web && npm run lint` | PASS (implement time) |
+
+### Delivered (code truth)
+
+| Area | Delivered |
+|------|-----------|
+| Domain | `filename_relation.py` — 3 kinds, token precedence, generic stem guard |
+| Settings | `SETTINGS_KEY_INCLUDE_RELATION` default false; scan-time gate |
+| Session | `_run_relation_phase` post-near, non-fatal try/except; session memory groups |
+| Review | Relation rows in cache; `queryReviewRows` filter `relation`; detail `relation_filename_v1` |
+| Apply | `RELATION_APPLY_UNSUPPORTED`; mixed selection guards |
+| Web | Relation filter/badge; apply disable tooltip; relation detail panel fields |
+| Tests | Gate fixtures in `test_bridge_contract.py` (settings, batch id, token precedence, false positives) |
+
+### Acceptance criteria (plan §)
+
+All plan-locked items shipped: opt-in detection, deterministic ids, no relation DB, apply rejection, UI filter/badge/disable, gate fixtures 1–5 covered by contract tests. Exact/near safety preserved.
+
+### Known gaps (intentional — out of scope)
+
+- Settings UI screen for `include_relation` (bridge get/set only; tests/dev enable explicitly)
+- Dedicated `tests/domain/test_filename_relation_detector.py` (deferred unless `TEST_ALLOWED`)
+- `title_prefix_overlap` relation kind
+
+### Handoff
+
+**Next:** PR-21 — [009 quality issue detail spec](../specs/009-2026-06-02-quality-issue-detail-design.md) → grill-me → [015 plan](./015-2026-06-02-pr21-quality-issue-detail.md).
+
+---
+
 ## Changelog
 
 | Date | Change |
 |------|--------|
 | 2026-06-02 | Initial plan 014 from approved spec 008 + gate reviewer locks |
+| 2026-06-02 | Plan closure note; status **Closed**; pytest count corrected to 72 |

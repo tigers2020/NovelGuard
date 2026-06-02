@@ -12,6 +12,7 @@ from app.bridge_contract import (
     validate_app_snapshot,
     validate_duplicate_group_detail,
     validate_move_preview,
+    validate_quality_issue_detail,
     validate_quality_rows_page,
     validate_review_rows_page,
     validate_selection_scope,
@@ -78,7 +79,9 @@ class BridgeApi:
         return result
 
     def get_quality_issue_detail(self, issue_id: str) -> dict[str, Any]:
-        return self._session.get_quality_issue_detail(issue_id)
+        payload = self._session.get_quality_issue_detail(issue_id)
+        validate_quality_issue_detail(payload)
+        return payload
 
     def get_move_preview(self, selection: dict[str, Any]) -> dict[str, Any]:
         validate_selection_scope(selection)

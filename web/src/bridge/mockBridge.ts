@@ -34,6 +34,7 @@ import {
 } from "./mockReviewState";
 import type { DuplicateGroupDetail, ReviewRow } from "../types/review";
 import { buildMockDuplicateGroupDetail } from "./mockDuplicateGroupDetail";
+import { buildMockQualityIssueDetail } from "./mockQualityIssueDetail";
 import type { UpdateReviewDecisionsRequest } from "../types/reviewDecisions";
 
 const state = {
@@ -321,24 +322,7 @@ export const mockBridge: NovelGuardBridge = {
   },
 
   async getQualityIssueDetail(issueId) {
-    const row = buildQualityRows().find((r) => r.id === issueId);
-    if (!row) {
-      return {
-        id: issueId,
-        issueType: "integrity",
-        name: "Unknown",
-        integrity: "Unknown",
-      };
-    }
-    return {
-      id: row.id,
-      issueType: row.issueType,
-      name: row.name,
-      path: row.path,
-      encoding: row.encoding,
-      integrity: row.integrity,
-      evidence: { severity: row.severity },
-    };
+    return buildMockQualityIssueDetail(issueId, buildQualityRows(), libraryRevision);
   },
 
   async getMovePreview(selection) {

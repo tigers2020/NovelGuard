@@ -15,6 +15,7 @@ from application.dto_mapper import (
 )
 from application.ports.library_index import LibraryIndexPort
 from application.quality_analyzer import analyze_quality
+from application.quality_issue_detail import build_quality_issue_detail
 from application.quality_query import query_quality_page
 from application.quality_rows_builder import build_quality_rows
 from application.review_query import query_review_page
@@ -209,23 +210,13 @@ class LibrarySession:
 
     def get_quality_issue_detail(self, issue_id: str) -> dict[str, Any]:
         with self._lock:
-            row = next((r for r in self._quality_rows_cache if r.get("id") == issue_id), None)
-            if row is None:
-                return {
-                    "id": issue_id,
-                    "issueType": "integrity",
-                    "name": "Unknown",
-                    "integrity": "Unknown",
-                }
-            return {
-                "id": row["id"],
-                "issueType": row["issueType"],
-                "name": row["name"],
-                "path": row.get("path"),
-                "encoding": row.get("encoding"),
-                "integrity": row["integrity"],
-                "evidence": {"severity": row.get("severity")},
-            }
+            return build_quality_issue_detail(
+                issue_id,
+                quality_rows=self._quality_rows_cache,
+                quality_issues=self._index.quality_issues(),
+                files_by_id=self._files_by_id,
+                library_revision=self._library_revision,
+            )
 
     def get_app_setting(self, key: str) -> bool:
         with self._lock:

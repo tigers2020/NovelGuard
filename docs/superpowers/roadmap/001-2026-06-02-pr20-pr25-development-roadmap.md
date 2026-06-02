@@ -11,7 +11,7 @@ last_reviewed: 2026-06-02
 
 **Parent:** [000 master roadmap](./000-2026-06-01-novelguard-master-roadmap.md)
 
-**Position (2026-06-02):** PR-19 **Done**. **Next:** PR-20 — Relation / filename-blocking signals (spec not written).
+**Position (2026-06-02):** PR-21 **Done**. **Next:** PR-22 — Quality repair execution.
 
 **Sequencing (locked):** `real apply safety → review state → near/relation detection → quality repair → packaging → shell FileDock`. Quality-first ordering before apply remains **rejected** ([000 § Rejected ordering](./000-2026-06-01-novelguard-master-roadmap.md#rejected-ordering-do-not-revive)).
 
@@ -58,7 +58,7 @@ flowchart TD
 | PR | Name | Wave | Mutation | Spec (proposed) | Plan (proposed) | Status |
 |----|------|------|----------|-----------------|-----------------|--------|
 | **PR-20** | Relation / filename-blocking signals | C | No | [008 relation design](../specs/008-2026-06-02-relation-filename-blocking-design.md) | [014 pr20 plan](../plans/014-2026-06-02-pr20-relation-filename-blocking.md) | **Done** |
-| **PR-21** | Quality issue detail | D | No | [009 quality detail](../specs/009-2026-06-02-quality-issue-detail-design.md) | [015 pr21 plan](../plans/015-2026-06-02-pr21-quality-issue-detail.md) | Not written |
+| **PR-21** | Quality issue detail | D | No | [009 quality detail](../specs/009-2026-06-02-quality-issue-detail-design.md) | [015 pr21 plan](../plans/015-2026-06-02-pr21-quality-issue-detail.md) | **Done** |
 | **PR-22** | Quality repair execution | D | **Yes** | [010 quality repair](../specs/010-2026-06-02-quality-repair-execution-design.md) | [016 pr22 plan](../plans/016-2026-06-02-pr22-quality-repair-execution.md) | Not written |
 | **PR-23** | Finalize / cleanup pipeline | D | Limited | [011 finalize](../specs/011-2026-06-02-finalize-cleanup-pipeline-design.md) | [017 pr23 plan](../plans/017-2026-06-02-pr23-finalize-cleanup-pipeline.md) | Not written |
 | **PR-24** | Packaging / distribution | E | No | [012 packaging](../specs/012-2026-06-02-packaging-distribution-design.md) | [018 pr24 plan](../plans/018-2026-06-02-pr24-packaging-distribution.md) | Not written |
@@ -338,6 +338,9 @@ Additional contract behavior:
 
 - [x] PR-20 spec → grill-me (false positive / namespace / apply unsupported) — **approved 2026-06-02**
 - [x] PR-20 plan 014 → implemented 2026-06-02
+- [x] PR-21 grill-me **G1** + **G2** — approved 2026-06-02
+- [x] PR-21 spec 009 approved
+- [ ] PR-21 plan 015 approve → implement
 - [ ] PR-21 stays read-only (low-risk Quality track entry)
 - [ ] PR-22 reuses PR-15 apply safety model explicitly in spec
 - [ ] PR-23 locks finalize “complete” definition
@@ -365,3 +368,5 @@ Additional contract behavior:
 |------|--------|
 | 2026-06-02 | Initial PR-20..25 development roadmap; parent 000 updated to point here |
 | 2026-06-02 | Locked sequence PR-20 → 21 → 22 → 23 → 24 → 25; proposed spec/plan filenames 008–013 / 014–019 |
+| 2026-06-02 | PR-20 closed (plan 014 closure); PR-21 spec 009 + plan 015 drafted |
+| 2026-06-02 | PR-21 grill-me G1+G2 done; spec 009 approved (`ok.detail`, client stale) |

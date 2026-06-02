@@ -17,7 +17,7 @@ pr_label: PR-20
 
 ## Status
 
-**Approved** (2026-06-02) — grill-me G1–G5 + spec gate review B1–B5 locked. **Implementation plan:** [014-2026-06-02-pr20-relation-filename-blocking.md](../plans/014-2026-06-02-pr20-relation-filename-blocking.md) (**draft** — awaiting approval).
+**Approved** (2026-06-02) — grill-me G1–G5 + spec gate review B1–B5 locked. **Implementation plan:** [014-2026-06-02-pr20-relation-filename-blocking.md](../plans/014-2026-06-02-pr20-relation-filename-blocking.md) (**closed** 2026-06-02).
 
 ## Scope sentence
 
