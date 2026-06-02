@@ -68,6 +68,16 @@ def _parse_cursor(cursor: Any) -> int:
         return 0
 
 
+def _allowed_row_types(filters: dict[str, Any]) -> set[str]:
+    type_filter = filters.get("types")
+    if not isinstance(type_filter, list) or not type_filter:
+        return {"exact"}
+    allowed = {str(value) for value in type_filter if isinstance(value, str)}
+    if not allowed:
+        return {"exact"}
+    return allowed
+
+
 def _filter_rows(rows: list[dict[str, Any]], query: dict[str, Any]) -> list[dict[str, Any]]:
     view_mode = query.get("viewMode", "all")
     raw_filters = query.get("filters")
@@ -75,10 +85,11 @@ def _filter_rows(rows: list[dict[str, Any]], query: dict[str, Any]) -> list[dict
     search = (filters.get("search") or "").lower()
     status_filter = filters.get("status")
     type_filter = filters.get("types")
+    allowed_types = _allowed_row_types(filters)
 
     result: list[dict[str, Any]] = []
     for row in rows:
-        if row.get("type") != "exact":
+        if row.get("type") not in allowed_types:
             continue
         if view_mode == "conflicts" and row.get("status") != "conflict":
             continue

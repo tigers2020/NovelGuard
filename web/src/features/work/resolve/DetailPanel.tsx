@@ -117,21 +117,23 @@ export function DetailPanel({
             </fieldset>
           </div>
 
-          <div className="rounded-md border border-outline bg-surface p-4">
-            <p className="text-sm font-semibold text-on-surface">Move plan</p>
-            <dl className="mt-2 space-y-2 text-sm">
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted">Keeper</dt>
-                <dd className="font-medium text-on-surface">{detail.movePlan.keeperAction}</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-muted">Duplicates</dt>
-                <dd className="font-medium text-on-surface">
-                  {detail.movePlan.duplicateAction} → {detail.movePlan.targetFolder}
-                </dd>
-              </div>
-            </dl>
-          </div>
+          {detail.type === "exact" && "movePlan" in detail && (
+            <div className="rounded-md border border-outline bg-surface p-4">
+              <p className="text-sm font-semibold text-on-surface">Move plan</p>
+              <dl className="mt-2 space-y-2 text-sm">
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted">Keeper</dt>
+                  <dd className="font-medium text-on-surface">{detail.movePlan.keeperAction}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted">Duplicates</dt>
+                  <dd className="font-medium text-on-surface">
+                    {detail.movePlan.duplicateAction} → {detail.movePlan.targetFolder}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          )}
 
           <div className="rounded-md border border-outline bg-surface p-4">
             <p className="text-sm font-semibold text-on-surface">Members</p>
@@ -175,11 +177,21 @@ export function DetailPanel({
           <div className="rounded-md border border-outline bg-surface p-4">
             <p className="text-sm font-semibold text-on-surface">Evidence</p>
             <p className="mt-2 text-xs text-on-surface-variant">
-              {detail.evidence.matchKind}
+              {detail.type === "near" ? "Near duplicate" : detail.evidence.matchKind}
             </p>
-            <p className="mt-1 break-all font-mono text-xs text-muted">
-              {detail.evidence.contentSha256 || "—"}
-            </p>
+            {detail.type === "near" ? (
+              <>
+                <p className="mt-1 text-sm text-on-surface">
+                  Max similarity: {detail.evidence.maxSimilarity.toFixed(2)} (threshold{" "}
+                  {detail.evidence.threshold})
+                </p>
+                <p className="mt-1 text-xs text-muted">{detail.evidence.comparisonMethod}</p>
+              </>
+            ) : (
+              <p className="mt-1 break-all font-mono text-xs text-muted">
+                {detail.evidence.contentSha256 || "—"}
+              </p>
+            )}
           </div>
 
           <details className="rounded-md border border-outline bg-surface p-4">

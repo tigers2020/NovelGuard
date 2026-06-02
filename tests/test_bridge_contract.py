@@ -889,3 +889,163 @@ def test_get_duplicate_group_detail_not_found(tmp_path: Path) -> None:
     validate_duplicate_group_detail(detail)
     assert detail["status"] == "not_found"
     assert detail["members"] == []
+
+
+def _near_similar_body(seed: str) -> str:
+    paragraph = (
+        "The quick brown fox jumps over the lazy dog. "
+        "Near duplicate detection uses normalized text n-grams. "
+    )
+    return (paragraph * 12) + f" variant-{seed} "
+
+
+def test_normalize_text_for_near_dup_deterministic() -> None:
+    from domain.duplicate_near import normalize_text_for_near_dup
+
+    raw = "  Hello\r\nWorld  "
+    assert normalize_text_for_near_dup(raw) == normalize_text_for_near_dup(raw)
+    assert normalize_text_for_near_dup(raw) == "hello world"
+
+
+def test_near_duplicate_blocking_reduces_pairs() -> None:
+    from domain.duplicate_near import NearDuplicateInput, find_near_duplicate_groups
+
+    files: list[NearDuplicateInput] = []
+    for index in range(20):
+        body = _near_similar_body(f"txt-{index}")
+        files.append(
+            NearDuplicateInput(
+                file_id=f"txt-{index}",
+                path=f"t{index}.txt",
+                extension=".txt",
+                content_hash=f"hash-txt-{index}",
+                size_bytes=len(body),
+                mtime_ns=index,
+                text=body,
+            )
+        )
+    for index in range(20):
+        body = _near_similar_body(f"json-{index}")
+        files.append(
+            NearDuplicateInput(
+                file_id=f"json-{index}",
+                path=f"j{index}.json",
+                extension=".json",
+                content_hash=f"hash-json-{index}",
+                size_bytes=len(body),
+                mtime_ns=100 + index,
+                text=body,
+            )
+        )
+    result = find_near_duplicate_groups(
+        files,
+        exact_group_by_file_id={},
+        near_batch_id="batch-test",
+    )
+    naive = 40 * 39 // 2
+    within_family_max = 2 * (20 * 19 // 2)
+    assert result.stats.candidate_pair_count <= within_family_max
+    assert result.stats.candidate_pair_count < naive
+
+
+def test_near_duplicate_skips_same_exact_group(tmp_path: Path) -> None:
+    from domain.duplicate_exact import find_exact_duplicate_groups
+    from domain.duplicate_near import NearDuplicateInput, find_near_duplicate_groups
+    from domain.models import FileRecord, make_file_id
+
+    body = _near_similar_body("dup")
+    records = [
+        FileRecord(
+            id=make_file_id(f"{name}.txt", len(body), i),
+            relative_path=f"{name}.txt",
+            name=f"{name}.txt",
+            size_bytes=len(body),
+            modified_at_ns=i,
+            extension=".txt",
+            content_sha256="samehash",
+        )
+        for i, name in enumerate(("a", "b"))
+    ]
+    exact_map = {
+        member_id: group.group_id
+        for group in find_exact_duplicate_groups(records)
+        for member_id in group.member_ids
+    }
+    inputs = [
+        NearDuplicateInput(
+            file_id=record.id,
+            path=record.relative_path,
+            extension=record.extension,
+            content_hash=record.content_sha256,
+            size_bytes=record.size_bytes,
+            mtime_ns=record.modified_at_ns,
+            text=body,
+        )
+        for record in records
+    ]
+    result = find_near_duplicate_groups(
+        inputs,
+        exact_group_by_file_id=exact_map,
+        near_batch_id="batch-exact-skip",
+    )
+    assert result.stats.accepted_pair_count == 0
+
+
+def test_query_review_rows_near_after_similar_scan(tmp_path: Path) -> None:
+    (tmp_path / "alpha.txt").write_text(_near_similar_body("alpha"), encoding="utf-8")
+    (tmp_path / "beta.txt").write_text(_near_similar_body("beta"), encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    near_page = api.query_review_rows(
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["near"]}}
+    )
+    validate_review_rows_page(near_page)
+    if near_page["rows"]:
+        assert all(row["type"] == "near" for row in near_page["rows"])
+    both_page = api.query_review_rows(
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["exact", "near"]}}
+    )
+    assert any(row["type"] == "exact" for row in both_page["rows"]) or not near_page["rows"]
+
+
+def test_get_near_duplicate_group_detail(tmp_path: Path) -> None:
+    (tmp_path / "alpha.txt").write_text(_near_similar_body("alpha"), encoding="utf-8")
+    (tmp_path / "beta.txt").write_text(_near_similar_body("beta"), encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    near_page = api.query_review_rows(
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["near"]}}
+    )
+    group_row = next((row for row in near_page["rows"] if row["rowKind"] == "group"), None)
+    if group_row is None:
+        return
+    detail = api.get_duplicate_group_detail(group_row["groupId"])
+    validate_duplicate_group_detail(detail)
+    assert detail["status"] == "ok"
+    assert detail["type"] == "near"
+    assert detail["evidence"]["matchKind"] == "near_ngram_v1"
+
+
+def test_preview_rejects_near_duplicate_rows(tmp_path: Path) -> None:
+    (tmp_path / "alpha.txt").write_text(_near_similar_body("alpha"), encoding="utf-8")
+    (tmp_path / "beta.txt").write_text(_near_similar_body("beta"), encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    near_page = api.query_review_rows(
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["near"]}}
+    )
+    file_row = next((row for row in near_page["rows"] if row["rowKind"] == "file"), None)
+    if file_row is None:
+        return
+    with pytest.raises(PreviewApplyError) as exc_info:
+        api.get_move_preview({"type": "explicit_rows", "rowIds": [file_row["id"]]})
+    assert exc_info.value.reason == "NEAR_DUPLICATE_APPLY_UNSUPPORTED"

@@ -148,33 +148,35 @@ def validate_duplicate_group_detail(payload: Any) -> None:
     if status != "ok":
         raise PageContractError("DuplicateGroupDetail.status must be ok or not_found")
 
-    for key in (
-        "type",
-        "groupStatus",
-        "keeperFileId",
-        "keeperLabel",
-        "evidence",
-        "movePlan",
-    ):
+    for key in ("type", "groupStatus", "keeperFileId", "keeperLabel", "evidence"):
         if key not in payload:
             raise PageContractError(f"DuplicateGroupDetail ok variant missing {key}")
 
-    if payload.get("type") != "exact":
-        raise PageContractError("DuplicateGroupDetail.type must be exact")
+    detail_type = payload.get("type")
+    if detail_type not in ("exact", "near"):
+        raise PageContractError("DuplicateGroupDetail.type must be exact or near")
     if payload.get("groupStatus") not in _REVIEW_STATUSES:
         raise PageContractError("DuplicateGroupDetail.groupStatus invalid")
 
     evidence = payload.get("evidence")
     if not isinstance(evidence, dict):
         raise PageContractError("DuplicateGroupDetail.evidence must be a dict")
-    if evidence.get("matchKind") != "exact_content_hash":
-        raise PageContractError("evidence.matchKind must be exact_content_hash")
+    if detail_type == "exact":
+        if evidence.get("matchKind") != "exact_content_hash":
+            raise PageContractError("evidence.matchKind must be exact_content_hash")
+        move_plan = payload.get("movePlan")
+        if not isinstance(move_plan, dict):
+            raise PageContractError("DuplicateGroupDetail.movePlan must be a dict")
+    else:
+        if evidence.get("matchKind") != "near_ngram_v1":
+            raise PageContractError("evidence.matchKind must be near_ngram_v1")
+        if not isinstance(evidence.get("maxSimilarity"), (int, float)):
+            raise PageContractError("evidence.maxSimilarity must be a number")
+        if not isinstance(evidence.get("threshold"), (int, float)):
+            raise PageContractError("evidence.threshold must be a number")
+
     if not isinstance(evidence.get("memberCount"), int):
         raise PageContractError("evidence.memberCount must be int")
-
-    move_plan = payload.get("movePlan")
-    if not isinstance(move_plan, dict):
-        raise PageContractError("DuplicateGroupDetail.movePlan must be a dict")
 
     for member in members:
         if not isinstance(member, dict):

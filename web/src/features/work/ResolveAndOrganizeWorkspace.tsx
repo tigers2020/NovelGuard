@@ -5,6 +5,7 @@ import type {
   DuplicateGroupDetail,
   DuplicateGroupMemberDetail,
   ReviewRow,
+  ReviewRowType,
   ReviewRowsQuery,
   ReviewViewMode,
 } from "../../types/review";
@@ -35,6 +36,7 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
   const resolve = snapshot.work.resolve;
 
   const [viewMode, setViewMode] = useState<ReviewViewMode>("action");
+  const [rowTypeFilter, setRowTypeFilter] = useState<"exact" | "near" | "all">("exact");
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [filteredCount, setFilteredCount] = useState(0);
@@ -51,18 +53,24 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailMutating, setDetailMutating] = useState(false);
 
+  const rowTypeFilterTypes = useMemo((): ReviewRowType[] | undefined => {
+    if (rowTypeFilter === "exact") return ["exact"];
+    if (rowTypeFilter === "near") return ["near"];
+    return ["exact", "near"];
+  }, [rowTypeFilter]);
+
   const currentQuery = useMemo<ReviewRowsQuery>(() => {
     const primary = sorting[0];
     return {
       viewMode,
-      filters: { search: search || undefined },
+      filters: { search: search || undefined, types: rowTypeFilterTypes },
       cursor: null,
       limit: 100,
       sort: primary
         ? { field: primary.id, direction: primary.desc ? "desc" : "asc" }
         : undefined,
     };
-  }, [viewMode, search, sorting]);
+  }, [viewMode, search, sorting, rowTypeFilterTypes]);
 
   const loadDetail = useCallback(
     async (row: ReviewRow | null) => {
@@ -161,6 +169,13 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
       ? explicitSelection
       : { type: "current_query", query: currentQuery, excludeRowIds: [] };
 
+  const previewIncludesNear = useMemo(() => {
+    if (explicitIds.length > 0) {
+      return rows.some((row) => explicitIds.includes(row.id) && row.type === "near");
+    }
+    return rowTypeFilter !== "exact";
+  }, [explicitIds, rows, rowTypeFilter]);
+
   const runDetailReviewCommand = useCallback(
     async (
       command: ReviewDecisionCommand,
@@ -242,6 +257,29 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
           <StatChip label="Conflicts" value={resolve.conflictCount} tone="danger" />
           <StatChip label="Approved" value={resolve.approvedCount} tone="good" />
         </div>
+        <div className="mt-4 flex flex-wrap gap-2" data-testid="resolve-type-filter">
+          {(
+            [
+              ["exact", "Exact only"],
+              ["near", "Near only"],
+              ["all", "Exact + Near"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              data-testid={`resolve-type-filter-${id}`}
+              onClick={() => setRowTypeFilter(id)}
+              className={
+                rowTypeFilter === id
+                  ? "rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-background"
+                  : "rounded-md border border-outline px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-hover"
+              }
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -310,6 +348,12 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
         onApprove={() => void runBatchCommand("approve")}
         onExclude={() => void runBatchCommand("exclude")}
         onPreview={() => onOpenPreview(previewSelection)}
+        previewDisabled={previewIncludesNear}
+        previewDisabledReason={
+          previewIncludesNear
+            ? "Near duplicate groups are review-only in PR-19 and cannot be applied."
+            : undefined
+        }
       />
     </main>
   );

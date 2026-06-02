@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from application.ports.review_state import LoadedReviewState
+from domain.duplicate_near import NearDuplicateResult
 from domain.models import FileRecord
 from domain.quality import QualityIssue
 
@@ -12,6 +13,7 @@ class MemoryLibraryIndex:
         self._quality_issues: list[QualityIssue] = []
         self._review_groups: dict[str, dict[str, tuple[str | None, str | None]]] = {}
         self._review_members: dict[str, dict[str, str]] = {}
+        self._near_results: dict[str, NearDuplicateResult] = {}
 
     def clear(self) -> None:
         self._current_folder = None
@@ -19,6 +21,7 @@ class MemoryLibraryIndex:
         self._quality_issues = []
         self._review_groups = {}
         self._review_members = {}
+        self._near_results = {}
 
     def replace_files(self, folder_path: str, files: list[FileRecord]) -> None:
         self._current_folder = folder_path
@@ -109,3 +112,12 @@ class MemoryLibraryIndex:
         self._review_members[folder_path] = {
             fid: status for fid, status in members.items() if fid in valid_file_ids
         }
+
+    def replace_near_duplicate_results(self, folder_path: str, result: NearDuplicateResult) -> None:
+        self._near_results[folder_path] = result
+
+    def load_near_duplicate_result(self, folder_path: str) -> NearDuplicateResult | None:
+        return self._near_results.get(folder_path)
+
+    def clear_near_duplicate_results(self, folder_path: str) -> None:
+        self._near_results.pop(folder_path, None)

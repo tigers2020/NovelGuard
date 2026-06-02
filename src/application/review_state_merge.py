@@ -40,7 +40,10 @@ def merge_review_state(
 
         group = members_by_group.get(group_id)
         if group is None:
-            merged.append(updated)
+            if isinstance(group_id, str) and group_id.startswith("near:"):
+                merged.append(_merge_near_row(updated, group_id, stored, files_by_id))
+            else:
+                merged.append(updated)
             continue
 
         member_ids = [mid for mid in group.member_ids if mid in files_by_id]
@@ -81,13 +84,56 @@ def merge_review_state(
     return merged
 
 
+def _merge_near_row(
+    row: dict[str, Any],
+    group_id: str,
+    stored: LoadedReviewState,
+    files_by_id: dict[str, FileRecord],
+) -> dict[str, Any]:
+    updated = dict(row)
+    group_entry = stored.groups.get(group_id)
+    group_status = group_entry[1] if group_entry else None
+    keeper_override = group_entry[0] if group_entry else None
+
+    if row.get("rowKind") == "group":
+        updated["status"] = group_status or row.get("status", "unreviewed")
+        if keeper_override and keeper_override in files_by_id:
+            updated["keeperLabel"] = files_by_id[keeper_override].name
+        updated["proposedAction"] = "keep"
+        return updated
+
+    file_id = _file_id_from_row_id(str(row.get("id", "")))
+    member_status = stored.members.get(file_id) if file_id else None
+    if member_status:
+        effective_status = member_status
+    elif group_status:
+        effective_status = group_status
+    else:
+        effective_status = row.get("status", "unreviewed")
+
+    updated["status"] = effective_status
+    if keeper_override and keeper_override in files_by_id:
+        keeper = files_by_id[keeper_override]
+        updated["keeperLabel"] = keeper.name
+        updated["proposedAction"] = "keep" if file_id == keeper.id else "ignore"
+    updated.pop("targetFolder", None)
+    return updated
+
+
 def _file_id_from_row_id(row_id: str) -> str | None:
     if not row_id.startswith("file:"):
         return None
-    parts = row_id.split(":", 2)
-    if len(parts) != 3:
+    rest = row_id[5:]
+    if len(rest) < 64:
         return None
-    return parts[2]
+    candidate = rest[-64:]
+    if len(candidate) != 64:
+        return None
+    try:
+        int(candidate, 16)
+    except ValueError:
+        return None
+    return candidate
 
 
 def group_id_from_row(row: dict[str, Any]) -> str | None:
@@ -98,9 +144,10 @@ def group_id_from_row(row: dict[str, Any]) -> str | None:
     if row_id.startswith("group:"):
         return row_id.split(":", 1)[1]
     if row_id.startswith("file:"):
-        parts = row_id.split(":", 2)
-        if len(parts) == 3:
-            return parts[1]
+        rest = row_id[5:]
+        file_id = _file_id_from_row_id(row_id)
+        if file_id and len(rest) > len(file_id) + 1:
+            return rest[: -(len(file_id) + 1)]
     return None
 
 

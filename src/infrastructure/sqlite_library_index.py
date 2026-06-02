@@ -8,6 +8,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from application.ports.review_state import LoadedReviewState
+from domain.duplicate_near import (
+    NearDuplicateGroup,
+    NearDuplicatePair,
+    NearDuplicateResult,
+    NearDuplicateStats,
+)
 from domain.models import FileRecord
 from domain.quality import QualityIssue
 
@@ -54,6 +60,37 @@ CREATE TABLE IF NOT EXISTS review_member_state (
 );
 CREATE INDEX IF NOT EXISTS idx_review_group_folder ON review_group_state(folder_path);
 CREATE INDEX IF NOT EXISTS idx_review_member_folder ON review_member_state(folder_path);
+CREATE TABLE IF NOT EXISTS near_duplicate_groups (
+  folder_path TEXT NOT NULL,
+  group_id TEXT NOT NULL,
+  near_batch_id TEXT NOT NULL,
+  algorithm_version TEXT NOT NULL,
+  threshold REAL NOT NULL,
+  member_count INTEGER NOT NULL,
+  max_similarity REAL NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (folder_path, group_id)
+);
+CREATE TABLE IF NOT EXISTS near_duplicate_group_members (
+  folder_path TEXT NOT NULL,
+  group_id TEXT NOT NULL,
+  file_id TEXT NOT NULL,
+  normalized_length INTEGER NOT NULL,
+  fingerprint_count INTEGER NOT NULL,
+  PRIMARY KEY (folder_path, group_id, file_id)
+);
+CREATE TABLE IF NOT EXISTS near_duplicate_pairs (
+  folder_path TEXT NOT NULL,
+  group_id TEXT NOT NULL,
+  left_file_id TEXT NOT NULL,
+  right_file_id TEXT NOT NULL,
+  similarity_score REAL NOT NULL,
+  shared_fingerprint_count INTEGER NOT NULL,
+  left_fingerprint_count INTEGER NOT NULL,
+  right_fingerprint_count INTEGER NOT NULL,
+  PRIMARY KEY (folder_path, group_id, left_file_id, right_file_id)
+);
+CREATE INDEX IF NOT EXISTS idx_near_groups_folder ON near_duplicate_groups(folder_path);
 """
 
 
@@ -75,6 +112,9 @@ class SqliteLibraryIndex:
             conn.execute("DELETE FROM quality_issues")
             conn.execute("DELETE FROM review_group_state")
             conn.execute("DELETE FROM review_member_state")
+            conn.execute("DELETE FROM near_duplicate_groups")
+            conn.execute("DELETE FROM near_duplicate_group_members")
+            conn.execute("DELETE FROM near_duplicate_pairs")
 
     def replace_files(self, folder_path: str, files: list[FileRecord]) -> None:
         self._current_folder = folder_path
@@ -329,3 +369,145 @@ class SqliteLibraryIndex:
                     "DELETE FROM review_member_state WHERE folder_path = ?",
                     (folder_path,),
                 )
+
+    def replace_near_duplicate_results(self, folder_path: str, result: NearDuplicateResult) -> None:
+        created_at = datetime.now(timezone.utc).isoformat()
+        with self._connect() as conn:
+            conn.execute("DELETE FROM near_duplicate_pairs WHERE folder_path = ?", (folder_path,))
+            conn.execute(
+                "DELETE FROM near_duplicate_group_members WHERE folder_path = ?",
+                (folder_path,),
+            )
+            conn.execute("DELETE FROM near_duplicate_groups WHERE folder_path = ?", (folder_path,))
+            for group in result.groups:
+                conn.execute(
+                    """
+                    INSERT INTO near_duplicate_groups (
+                      folder_path, group_id, near_batch_id, algorithm_version, threshold,
+                      member_count, max_similarity, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        folder_path,
+                        group.group_id,
+                        result.near_batch_id,
+                        result.algorithm_version,
+                        result.threshold,
+                        len(group.member_file_ids),
+                        group.max_similarity,
+                        created_at,
+                    ),
+                )
+                for file_id in group.member_file_ids:
+                    conn.execute(
+                        """
+                        INSERT INTO near_duplicate_group_members (
+                          folder_path, group_id, file_id, normalized_length, fingerprint_count
+                        ) VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (folder_path, group.group_id, file_id, 0, 0),
+                    )
+                for pair in group.pairs:
+                    conn.execute(
+                        """
+                        INSERT INTO near_duplicate_pairs (
+                          folder_path, group_id, left_file_id, right_file_id,
+                          similarity_score, shared_fingerprint_count,
+                          left_fingerprint_count, right_fingerprint_count
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            folder_path,
+                            group.group_id,
+                            pair.left_file_id,
+                            pair.right_file_id,
+                            pair.similarity_score,
+                            pair.shared_fingerprint_count,
+                            pair.left_fingerprint_count,
+                            pair.right_fingerprint_count,
+                        ),
+                    )
+
+    def load_near_duplicate_result(self, folder_path: str) -> NearDuplicateResult | None:
+        with self._connect() as conn:
+            group_rows = conn.execute(
+                """
+                SELECT group_id, near_batch_id, algorithm_version, threshold,
+                       member_count, max_similarity
+                FROM near_duplicate_groups
+                WHERE folder_path = ?
+                ORDER BY group_id
+                """,
+                (folder_path,),
+            ).fetchall()
+            if not group_rows:
+                return None
+
+            near_batch_id = str(group_rows[0][1])
+            algorithm_version = str(group_rows[0][2])
+            threshold = float(group_rows[0][3])
+
+            groups: list[NearDuplicateGroup] = []
+            for row in group_rows:
+                group_id = str(row[0])
+                pair_rows = conn.execute(
+                    """
+                    SELECT left_file_id, right_file_id, similarity_score,
+                           shared_fingerprint_count, left_fingerprint_count,
+                           right_fingerprint_count
+                    FROM near_duplicate_pairs
+                    WHERE folder_path = ? AND group_id = ?
+                    """,
+                    (folder_path, group_id),
+                ).fetchall()
+                member_rows = conn.execute(
+                    """
+                    SELECT file_id FROM near_duplicate_group_members
+                    WHERE folder_path = ? AND group_id = ?
+                    ORDER BY file_id
+                    """,
+                    (folder_path, group_id),
+                ).fetchall()
+                pairs = tuple(
+                    NearDuplicatePair(
+                        left_file_id=str(pair_row[0]),
+                        right_file_id=str(pair_row[1]),
+                        similarity_score=float(pair_row[2]),
+                        shared_fingerprint_count=int(pair_row[3]),
+                        left_fingerprint_count=int(pair_row[4]),
+                        right_fingerprint_count=int(pair_row[5]),
+                    )
+                    for pair_row in pair_rows
+                )
+                groups.append(
+                    NearDuplicateGroup(
+                        group_id=group_id,
+                        member_file_ids=tuple(str(member_row[0]) for member_row in member_rows),
+                        pairs=pairs,
+                        max_similarity=float(row[5]),
+                    )
+                )
+
+        return NearDuplicateResult(
+            near_batch_id=near_batch_id,
+            algorithm_version=algorithm_version,
+            threshold=threshold,
+            groups=tuple(groups),
+            stats=NearDuplicateStats(
+                eligible_file_count=0,
+                skipped_file_count=0,
+                bucket_count=0,
+                candidate_pair_count=0,
+                accepted_pair_count=0,
+                group_count=len(groups),
+            ),
+        )
+
+    def clear_near_duplicate_results(self, folder_path: str) -> None:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM near_duplicate_pairs WHERE folder_path = ?", (folder_path,))
+            conn.execute(
+                "DELETE FROM near_duplicate_group_members WHERE folder_path = ?",
+                (folder_path,),
+            )
+            conn.execute("DELETE FROM near_duplicate_groups WHERE folder_path = ?", (folder_path,))

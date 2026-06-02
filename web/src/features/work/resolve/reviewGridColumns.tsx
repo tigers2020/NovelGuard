@@ -46,7 +46,15 @@ export function buildReviewGridColumns(): ColumnDef<ReviewRow>[] {
       header: "Type",
       enableSorting: true,
       meta: { gridWidth: "5rem", minWidthPx: 56, resizable: true },
-      cell: (ctx) => <span className="text-muted">{reviewTypeLabel[ctx.getValue()]}</span>,
+      cell: (ctx) => {
+        const value = ctx.getValue();
+        const isNear = value === "near";
+        return (
+          <span className={isNear ? "font-semibold text-secondary" : "text-muted"}>
+            {isNear ? "Near" : reviewTypeLabel[value]}
+          </span>
+        );
+      },
     }),
     helper.accessor("name", {
       id: "name",

@@ -20,7 +20,7 @@ Roadmap entries are **proposed** until a matching spec is approved. Do not treat
 
 | File | Scope |
 |------|--------|
-| [000-2026-06-01-novelguard-master-roadmap.md](./000-2026-06-01-novelguard-master-roadmap.md) | PR-0..14d (done); **PR-15..20 locked proposal**; PR-21..23 Quality; next spec `003` (PR-15 real apply + Phase 0 E2E preflight) |
+| [000-2026-06-01-novelguard-master-roadmap.md](./000-2026-06-01-novelguard-master-roadmap.md) | PR-0..18 (done); **next:** PR-19 plan — [007 spec](../specs/007-2026-06-01-near-duplicate-detection-design.md) (approved) |
 
 ## Adding a roadmap file
 

@@ -7,6 +7,8 @@ export function BatchActionBar({
   onApprove,
   onExclude,
   onPreview,
+  previewDisabled = false,
+  previewDisabledReason,
 }: {
   selectionLabel: string;
   filteredCount: number;
@@ -14,8 +16,11 @@ export function BatchActionBar({
   onApprove: () => void;
   onExclude: () => void;
   onPreview: () => void;
+  previewDisabled?: boolean;
+  previewDisabledReason?: string;
 }) {
   const batchDisabled = explicitCount === 0;
+  const previewBlocked = previewDisabled || batchDisabled;
 
   return (
     <div className="relative z-30 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-outline bg-surface px-4 py-3">
@@ -49,9 +54,14 @@ export function BatchActionBar({
         </button>
         <button
           type="button"
+          disabled={previewBlocked}
+          title={
+            previewDisabledReason ??
+            (batchDisabled ? BATCH_DISABLED_TOOLTIP : undefined)
+          }
           data-testid="batch-preview-open"
           onClick={onPreview}
-          className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-background hover:opacity-90"
+          className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           이동 계획 미리보기
         </button>
