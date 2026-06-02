@@ -6,7 +6,8 @@ import {
   BRIDGE_ERROR_CODES,
   BridgeUnavailableError,
 } from "./bridgeErrors";
-import { resolveBridge } from "./bridgeFactory";
+import { resolveBridge, resolveBridgeAsync } from "./bridgeFactory";
+import { PYWEBVIEW_READY_EVENT } from "./waitForPywebviewApi";
 import { mockBridge } from "./mockBridge";
 import { getAllReviewRows } from "./mockData";
 import { createPywebviewBridge } from "./pywebviewBridge";
@@ -64,6 +65,37 @@ describe("bridge parity", () => {
     ).toThrowError(
       new BridgeUnavailableError(BRIDGE_ERROR_CODES.productionUnavailable),
     );
+  });
+
+  it("resolveBridgeAsync in PROD waits for pywebviewready before resolving", async () => {
+    const fakeApi = Object.fromEntries(
+      PYWEBVIEW_API_METHODS.map((m) => [m, async () => ({})]),
+    );
+    const win: { pywebview?: { api?: typeof fakeApi } } = {};
+    const listeners = new Map<string, Set<() => void>>();
+    const eventTarget = {
+      addEventListener(event: string, listener: () => void) {
+        const set = listeners.get(event) ?? new Set();
+        set.add(listener);
+        listeners.set(event, set);
+      },
+      removeEventListener(event: string, listener: () => void) {
+        listeners.get(event)?.delete(listener);
+      },
+      dispatchEvent() {
+        return true;
+      },
+    };
+
+    const pending = resolveBridgeAsync({ PROD: true, DEV: false }, win, eventTarget);
+
+    await new Promise((r) => setTimeout(r, 20));
+    win.pywebview = { api: fakeApi };
+    listeners.get(PYWEBVIEW_READY_EVENT)?.forEach((listener) => listener());
+
+    const { bridge, kind } = await pending;
+    expect(kind).toBe("pywebview");
+    expect(bridge.getSnapshot).toBeTypeOf("function");
   });
 
   it("resolveBridge in DEV without flag throws DEV_BRIDGE_UNAVAILABLE", () => {

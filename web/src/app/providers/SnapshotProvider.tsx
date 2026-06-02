@@ -3,7 +3,7 @@ import type { AppSnapshot } from "../../types/snapshot";
 import type { NovelGuardBridge } from "../../bridge/NovelGuardBridge";
 import type { BridgeHealth, BridgeKind } from "../../bridge/bridgeHealth";
 import { getBridgeErrorCode } from "../../bridge/bridgeErrors";
-import { resolveBridge } from "../../bridge/bridgeFactory";
+import { resolveBridgeAsync } from "../../bridge/bridgeFactory";
 import {
   BridgeContext,
   BridgeKindContext,
@@ -17,7 +17,7 @@ type BridgeSelection =
   | { status: "ok"; bridge: NovelGuardBridge; kind: BridgeKind }
   | { status: "unavailable"; unavailableCode: string };
 
-function selectBridge(override?: NovelGuardBridge): BridgeSelection {
+function selectBridgeImmediate(override?: NovelGuardBridge): BridgeSelection | null {
   if (override) {
     return { status: "ok", bridge: override, kind: "mock" };
   }
@@ -27,12 +27,7 @@ function selectBridge(override?: NovelGuardBridge): BridgeSelection {
     return { status: "ok", bridge: createTestBridge(failMode), kind: "mock" };
   }
 
-  try {
-    const resolved = resolveBridge();
-    return { status: "ok", bridge: resolved.bridge, kind: resolved.kind };
-  } catch (error) {
-    return { status: "unavailable", unavailableCode: getBridgeErrorCode(error) };
-  }
+  return null;
 }
 
 function BridgeUnavailableScreen({ code }: { code: string }) {
@@ -54,7 +49,40 @@ export function SnapshotProvider({
   children: ReactNode;
   bridge?: NovelGuardBridge;
 }) {
-  const [selection] = useState(() => selectBridge(bridgeOverride));
+  const [selection, setSelection] = useState<BridgeSelection | null>(() =>
+    selectBridgeImmediate(bridgeOverride),
+  );
+
+  useEffect(() => {
+    const immediate = selectBridgeImmediate(bridgeOverride);
+    if (immediate) {
+      setSelection(immediate);
+      return;
+    }
+
+    let alive = true;
+
+    void (async () => {
+      try {
+        const resolved = await resolveBridgeAsync();
+        if (alive) {
+          setSelection({ status: "ok", bridge: resolved.bridge, kind: resolved.kind });
+        }
+      } catch (error) {
+        if (alive) {
+          setSelection({ status: "unavailable", unavailableCode: getBridgeErrorCode(error) });
+        }
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [bridgeOverride]);
+
+  if (!selection) {
+    return <div className="p-6 text-muted">Loading…</div>;
+  }
 
   if (selection.status === "unavailable") {
     return <BridgeUnavailableScreen code={selection.unavailableCode} />;
