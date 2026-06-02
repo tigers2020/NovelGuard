@@ -10,7 +10,8 @@ import {
 import { resolveBridge, resolveBridgeAsync } from "./bridgeFactory";
 import { PYWEBVIEW_READY_EVENT } from "./waitForPywebviewApi";
 import { mockBridge } from "./mockBridge";
-import { getAllReviewRows, sortQualityRows, textSortKey } from "./mockData";
+import { textSortKey } from "./mockFileRows";
+import { getAllReviewRows, sortQualityRows } from "./mockData";
 import { createPywebviewBridge } from "./pywebviewBridge";
 import {
   NOVEL_GUARD_BRIDGE_METHODS,
@@ -238,6 +239,13 @@ describe("bridge parity", () => {
     expect(preview.summary.operationCount).toBe(moveIds.length);
   });
 
+  it("textSortKey case-folds file-row search fixtures", () => {
+    expect(textSortKey("File.TXT")).toBe(textSortKey("file.txt"));
+    expect(textSortKey("café")).toBe(textSortKey("CAFÉ"));
+    expect(textSortKey("토끼.txt")).toBe(textSortKey("토끼.txt"));
+    expect(textSortKey(".Md")).toBe(textSortKey(".md"));
+  });
+
   it("queryFileRows returns empty page shape when search matches nothing", async () => {
     const page = await mockBridge.queryFileRows({
       search: "__no_match_pr25__",
@@ -262,9 +270,41 @@ describe("bridge parity", () => {
     }
   });
 
-  it("queryFileRows clamps limit to 200", async () => {
+  it("queryFileRows clamps limit to 500", async () => {
     const page = await mockBridge.queryFileRows({ cursor: null, limit: 999 });
-    expect(page.rows.length).toBeLessThanOrEqual(200);
+    expect(page.rows.length).toBeLessThanOrEqual(500);
+  });
+
+  it("queryFileRows rejects invalid sort field", async () => {
+    await expect(
+      mockBridge.queryFileRows({
+        cursor: null,
+        sort: { field: "notAllowed" as "name", direction: "asc" },
+      }),
+    ).rejects.toMatchObject({ reason: "INVALID_SORT_FIELD" });
+  });
+
+  it("queryFileRows rejects invalid filter value", async () => {
+    await expect(
+      mockBridge.queryFileRows({
+        cursor: null,
+        filters: { duplicateGroup: "maybe" as "any" },
+      }),
+    ).rejects.toMatchObject({ reason: "INVALID_FILTER_VALUE" });
+  });
+
+  it("queryFileRows sort changes first row", async () => {
+    const asc = await mockBridge.queryFileRows({
+      cursor: null,
+      limit: 5,
+      sort: { field: "name", direction: "asc" },
+    });
+    const desc = await mockBridge.queryFileRows({
+      cursor: null,
+      limit: 5,
+      sort: { field: "name", direction: "desc" },
+    });
+    expect(asc.rows[0]?.name).not.toBe(desc.rows[0]?.name);
   });
 });
 

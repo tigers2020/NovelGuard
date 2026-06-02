@@ -6,7 +6,10 @@ import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
+from application.dto_mapper import empty_file_rows_page
+from application.file_row_query import NormalizedFileRowsQuery, text_sort_key
 from application.ports.review_state import LoadedReviewState
 from domain.duplicate_near import (
     NearDuplicateGroup,
@@ -16,6 +19,7 @@ from domain.duplicate_near import (
 )
 from domain.models import FileRecord
 from domain.quality import QualityIssue
+from infrastructure.sqlite_file_rows_page import query_sqlite_file_rows_page
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS files (
@@ -27,7 +31,11 @@ CREATE TABLE IF NOT EXISTS files (
   modified_at_ns INTEGER NOT NULL,
   extension TEXT NOT NULL,
   content_sha256 TEXT,
-  encoding_status TEXT
+  encoding_status TEXT,
+  name_key TEXT NOT NULL DEFAULT '',
+  relative_path_key TEXT NOT NULL DEFAULT '',
+  extension_key TEXT NOT NULL DEFAULT '',
+  encoding_key TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_files_folder ON files(folder_path);
 CREATE TABLE IF NOT EXISTS quality_issues (
@@ -93,6 +101,87 @@ CREATE TABLE IF NOT EXISTS near_duplicate_pairs (
 CREATE INDEX IF NOT EXISTS idx_near_groups_folder ON near_duplicate_groups(folder_path);
 """
 
+_FILE_KEY_MIGRATION_COLUMNS = (
+    "name_key",
+    "relative_path_key",
+    "extension_key",
+    "encoding_key",
+)
+
+
+def _table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return {str(row[1]) for row in rows}
+
+
+def _file_sort_keys(record: FileRecord) -> tuple[str, str, str, str]:
+    return (
+        text_sort_key(record.name),
+        text_sort_key(record.relative_path),
+        text_sort_key(record.extension),
+        text_sort_key(record.encoding_status or ""),
+    )
+
+
+def _backfill_file_keys(conn: sqlite3.Connection) -> None:
+    rows = conn.execute("""
+        SELECT folder_path, id, name, relative_path, extension, encoding_status
+        FROM files
+        """).fetchall()
+    for folder_path, file_id, name, relative_path, extension, encoding_status in rows:
+        conn.execute(
+            """
+            UPDATE files
+            SET name_key = ?,
+                relative_path_key = ?,
+                extension_key = ?,
+                encoding_key = ?
+            WHERE folder_path = ? AND id = ?
+            """,
+            (
+                text_sort_key(str(name)),
+                text_sort_key(str(relative_path)),
+                text_sort_key(str(extension)),
+                text_sort_key(str(encoding_status or "")),
+                folder_path,
+                file_id,
+            ),
+        )
+
+
+def _migrate_schema(conn: sqlite3.Connection) -> None:
+    file_columns = _table_columns(conn, "files")
+    if not file_columns:
+        return
+    for column in _FILE_KEY_MIGRATION_COLUMNS:
+        if column not in file_columns:
+            conn.execute(f"ALTER TABLE files ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+    _backfill_file_keys(conn)
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS file_review_projection (
+          folder_path TEXT NOT NULL,
+          file_id TEXT NOT NULL,
+          duplicate_group_id TEXT,
+          is_keeper INTEGER NOT NULL DEFAULT 0,
+          duplicate_group_key TEXT,
+          PRIMARY KEY (folder_path, file_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_file_review_folder_group_key_id
+          ON file_review_projection(folder_path, duplicate_group_key, file_id);
+        CREATE INDEX IF NOT EXISTS idx_files_folder_path_id
+          ON files(folder_path, relative_path_key, id);
+        CREATE INDEX IF NOT EXISTS idx_files_folder_name_id
+          ON files(folder_path, name_key, id);
+        CREATE INDEX IF NOT EXISTS idx_files_folder_extension_id
+          ON files(folder_path, extension_key, id);
+        CREATE INDEX IF NOT EXISTS idx_files_folder_size_id
+          ON files(folder_path, size_bytes, id);
+        CREATE INDEX IF NOT EXISTS idx_files_folder_modified_id
+          ON files(folder_path, modified_at_ns, id);
+        CREATE INDEX IF NOT EXISTS idx_files_folder_encoding_id
+          ON files(folder_path, encoding_key, id);
+        """)
+
 
 class SqliteLibraryIndex:
     def __init__(self, db_path: Path) -> None:
@@ -101,6 +190,8 @@ class SqliteLibraryIndex:
         db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
+            _migrate_schema(conn)
+            conn.commit()
 
     def _connect(self) -> sqlite3.Connection:
         return sqlite3.connect(self._db_path)
@@ -115,6 +206,7 @@ class SqliteLibraryIndex:
             conn.execute("DELETE FROM near_duplicate_groups")
             conn.execute("DELETE FROM near_duplicate_group_members")
             conn.execute("DELETE FROM near_duplicate_pairs")
+            conn.execute("DELETE FROM file_review_projection")
 
     def replace_files(self, folder_path: str, files: list[FileRecord]) -> None:
         self._current_folder = folder_path
@@ -124,8 +216,9 @@ class SqliteLibraryIndex:
                 """
                 INSERT INTO files (
                   id, folder_path, relative_path, name, size_bytes, modified_at_ns,
-                  extension, content_sha256, encoding_status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  extension, content_sha256, encoding_status,
+                  name_key, relative_path_key, extension_key, encoding_key
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [
                     (
@@ -138,10 +231,48 @@ class SqliteLibraryIndex:
                         f.extension,
                         f.content_sha256,
                         f.encoding_status,
+                        *_file_sort_keys(f),
                     )
                     for f in files
                 ],
             )
+
+    def replace_file_review_projection(
+        self,
+        folder_path: str,
+        rows: list[tuple[str, str | None, bool, str | None]],
+    ) -> None:
+        """Replace 1:1 review enrichment rows for folder (file_id, group_id, is_keeper, group_key)."""
+        with self._connect() as conn:
+            conn.execute(
+                "DELETE FROM file_review_projection WHERE folder_path = ?",
+                (folder_path,),
+            )
+            if not rows:
+                return
+            conn.executemany(
+                """
+                INSERT INTO file_review_projection (
+                  folder_path, file_id, duplicate_group_id, is_keeper, duplicate_group_key
+                ) VALUES (?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        folder_path,
+                        file_id,
+                        duplicate_group_id,
+                        1 if is_keeper else 0,
+                        duplicate_group_key,
+                    )
+                    for file_id, duplicate_group_id, is_keeper, duplicate_group_key in rows
+                ],
+            )
+
+    def query_file_rows_page(self, normalized: NormalizedFileRowsQuery) -> dict[str, Any]:
+        if self._current_folder is None:
+            return empty_file_rows_page(normalized.wire_cursor)
+        with self._connect() as conn:
+            return query_sqlite_file_rows_page(conn, self._current_folder, normalized)
 
     @property
     def folder_path(self) -> str | None:

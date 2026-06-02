@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import sqlite3
 import time
 from pathlib import Path
 
@@ -34,6 +35,7 @@ from app.bridge_parity import PYWEBVIEW_API_METHODS
 from app.selection_fingerprint import selection_fingerprint
 from app.session_factory import create_bridge_api, create_library_session
 from application.app_settings import AppSettings
+from application.file_row_query import normalize_file_rows_query, text_sort_key
 from application.ports.filesystem_apply import ApplyRowResult
 from application.quality_analyzer import analyze_quality
 from application.scan_settings import SettingsValidationError, parse_extension_filter
@@ -142,6 +144,46 @@ def test_query_file_rows_empty_library_shape() -> None:
     assert page["rows"] == []
     assert page["pageInfo"]["totalFiltered"] == 0
     assert page["pageInfo"]["hasMore"] is False
+
+
+def test_normalize_file_rows_query_defaults() -> None:
+    normalized = normalize_file_rows_query({"cursor": None})
+    assert normalized.sort_field == "path"
+    assert normalized.sort_direction == "asc"
+    assert normalized.search_term is None
+    assert normalized.cursor_offset == 0
+    assert normalized.limit == 100
+
+
+def test_normalize_file_rows_query_limit_clamped_to_500() -> None:
+    normalized = normalize_file_rows_query({"limit": 999})
+    assert normalized.limit == 500
+
+
+def test_text_sort_key_case_and_unicode_parity() -> None:
+    assert text_sort_key("File.TXT") == text_sort_key("file.txt")
+    assert text_sort_key("토끼.txt") == text_sort_key("토끼.txt")
+    assert text_sort_key("café") == text_sort_key("CAFÉ")
+    assert text_sort_key(".Md") == text_sort_key(".md")
+
+
+def test_normalize_file_rows_query_malformed_cursor_is_zero() -> None:
+    normalized = normalize_file_rows_query({"cursor": "not-a-number", "limit": 10})
+    assert normalized.cursor_offset == 0
+
+
+def test_query_file_rows_invalid_sort_field_rejected() -> None:
+    api = _memory_api()
+    with pytest.raises(PreviewApplyError) as exc_info:
+        api.query_file_rows({"sort": {"field": "notAllowed", "direction": "asc"}})
+    assert exc_info.value.reason == "INVALID_SORT_FIELD"
+
+
+def test_query_file_rows_invalid_filter_value_rejected() -> None:
+    api = _memory_api()
+    with pytest.raises(PreviewApplyError) as exc_info:
+        api.query_file_rows({"filters": {"duplicateGroup": "maybe"}})
+    assert exc_info.value.reason == "INVALID_FILTER_VALUE"
 
 
 def test_bridge_api_get_snapshot_valid() -> None:
@@ -426,6 +468,177 @@ def test_sqlite_library_index_round_trip(tmp_path: Path) -> None:
     assert len(loaded) == 1
     assert loaded[0].content_sha256 == "abc"
     assert index.folder_path == folder
+
+
+def test_sqlite_library_index_file_sort_keys_populated(tmp_path: Path) -> None:
+    db = tmp_path / "library.db"
+    index = SqliteLibraryIndex(db)
+    folder = str(tmp_path / "lib")
+    record = FileRecord(
+        id=make_file_id("Café.txt", 5, 1),
+        relative_path="sub/Café.txt",
+        name="Café.txt",
+        size_bytes=5,
+        modified_at_ns=1,
+        extension=".TXT",
+        content_sha256="abc",
+        encoding_status="UTF-8",
+    )
+    index.replace_files(folder, [record])
+    with sqlite3.connect(db) as conn:
+        row = conn.execute(
+            """
+            SELECT name_key, relative_path_key, extension_key, encoding_key
+            FROM files WHERE folder_path = ? AND id = ?
+            """,
+            (folder, record.id),
+        ).fetchone()
+    assert row is not None
+    assert row[0] == text_sort_key("Café.txt")
+    assert row[1] == text_sort_key("sub/Café.txt")
+    assert row[2] == text_sort_key(".TXT")
+    assert row[3] == text_sort_key("UTF-8")
+    assert row[0] != ""
+    assert row[1] != ""
+
+
+def test_sqlite_library_index_has_file_review_projection_table(tmp_path: Path) -> None:
+    db = tmp_path / "library.db"
+    SqliteLibraryIndex(db)
+    with sqlite3.connect(db) as conn:
+        found = conn.execute("""
+            SELECT name FROM sqlite_master
+            WHERE type = 'table' AND name = 'file_review_projection'
+            """).fetchone()
+    assert found is not None
+
+
+def test_sqlite_query_file_rows_sort_and_search(tmp_path: Path) -> None:
+    folder = tmp_path / "lib"
+    folder.mkdir()
+    (folder / "beta.txt").write_text("b", encoding="utf-8")
+    (folder / "alpha.txt").write_text("a", encoding="utf-8")
+    session = create_library_session(SqliteLibraryIndex(tmp_path / "lib.db"))
+    session.select_folder(str(folder))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+
+    by_path = api.query_file_rows({"sort": {"field": "path", "direction": "asc"}, "limit": 10})
+    paths = [row["path"] for row in by_path["rows"]]
+    assert paths == sorted(paths)
+
+    by_name_desc = api.query_file_rows(
+        {"sort": {"field": "name", "direction": "desc"}, "limit": 10}
+    )
+    names = [row["name"] for row in by_name_desc["rows"]]
+    assert names == sorted(names, reverse=True)
+
+    search = api.query_file_rows({"search": "alpha", "limit": 10})
+    assert search["pageInfo"]["totalFiltered"] == 1
+    assert search["rows"][0]["name"] == "alpha.txt"
+
+
+def test_query_file_rows_cursor_pagination(tmp_path: Path) -> None:
+    folder = tmp_path / "lib"
+    folder.mkdir()
+    for index in range(5):
+        (folder / f"file_{index}.txt").write_bytes(b"x")
+    session = create_library_session(SqliteLibraryIndex(tmp_path / "page.db"))
+    session.select_folder(str(folder))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+
+    first = api.query_file_rows({"limit": 2, "cursor": None})
+    assert len(first["rows"]) == 2
+    assert first["pageInfo"]["hasMore"] is True
+    second = api.query_file_rows({"limit": 2, "cursor": first["pageInfo"]["nextCursor"]})
+    assert len(second["rows"]) == 2
+    assert first["rows"][0]["id"] != second["rows"][0]["id"]
+
+
+def test_query_file_rows_filter_duplicate_group_none(tmp_path: Path) -> None:
+    folder = tmp_path / "lib"
+    folder.mkdir()
+    (folder / "solo.txt").write_bytes(b"only")
+    session = create_library_session(SqliteLibraryIndex(tmp_path / "filter.db"))
+    session.select_folder(str(folder))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+
+    page = api.query_file_rows({"filters": {"duplicateGroup": "none"}, "limit": 50})
+    assert page["pageInfo"]["totalFiltered"] >= 1
+    assert all(row.get("duplicateGroupId") is None for row in page["rows"])
+
+
+def test_query_file_rows_exact_duplicate_enrichment(tmp_path: Path) -> None:
+    payload = "duplicate story body\n"
+    (tmp_path / "keeper.txt").write_text(payload, encoding="utf-8")
+    (tmp_path / "copy.txt").write_text(payload, encoding="utf-8")
+    session = create_library_session(SqliteLibraryIndex(tmp_path / "dup.db"))
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+
+    page = api.query_file_rows({"limit": 50})
+    assert page["pageInfo"]["totalFiltered"] == 2
+    group_ids = {row.get("duplicateGroupId") for row in page["rows"]}
+    assert len(group_ids) == 1
+    assert None not in group_ids
+    assert sum(1 for row in page["rows"] if row.get("isKeeper")) == 1
+
+
+def test_sqlite_library_index_legacy_db_backfills_file_keys(tmp_path: Path) -> None:
+    db = tmp_path / "legacy.db"
+    folder = str(tmp_path / "lib")
+    file_id = make_file_id("legacy.txt", 10, 1)
+    with sqlite3.connect(db) as conn:
+        conn.executescript("""
+            CREATE TABLE files (
+              id TEXT PRIMARY KEY,
+              folder_path TEXT NOT NULL,
+              relative_path TEXT NOT NULL,
+              name TEXT NOT NULL,
+              size_bytes INTEGER NOT NULL,
+              modified_at_ns INTEGER NOT NULL,
+              extension TEXT NOT NULL,
+              content_sha256 TEXT,
+              encoding_status TEXT
+            );
+            """)
+        conn.execute(
+            """
+            INSERT INTO files (
+              id, folder_path, relative_path, name, size_bytes, modified_at_ns,
+              extension, content_sha256, encoding_status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                file_id,
+                folder,
+                "legacy.txt",
+                "legacy.txt",
+                10,
+                1,
+                ".txt",
+                None,
+                "ascii",
+            ),
+        )
+        conn.commit()
+
+    SqliteLibraryIndex(db)
+    with sqlite3.connect(db) as conn:
+        row = conn.execute(
+            "SELECT name_key, relative_path_key FROM files WHERE id = ?",
+            (file_id,),
+        ).fetchone()
+    assert row is not None
+    assert row[0] == text_sort_key("legacy.txt")
+    assert row[1] == text_sort_key("legacy.txt")
 
 
 def _scan_until_idle(api: BridgeApi) -> dict:

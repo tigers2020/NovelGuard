@@ -9,6 +9,7 @@ from app import version
 from app.apply_quality_repair import ApplyQualityRepairUseCase
 from app.apply_resolved_actions import ApplyResolvedActionsUseCase
 from app.bridge_contract import (
+    FileRowQueryError,
     FinalizeError,
     PreviewApplyError,
     QualityQueryError,
@@ -40,6 +41,7 @@ from application.app_settings import (
     InvalidSettingValueError,
     UnknownSettingKeyError,
 )
+from application.file_row_query import normalize_file_rows_query
 from application.issue_selection_fingerprint import issue_selection_fingerprint
 from application.library_session import LibrarySession
 from application.log_query import LogQueryError
@@ -106,7 +108,10 @@ class BridgeApi:
         return payload
 
     def query_file_rows(self, query: dict[str, Any]) -> dict[str, Any]:
-        _ = clamp_query_limit(query)
+        try:
+            _ = normalize_file_rows_query(query)
+        except FileRowQueryError as exc:
+            raise PreviewApplyError(exc.reason, str(exc)) from exc
         payload = self._session.query_file_rows(query)
         validate_file_rows_page(payload)
         return payload
