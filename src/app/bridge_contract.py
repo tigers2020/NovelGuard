@@ -15,6 +15,8 @@ FORBIDDEN_SNAPSHOT_ARRAY_KEYS = (
 
 MAX_QUERY_LIMIT = 200
 DEFAULT_QUERY_LIMIT = 100
+FILE_ROW_MAX_QUERY_LIMIT = 500
+FILE_ROW_DEFAULT_QUERY_LIMIT = 100
 
 
 class SnapshotContractError(ValueError):
@@ -53,8 +55,30 @@ class RepairApplyError(ValueError):
 
 QUALITY_SORT_FIELDS = frozenset({"name", "path", "issueType", "severity", "encoding", "integrity"})
 
+FILE_ROW_SORT_FIELDS = frozenset(
+    {
+        "name",
+        "path",
+        "extension",
+        "size",
+        "modifiedAt",
+        "encoding",
+        "duplicateGroup",
+        "integrity",
+    }
+)
+
 
 class QualityQueryError(ValueError):
+    def __init__(self, reason: str, message: str | None = None) -> None:
+        self.reason = reason
+        super().__init__(message or reason)
+
+    def __str__(self) -> str:
+        return json.dumps({"reason": self.reason}, ensure_ascii=False)
+
+
+class FileRowQueryError(ValueError):
     def __init__(self, reason: str, message: str | None = None) -> None:
         self.reason = reason
         super().__init__(message or reason)
@@ -124,7 +148,7 @@ def validate_file_rows_page(page: Any) -> None:
     if not isinstance(page, dict):
         raise PageContractError("FileRowsPage must be a dict")
     rows = page.get("rows")
-    if not isinstance(rows, list) or len(rows) > MAX_QUERY_LIMIT:
+    if not isinstance(rows, list) or len(rows) > FILE_ROW_MAX_QUERY_LIMIT:
         raise PageContractError("FileRowsPage.rows invalid or exceeds limit")
     page_info = page.get("pageInfo")
     if not isinstance(page_info, dict) or not isinstance(page_info.get("totalFiltered"), int):

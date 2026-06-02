@@ -12,7 +12,7 @@ reviewer_audit: 2026-06-02 — approved 8.5/10; scope locks below incorporated
 
 **Parent:** [000 master roadmap](./000-2026-06-01-novelguard-master-roadmap.md) · **Prior track:** [001 PR-20..25](./001-2026-06-02-pr20-pr25-development-roadmap.md) (closed)
 
-**Position (2026-06-02):** PR-25 **Done** on `main` ([spec 013](../specs/013-2026-06-02-shell-filedock-design.md), [plan 019](../plans/019-2026-06-02-pr25-shell-filedock.md)). **Next:** PR-26 spec `014` (proposed) — snapshot **invalidation** events (not snapshot payload push).
+**Position (2026-06-02):** PR-26..28 **Done** on feature branch (merge to `main` pending). **Next:** PR-29 spec [017](../specs/017-2026-06-02-query-file-rows-advanced-design.md) (**approved** 2026-06-02) → plan 023 → implement.
 
 **Sequencing (locked):** `snapshot invalidation transport → quality grid parity → Settings/Logs v1 (minimal) → queryFileRows advanced → bridge hygiene refactor`. PR-30 is **not** a mandatory “last feature PR” — see [PR-30 early-pull rules](#pr-30--bridge--app-hygiene-refactor).
 
@@ -25,8 +25,9 @@ reviewer_audit: 2026-06-02 — approved 8.5/10; scope locks below incorporated
 | **PR-26 transport** | Events = invalidation only → UI coalesces → `getSnapshot()`. No row arrays on the wire. |
 | **PR-26 fallback** | **Roadmap default:** `idle 10 s` slow poll + event-driven refresh (spec may tighten, not loosen). |
 | **PR-28 scope** | **Option A (locked):** one PR, strictly minimal Settings v1 + Logs v1 — see [PR-28](#pr-28--settings--logs-product-surfaces). Option B split (28a/28b) only via new product decision + roadmap changelog. |
-| **PR-29 ownership** | `ShellFileDock` stays shell-owned; PR-29 extends query/index only. |
-| **PR-30 start gate** | No implementation without behavior-identical characterization coverage plan in spec 018. |
+| **PR-29 ownership** | `ShellFileDock` stays shell-owned; PR-29 extends query/index only. **No Work visible “all files” mode; no public `FileRowsProvider` in PR-29.** |
+| **PR-29 backend** | SQLite `files` table already exists; PR-29 = SQL `query_file_rows_page`, not greenfield index. |
+| **PR-30 start gate** | No implementation without behavior-identical characterization coverage plan in spec 018. **No `queryFileRows` ownership change; no BridgeApi surgery before PR-29 spec approval.** |
 
 ---
 
@@ -69,8 +70,8 @@ flowchart TD
 |----|------|------|----------|-----------------|-----------------|--------|
 | **PR-26** | Snapshot invalidation events | F | No | `specs/014-2026-06-02-snapshot-invalidation-design.md` | `plans/020-2026-06-02-pr26-snapshot-invalidation.md` | **Done** (2026-06-02) |
 | **PR-27** | Quality grid parity with Resolve | F | No | `specs/015-2026-06-02-quality-grid-parity-design.md` | `plans/021-2026-06-02-pr27-quality-grid-parity.md` | **Done** (2026-06-02) |
-| **PR-28** | Settings/Logs v1 (minimal subset) | F | Limited | `specs/016-2026-06-02-settings-logs-design.md` | `plans/022-2026-06-02-pr28-settings-logs.md` | **Implemented** (2026-06-02); merge pending |
-| **PR-29** | `queryFileRows` advanced / library grid | F | No | `specs/017-2026-06-02-query-file-rows-advanced-design.md` | `plans/023-2026-06-02-pr29-query-file-rows-advanced.md` | **Proposed** |
+| **PR-28** | Settings/Logs v1 (minimal subset) | F | Limited | `specs/016-2026-06-02-settings-logs-design.md` | `plans/022-2026-06-02-pr28-settings-logs.md` | **Done** (2026-06-02); **merge to `main` before PR-29 implement** |
+| **PR-29** | `queryFileRows` advanced / SQL page query | F | No | `specs/017-2026-06-02-query-file-rows-advanced-design.md` | `plans/023-2026-06-02-pr29-query-file-rows-advanced.md` | Spec **approved**; plan 023 **approved** (2026-06-02); Task 1 in progress |
 | **PR-30** | Bridge / app hygiene refactor | G | No | `specs/018-2026-06-02-bridge-hygiene-design.md` | `plans/024-2026-06-02-pr30-bridge-hygiene.md` | **Proposed** |
 
 ---
@@ -395,7 +396,9 @@ python scripts/verify_phase_completion.py
 - [ ] PR-26 fallback locked: **idle 10 s poll + event refresh** (or stricter in spec)
 - [x] PR-27 sort field **whitelist** named in spec 015
 - [x] PR-28 Settings v1 subset locked (LOCK-28); Logs **one** source of truth chosen (spec 016 grill 2026-06-02: `queryLogEntries` + artifact metadata only)
-- [ ] PR-29 SQLite rebuild: **full rescan rebuild** default documented in spec 017
+- [x] PR-29 SQLite rebuild: **full rescan rebuild** (`replace_files`) documented in spec 017
+- [x] PR-29 UI consumer: **ShellFileDock only** (LOCK-29-1 in spec 017)
+- [x] PR-29 cursor: **offset wire**; keyset deferred (LOCK-29-8..10 in spec 017)
 - [ ] PR-30: characterization test plan in spec 018 before any extraction task
 - [ ] 001 closed-track stale checklist cleaned (hygiene)
 
@@ -407,7 +410,8 @@ python scripts/verify_phase_completion.py
 - [x] PR-27 plan 021 approved + implemented (2026-06-02)
 - [x] PR-28 spec 016 approved (2026-06-02)
 - [x] PR-28 plan 022 approved (2026-06-02)
-- [ ] PR-29 spec 017 → grill-me (index rebuild; no dock ownership move)
+- [x] PR-29 spec 017 approved (2026-06-02; grill B1–B4, G1–G4)
+- [ ] PR-29 plan [023](../plans/023-2026-06-02-pr29-query-file-rows-advanced.md) → human approve (Task 0)
 - [ ] PR-30 spec 018 → grill-me (early-pull rules + characterization gate)
 - [ ] No PR-29 scope creep into PR-25 shell ownership
 - [ ] No PR-30 semantic changes without new spec cycle
@@ -444,3 +448,6 @@ python scripts/verify_phase_completion.py
 | 2026-06-02 | Initial PR-26..30 platform polish roadmap; parent 000 + closed track 001 referenced |
 | 2026-06-02 | Locked sequence 26→27→28→29; PR-30 optional parallel; proposed specs 014–018 / plans 020–024 |
 | 2026-06-02 | Roadmap audit: LOCK-26 invalidation-only + idle 10s fallback; LOCK-28 Option A minimal v1; PR-27 sort whitelist; PR-29 full rescan rebuild default; PR-30 early-pull + characterization gate |
+| 2026-06-02 | PR-29 spec 017 draft: ShellFileDock-only consumer; SQL page path; offset cursor; strengthened PR-30 parallel gate |
+| 2026-06-02 | PR-29 spec 017 **approved**: NormalizedFileRowsQuery, *_key columns, file_review_projection, LOCK-29-13..16 |
+| 2026-06-02 | PR-29 plan 023 draft (Tasks 0–14, commit slices) |

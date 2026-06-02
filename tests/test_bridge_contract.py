@@ -34,6 +34,7 @@ from app.bridge_parity import PYWEBVIEW_API_METHODS
 from app.selection_fingerprint import selection_fingerprint
 from app.session_factory import create_bridge_api, create_library_session
 from application.app_settings import AppSettings
+from application.file_row_query import normalize_file_rows_query
 from application.ports.filesystem_apply import ApplyRowResult
 from application.quality_analyzer import analyze_quality
 from application.scan_settings import SettingsValidationError, parse_extension_filter
@@ -142,6 +143,39 @@ def test_query_file_rows_empty_library_shape() -> None:
     assert page["rows"] == []
     assert page["pageInfo"]["totalFiltered"] == 0
     assert page["pageInfo"]["hasMore"] is False
+
+
+def test_normalize_file_rows_query_defaults() -> None:
+    normalized = normalize_file_rows_query({"cursor": None})
+    assert normalized.sort_field == "path"
+    assert normalized.sort_direction == "asc"
+    assert normalized.search_term is None
+    assert normalized.cursor_offset == 0
+    assert normalized.limit == 100
+
+
+def test_normalize_file_rows_query_limit_clamped_to_500() -> None:
+    normalized = normalize_file_rows_query({"limit": 999})
+    assert normalized.limit == 500
+
+
+def test_normalize_file_rows_query_malformed_cursor_is_zero() -> None:
+    normalized = normalize_file_rows_query({"cursor": "not-a-number", "limit": 10})
+    assert normalized.cursor_offset == 0
+
+
+def test_query_file_rows_invalid_sort_field_rejected() -> None:
+    api = _memory_api()
+    with pytest.raises(PreviewApplyError) as exc_info:
+        api.query_file_rows({"sort": {"field": "notAllowed", "direction": "asc"}})
+    assert exc_info.value.reason == "INVALID_SORT_FIELD"
+
+
+def test_query_file_rows_invalid_filter_value_rejected() -> None:
+    api = _memory_api()
+    with pytest.raises(PreviewApplyError) as exc_info:
+        api.query_file_rows({"filters": {"duplicateGroup": "maybe"}})
+    assert exc_info.value.reason == "INVALID_FILTER_VALUE"
 
 
 def test_bridge_api_get_snapshot_valid() -> None:
