@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 from app.apply_quality_repair import ApplyQualityRepairUseCase
 from app.apply_resolved_actions import ApplyResolvedActionsUseCase
 from app.bridge_contract import (
+    FinalizeError,
     PreviewApplyError,
     RepairApplyError,
     clamp_query_limit,
     validate_app_snapshot,
     validate_duplicate_group_detail,
+    validate_finalize_result,
+    validate_finalize_summary,
     validate_move_preview,
     validate_quality_issue_detail,
     validate_quality_repair_preview,
@@ -28,6 +32,14 @@ from app.selection_fingerprint import selection_fingerprint
 from application.issue_selection_fingerprint import issue_selection_fingerprint
 from application.library_session import LibrarySession
 from application.review_errors import ReviewDecisionError
+
+
+def _default_audit_log_path() -> Path:
+    return Path.home() / ".novelguard" / "apply-audit.jsonl"
+
+
+def _default_finalize_save_root() -> Path:
+    return Path.home() / ".novelguard" / "SAVE" / "finalize"
 
 
 class BridgeApi:
@@ -218,3 +230,37 @@ class BridgeApi:
     def query_review_rows_json(self, query_json: str) -> str:
         """Optional helper if JS passes JSON string."""
         return json.dumps(self.query_review_rows(json.loads(query_json)))
+
+    def get_finalize_summary(self) -> dict[str, Any]:
+        if not self._session.library_root_path():
+            raise FinalizeError("NO_LIBRARY")
+        payload = self._session.get_finalize_summary(_default_audit_log_path())
+        validate_finalize_summary(payload)
+        return payload
+
+    def run_finalize_verification(self, request: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(request, dict):
+            raise FinalizeError("INVALID_REQUEST", "request must be a dict")
+        try:
+            payload = self._session.run_finalize_verification(request)
+        except RuntimeError as exc:
+            reason = str(exc)
+            if reason in ("NO_LIBRARY", "LIBRARY_BUSY", "FINALIZE_NOT_CONFIGURED"):
+                raise FinalizeError(reason) from exc
+            raise
+        validate_finalize_result(payload)
+        return payload
+
+    def get_finalize_report(self, report_id: str) -> dict[str, Any]:
+        if not isinstance(report_id, str) or not report_id.strip():
+            raise FinalizeError("INVALID_REQUEST", "reportId required")
+        try:
+            return self._session.read_finalize_report(
+                _default_finalize_save_root(),
+                report_id.strip(),
+            )
+        except FileNotFoundError as exc:
+            raise FinalizeError("REPORT_NOT_FOUND") from exc
+
+    def cancel_finalize(self) -> None:
+        self._session.cancel_finalize()

@@ -45,6 +45,12 @@ import type {
   RepairPreviewErrorCode,
 } from "../types/qualityRepair";
 import { issueSelectionFingerprint, normalizeRepairIssueIds } from "./issueSelectionFingerprint";
+import type {
+  FinalizeReportDocument,
+  FinalizeResult,
+  FinalizeSummary,
+  RunFinalizeRequest,
+} from "../types/finalize";
 
 const state = {
   activeMode: "resolve" as WorkMode,
@@ -73,6 +79,8 @@ let pendingRepair: {
   issueSelectionFingerprint: string;
   issueIds: string[];
 } | null = null;
+
+let lastFinalizeReport: FinalizeReportDocument | null = null;
 
 function rejectApply(method: string, reason: PreviewApplyErrorCode): never {
   throw new BridgeCallError(`Apply rejected: ${reason}`, {
@@ -159,6 +167,14 @@ function buildSnapshot(): AppSnapshot {
         integrityIssueCount: qualityRows.filter((r) => r.issueType === "integrity").length,
         encodingIssueCount: qualityRows.filter((r) => r.issueType === "encoding").length,
         smallFileAnomalyCount: qualityRows.filter((r) => r.issueType === "small_file").length,
+        hasPendingQualityRepair: pendingRepair !== null,
+      },
+      finalize: {
+        lastReportId: null,
+        lastStatus: "idle",
+        lastRunAt: null,
+        blockerCount: 0,
+        warningCount: 0,
       },
     },
     fileListSummary: {
@@ -243,6 +259,85 @@ function resolveSelectionIds(selection: SelectionScope): string[] {
     (row) => !selection.excludeRowIds.includes(row.id),
   );
   return filtered.map((row) => row.id);
+}
+
+function buildMockFinalizeSummary(): FinalizeSummary {
+  const merged = mergedReviewRows();
+  const counts = fileRowStatusCounts(merged);
+  const qualityRows = buildQualityRows();
+  const exactUnresolved = merged.filter(
+    (row) =>
+      row.rowKind === "file" &&
+      row.type === "exact" &&
+      (row.status === "unreviewed" || row.status === "conflict"),
+  ).length;
+  const blockers: FinalizeSummary["blockers"] = [];
+  if (state.hasPendingApply) {
+    blockers.push({
+      code: "PENDING_MOVE_PREVIEW",
+      message: "이동 미리보기가 적용되지 않았거나 해제되지 않았습니다.",
+    });
+  }
+  if (pendingRepair) {
+    blockers.push({
+      code: "PENDING_REPAIR_PREVIEW",
+      message: "품질 복구 미리보기가 적용되지 않았거나 해제되지 않았습니다.",
+    });
+  }
+  const scanState = state.pipelineRunning ? "running" : "success";
+  if (scanState !== "success") {
+    blockers.push({ code: "SCAN_NOT_SUCCESS", message: "스캔이 성공적으로 완료되지 않았습니다." });
+  }
+  if (exactUnresolved > 0) {
+    blockers.push({
+      code: "UNRESOLVED_DUPLICATE_QUEUE",
+      message: "미해결 exact 중복 파일이 남아 있습니다.",
+      count: exactUnresolved,
+    });
+  }
+  const encodingCount = qualityRows.filter((r) => r.issueType === "encoding").length;
+  const integrityCount = qualityRows.filter((r) => r.issueType === "integrity").length;
+  if (encodingCount + integrityCount > 0) {
+    blockers.push({
+      code: "QUALITY_ERROR_ISSUES",
+      message: "인코딩 또는 무결성 품질 오류가 남아 있습니다.",
+      count: encodingCount + integrityCount,
+    });
+  }
+  const warnings: FinalizeSummary["warnings"] = [];
+  const smallCount = qualityRows.filter((r) => r.issueType === "small_file").length;
+  if (smallCount > 0) {
+    warnings.push({
+      code: "SMALL_FILE_ANOMALIES",
+      message: "소용량 파일 이상이 남아 있습니다.",
+      count: smallCount,
+    });
+  }
+  return {
+    libraryRevision,
+    scanState,
+    resolve: {
+      queueCount: counts.queueCount,
+      exactUnresolvedQueueCount: exactUnresolved,
+      conflictCount: counts.conflictCount,
+      approvedCount: counts.approvedCount,
+      hasPendingApply: state.hasPendingApply,
+    },
+    quality: {
+      encodingIssueCount: encodingCount,
+      integrityIssueCount: integrityCount,
+      smallFileAnomalyCount: smallCount,
+      hasPendingQualityRepair: pendingRepair !== null,
+    },
+    auditTail: {
+      lastMoveApplyAt: null,
+      lastRepairApplyAt: null,
+      moveApplyCount: 0,
+      repairApplyCount: 0,
+    },
+    blockers,
+    warnings,
+  };
 }
 
 export const mockBridge: NovelGuardBridge = {
@@ -545,5 +640,68 @@ export const mockBridge: NovelGuardBridge = {
     if (key === "include_relation") {
       includeRelation = value;
     }
+  },
+
+  async getFinalizeSummary() {
+    return buildMockFinalizeSummary();
+  },
+
+  async runFinalizeVerification(request: RunFinalizeRequest) {
+    const summary = buildMockFinalizeSummary();
+    const status =
+      summary.blockers.length > 0
+        ? "blocked"
+        : summary.warnings.length > 0
+          ? "complete_with_warnings"
+          : "complete";
+    const reportId = `finalize-mock-${Date.now()}`;
+    const cleanup = { previewedEmptyDirs: [], removedEmptyDirs: [] };
+    if (request.includeCleanup && summary.blockers.length === 0) {
+      cleanup.previewedEmptyDirs = ["duplicate/empty-slot"];
+    }
+    const doc: FinalizeReportDocument = {
+      reportId,
+      sessionId: "mock-session",
+      createdAt: new Date().toISOString(),
+      libraryRevision,
+      status,
+      blockers: summary.blockers,
+      warnings: summary.warnings,
+      summary,
+      audit: summary.auditTail,
+      cleanup,
+    };
+    lastFinalizeReport = doc;
+    if (status === "cancelled" || status === "error") {
+      return {
+        status,
+        reportId: null,
+        reportPath: null,
+        libraryRevision,
+        blockers: summary.blockers,
+        warnings: summary.warnings,
+        cleanup,
+      } as FinalizeResult;
+    }
+    return {
+      status,
+      reportId,
+      reportPath: `finalize/${reportId}.json`,
+      libraryRevision,
+      blockers: summary.blockers,
+      warnings: summary.warnings,
+      cleanup,
+    } as FinalizeResult;
+  },
+
+  async getFinalizeReport(reportId: string) {
+    if (!lastFinalizeReport || lastFinalizeReport.reportId !== reportId) {
+      throw new BridgeCallError("REPORT_NOT_FOUND", { code: "rejected", method: "get_finalize_report" });
+    }
+    return lastFinalizeReport;
+  },
+
+  async cancelFinalize() {
+    state.pipelineRunning = false;
   },
 };

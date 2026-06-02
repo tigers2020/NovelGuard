@@ -63,6 +63,12 @@ def build_snapshot(
     encoding_issue_count: int = 0,
     small_file_anomaly_count: int = 0,
     total_quality_issue_count: int = 0,
+    has_pending_quality_repair: bool = False,
+    finalize_last_report_id: str | None = None,
+    finalize_last_status: str = "idle",
+    finalize_last_run_at: str | None = None,
+    finalize_blocker_count: int = 0,
+    finalize_warning_count: int = 0,
     connection: str = "Library session (Python)",
 ) -> dict[str, Any]:
     return {
@@ -100,6 +106,14 @@ def build_snapshot(
                 "integrityIssueCount": integrity_issue_count,
                 "encodingIssueCount": encoding_issue_count,
                 "smallFileAnomalyCount": small_file_anomaly_count,
+                "hasPendingQualityRepair": has_pending_quality_repair,
+            },
+            "finalize": {
+                "lastReportId": finalize_last_report_id,
+                "lastStatus": finalize_last_status,
+                "lastRunAt": finalize_last_run_at,
+                "blockerCount": finalize_blocker_count,
+                "warningCount": finalize_warning_count,
             },
         },
         "fileListSummary": {

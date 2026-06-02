@@ -23,9 +23,26 @@ export interface QualitySnapshot {
   integrityIssueCount: number;
   encodingIssueCount: number;
   smallFileAnomalyCount: number;
+  hasPendingQualityRepair: boolean;
 }
 
-export type WorkMode = "scan" | "resolve" | "quality";
+export type FinalizeLastStatus =
+  | "idle"
+  | "running"
+  | "complete"
+  | "complete_with_warnings"
+  | "blocked"
+  | "error";
+
+export interface FinalizeSnapshot {
+  lastReportId: string | null;
+  lastStatus: FinalizeLastStatus;
+  lastRunAt: string | null;
+  blockerCount: number;
+  warningCount: number;
+}
+
+export type WorkMode = "scan" | "resolve" | "quality" | "finalize";
 
 export interface AppSnapshot {
   route: "work" | "settings" | "logs";
@@ -47,6 +64,7 @@ export interface AppSnapshot {
     scan: ScanSnapshot;
     resolve: ResolveSnapshot;
     quality: QualitySnapshot;
+    finalize: FinalizeSnapshot;
   };
   fileListSummary: {
     totalCount: number;

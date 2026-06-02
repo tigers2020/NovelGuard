@@ -16,6 +16,12 @@ import type {
   UpdateReviewDecisionsRequest,
   UpdateReviewDecisionsResult,
 } from "../types/reviewDecisions";
+import type {
+  FinalizeReportDocument,
+  FinalizeResult,
+  FinalizeSummary,
+  RunFinalizeRequest,
+} from "../types/finalize";
 import type { SelectionScope } from "../types/selection";
 
 export interface NovelGuardBridge {
@@ -41,4 +47,8 @@ export interface NovelGuardBridge {
   ): Promise<UpdateReviewDecisionsResult>;
   getAppSetting(key: string): Promise<boolean>;
   setAppSetting(key: string, value: boolean): Promise<void>;
+  getFinalizeSummary(): Promise<FinalizeSummary>;
+  runFinalizeVerification(request: RunFinalizeRequest): Promise<FinalizeResult>;
+  getFinalizeReport(reportId: string): Promise<FinalizeReportDocument>;
+  cancelFinalize(): Promise<void>;
 }

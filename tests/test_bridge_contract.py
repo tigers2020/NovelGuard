@@ -10,6 +10,7 @@ from app.bridge_api import BridgeApi
 from app.bridge_contract import (
     ApplyFailedError,
     EmptySelectionError,
+    FinalizeError,
     InvalidSelectionScopeError,
     PreviewApplyError,
     RepairApplyError,
@@ -18,6 +19,8 @@ from app.bridge_contract import (
     clamp_query_limit,
     validate_app_snapshot,
     validate_duplicate_group_detail,
+    validate_finalize_result,
+    validate_finalize_summary,
     validate_move_preview,
     validate_quality_repair_preview,
     validate_quality_rows_page,
@@ -96,6 +99,10 @@ def test_pywebview_api_methods_match_locked_contract() -> None:
         "update_review_decisions",
         "get_app_setting",
         "set_app_setting",
+        "get_finalize_summary",
+        "run_finalize_verification",
+        "get_finalize_report",
+        "cancel_finalize",
     ]
     assert list(PYWEBVIEW_API_METHODS) == locked
 
@@ -1437,3 +1444,68 @@ def test_quality_repair_stale_file_drift(tmp_path: Path) -> None:
         )
     assert exc_info.value.reason == "STALE_REPAIR_PREVIEW"
     assert "changed-by-user" in path.read_bytes().decode("latin-1")
+
+
+def test_get_finalize_summary_requires_library() -> None:
+    api = _memory_api()
+    with pytest.raises(FinalizeError) as exc_info:
+        api.get_finalize_summary()
+    assert exc_info.value.reason == "NO_LIBRARY"
+
+
+def test_get_finalize_summary_after_scan(tmp_path: Path) -> None:
+    (tmp_path / "solo.txt").write_text("hello", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    summary = api.get_finalize_summary()
+    validate_finalize_summary(summary)
+    assert summary["resolve"]["exactUnresolvedQueueCount"] == 0
+    assert summary["scanState"] == "success"
+
+
+def test_finalize_complete_clean_library(tmp_path: Path) -> None:
+    (tmp_path / "solo.txt").write_text("hello", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    result = api.run_finalize_verification({"includeCleanup": False})
+    validate_finalize_result(result)
+    assert result["status"] in ("complete", "complete_with_warnings")
+    assert result["blockers"] == []
+    assert result["reportId"]
+    assert isinstance(result["cleanup"]["previewedEmptyDirs"], list)
+
+
+def test_finalize_blocked_exact_duplicate_queue(tmp_path: Path) -> None:
+    payload = "same\n"
+    (tmp_path / "a.txt").write_text(payload, encoding="utf-8")
+    (tmp_path / "b.txt").write_text(payload, encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    summary = api.get_finalize_summary()
+    assert summary["resolve"]["queueCount"] > 0
+    assert summary["resolve"]["exactUnresolvedQueueCount"] > 0
+    result = api.run_finalize_verification({"includeCleanup": False})
+    assert result["status"] == "blocked"
+    assert result["reportId"]
+    report = api.get_finalize_report(result["reportId"])
+    assert report["status"] == "blocked"
+
+
+def test_finalize_while_scan_raises_library_busy(tmp_path: Path) -> None:
+    (tmp_path / "solo.txt").write_text("x", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    with pytest.raises(FinalizeError) as exc_info:
+        api.run_finalize_verification({"includeCleanup": False})
+    assert exc_info.value.reason == "LIBRARY_BUSY"

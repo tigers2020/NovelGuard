@@ -37,6 +37,14 @@ VALID_SNAPSHOT: dict[str, Any] = {
             "integrityIssueCount": 0,
             "encodingIssueCount": 0,
             "smallFileAnomalyCount": 0,
+            "hasPendingQualityRepair": False,
+        },
+        "finalize": {
+            "lastReportId": None,
+            "lastStatus": "idle",
+            "lastRunAt": None,
+            "blockerCount": 0,
+            "warningCount": 0,
         },
     },
     "fileListSummary": {

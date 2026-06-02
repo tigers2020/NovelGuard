@@ -19,6 +19,10 @@ export const NOVEL_GUARD_BRIDGE_METHODS = [
   "updateReviewDecisions",
   "getAppSetting",
   "setAppSetting",
+  "getFinalizeSummary",
+  "runFinalizeVerification",
+  "getFinalizeReport",
+  "cancelFinalize",
 ] as const satisfies readonly (keyof NovelGuardBridge)[];
 
 export const PYWEBVIEW_API_METHODS = [
@@ -40,6 +44,10 @@ export const PYWEBVIEW_API_METHODS = [
   "update_review_decisions",
   "get_app_setting",
   "set_app_setting",
+  "get_finalize_summary",
+  "run_finalize_verification",
+  "get_finalize_report",
+  "cancel_finalize",
 ] as const;
 
 export function assertBridgeParity(bridge: NovelGuardBridge): void {

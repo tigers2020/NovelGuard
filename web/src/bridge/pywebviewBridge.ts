@@ -13,6 +13,7 @@ import type {
   UpdateReviewDecisionsResult,
 } from "../types/reviewDecisions";
 import type { SelectionScope } from "../types/selection";
+import type { FinalizeReportDocument, FinalizeResult, FinalizeSummary, RunFinalizeRequest } from "../types/finalize";
 import type { WorkMode } from "../types/snapshot";
 import { BridgeCallError } from "./bridgeErrors";
 import { callBridge } from "./callBridge";
@@ -124,6 +125,22 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
     setAppSetting: (key: string, value: boolean) =>
       callBridge(() => call(api, "set_app_setting", key, value).then(() => undefined), {
         method: "set_app_setting",
+      }),
+    getFinalizeSummary: () =>
+      callBridge(() => call<FinalizeSummary>(api, "get_finalize_summary"), {
+        method: "get_finalize_summary",
+      }),
+    runFinalizeVerification: (request: RunFinalizeRequest) =>
+      callBridge(() => call<FinalizeResult>(api, "run_finalize_verification", request), {
+        method: "run_finalize_verification",
+      }),
+    getFinalizeReport: (reportId: string) =>
+      callBridge(() => call<FinalizeReportDocument>(api, "get_finalize_report", reportId), {
+        method: "get_finalize_report",
+      }),
+    cancelFinalize: () =>
+      callBridge(() => call(api, "cancel_finalize").then(() => undefined), {
+        method: "cancel_finalize",
       }),
   };
 }

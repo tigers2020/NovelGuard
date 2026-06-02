@@ -357,6 +357,58 @@ def validate_quality_repair_preview(payload: Any) -> None:
             raise PageContractError("low confidence row requires encodingWarning")
 
 
+class FinalizeError(Exception):
+    def __init__(self, reason: str, details: str = "") -> None:
+        self.reason = reason
+        self.details = details
+        super().__init__(reason)
+
+    def __str__(self) -> str:
+        return json.dumps({"reason": self.reason, "details": self.details}, ensure_ascii=False)
+
+
+def validate_finalize_summary(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise PageContractError("FinalizeSummary must be a dict")
+    resolve = payload.get("resolve")
+    if not isinstance(resolve, dict):
+        raise PageContractError("FinalizeSummary.resolve must be a dict")
+    if not isinstance(resolve.get("exactUnresolvedQueueCount"), int):
+        raise PageContractError("exactUnresolvedQueueCount must be int")
+    if not isinstance(payload.get("blockers"), list) or not isinstance(
+        payload.get("warnings"), list
+    ):
+        raise PageContractError("FinalizeSummary blockers/warnings must be lists")
+
+
+def validate_finalize_result(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise PageContractError("FinalizeResult must be a dict")
+    status = payload.get("status")
+    if status not in (
+        "complete",
+        "complete_with_warnings",
+        "blocked",
+        "cancelled",
+        "error",
+    ):
+        raise PageContractError("FinalizeResult.status invalid")
+    if status in ("complete", "complete_with_warnings", "blocked"):
+        if not isinstance(payload.get("reportId"), str) or not isinstance(
+            payload.get("reportPath"), str
+        ):
+            raise PageContractError("FinalizeResult report fields required")
+    else:
+        if payload.get("reportId") is not None or payload.get("reportPath") is not None:
+            raise PageContractError("FinalizeResult report fields must be null")
+    cleanup = payload.get("cleanup")
+    if not isinstance(cleanup, dict):
+        raise PageContractError("FinalizeResult.cleanup must be a dict")
+    for key in ("previewedEmptyDirs", "removedEmptyDirs"):
+        if not isinstance(cleanup.get(key), list):
+            raise PageContractError(f"cleanup.{key} must be a list")
+
+
 def validate_selection_scope(selection: Any) -> None:
     if not isinstance(selection, dict):
         raise InvalidSelectionScopeError("SelectionScope must be a dict")

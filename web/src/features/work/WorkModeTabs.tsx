@@ -4,6 +4,7 @@ const tabs: { id: WorkMode; label: string }[] = [
   { id: "scan", label: "스캔" },
   { id: "resolve", label: "검토 · 정리" },
   { id: "quality", label: "품질" },
+  { id: "finalize", label: "적용 · 검증" },
 ];
 
 export function WorkModeTabs({

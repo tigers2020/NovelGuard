@@ -70,6 +70,13 @@ class LibrarySession:
         self._total_quality_issue_count = 0
         self._apply_in_progress = False
         self._has_pending_quality_repair = False
+        self._finalize_last_report_id: str | None = None
+        self._finalize_last_status = "idle"
+        self._finalize_last_run_at: str | None = None
+        self._finalize_blocker_count = 0
+        self._finalize_warning_count = 0
+        self._finalize_last_report_path: str | None = None
+        self._finalize_runner: Any = None
         self._near_groups_by_id: dict[str, NearDuplicateGroup] = {}
         self._relation_groups_by_id: dict[str, RelationGroup] = {}
         self._settings = AppSettings()
@@ -135,7 +142,7 @@ class LibrarySession:
 
     def set_work_mode(self, mode: str) -> None:
         with self._lock:
-            if mode in ("scan", "resolve", "quality"):
+            if mode in ("scan", "resolve", "quality", "finalize"):
                 self._active_mode = mode
 
     def get_snapshot(self) -> dict[str, Any]:
@@ -161,6 +168,12 @@ class LibrarySession:
                 encoding_issue_count=self._encoding_issue_count,
                 small_file_anomaly_count=self._small_file_anomaly_count,
                 total_quality_issue_count=self._total_quality_issue_count,
+                has_pending_quality_repair=self._has_pending_quality_repair,
+                finalize_last_report_id=self._finalize_last_report_id,
+                finalize_last_status=self._finalize_last_status,
+                finalize_last_run_at=self._finalize_last_run_at,
+                finalize_blocker_count=self._finalize_blocker_count,
+                finalize_warning_count=self._finalize_warning_count,
             )
 
     def query_review_rows(self, query: dict[str, Any]) -> dict[str, Any]:
@@ -230,6 +243,10 @@ class LibrarySession:
     def library_revision(self) -> int:
         with self._lock:
             return self._library_revision
+
+    def has_pending_apply(self) -> bool:
+        with self._lock:
+            return self._has_pending_apply
 
     def set_has_pending_apply(self, value: bool) -> None:
         with self._lock:
@@ -351,6 +368,160 @@ class LibrarySession:
     def is_apply_or_scan_busy(self) -> bool:
         with self._lock:
             return self._apply_in_progress or self._pipeline_running
+
+    def configure_finalize(self, runner: Any) -> None:
+        with self._lock:
+            self._finalize_runner = runner
+
+    def scan_state(self) -> str:
+        with self._lock:
+            return self._scan_state
+
+    def queue_count(self) -> int:
+        with self._lock:
+            return self._queue_count
+
+    def conflict_count(self) -> int:
+        with self._lock:
+            return self._conflict_count
+
+    def approved_count(self) -> int:
+        with self._lock:
+            return self._approved_count
+
+    def encoding_issue_count(self) -> int:
+        with self._lock:
+            return self._encoding_issue_count
+
+    def integrity_issue_count(self) -> int:
+        with self._lock:
+            return self._integrity_issue_count
+
+    def small_file_anomaly_count(self) -> int:
+        with self._lock:
+            return self._small_file_anomaly_count
+
+    def refresh_resolve_counts(self) -> None:
+        with self._lock:
+            self._refresh_resolve_counts()
+
+    def finalize_session_id(self) -> str:
+        return self.repair_session_id()
+
+    def set_finalize_counts(self, blocker_count: int, warning_count: int) -> None:
+        with self._lock:
+            self._finalize_blocker_count = blocker_count
+            self._finalize_warning_count = warning_count
+
+    def set_finalize_last_run(
+        self,
+        *,
+        report_id: str | None,
+        last_status: str,
+        report_path: str | None,
+    ) -> None:
+        with self._lock:
+            self._finalize_last_report_id = report_id
+            self._finalize_last_status = last_status
+            self._finalize_last_report_path = report_path
+            if last_status != "running":
+                self._finalize_last_run_at = scan_timestamp()
+
+    def get_finalize_summary(self, audit_log_path: Path) -> dict[str, Any]:
+        from application.finalize_summary import build_finalize_summary
+
+        with self._lock:
+            return build_finalize_summary(
+                library_revision=self._library_revision,
+                scan_state=self._scan_state,
+                review_rows=list(self._review_rows_cache),
+                queue_count=self._queue_count,
+                conflict_count=self._conflict_count,
+                approved_count=self._approved_count,
+                has_pending_apply=self._has_pending_apply,
+                has_pending_quality_repair=self._has_pending_quality_repair,
+                encoding_issue_count=self._encoding_issue_count,
+                integrity_issue_count=self._integrity_issue_count,
+                small_file_anomaly_count=self._small_file_anomaly_count,
+                audit_log_path=audit_log_path,
+            )
+
+    def run_finalize_verification(self, request: dict[str, Any]) -> dict[str, Any]:
+        with self._lock:
+            if not self._index.folder_path:
+                raise RuntimeError("NO_LIBRARY")
+            if self._apply_in_progress or self._pipeline_running:
+                raise RuntimeError("LIBRARY_BUSY")
+            if self._finalize_runner is None:
+                raise RuntimeError("FINALIZE_NOT_CONFIGURED")
+            runner = self._finalize_runner
+            include_cleanup = bool(request.get("includeCleanup"))
+            self._cancel_requested = False
+            self._pipeline_running = True
+            self._pipeline_phase = "finalize"
+            self._pipeline_percent = 0
+            self._pipeline_label = "사전 조건 확인"
+            self._pipeline_cancellable = True
+            self._finalize_last_status = "running"
+
+        result: dict[str, Any] = {}
+        error: str | None = None
+
+        def _run() -> None:
+            nonlocal result, error
+            try:
+
+                def on_step(step: str, pct: int, label: str) -> None:
+                    with self._lock:
+                        self._pipeline_percent = pct
+                        self._pipeline_label = label
+
+                def cancel_check() -> bool:
+                    with self._lock:
+                        return self._cancel_requested
+
+                result = runner.run(
+                    self,
+                    include_cleanup=include_cleanup,
+                    cancel_check=cancel_check,
+                    on_step=on_step,
+                )
+            except Exception as exc:
+                error = str(exc)
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+        thread.join()
+
+        with self._lock:
+            self._pipeline_running = False
+            self._pipeline_cancellable = False
+            self._pipeline_phase = "idle"
+            self._pipeline_percent = 0
+            self._pipeline_label = "대기 중"
+            if error is not None:
+                self._finalize_last_status = "error"
+                return {
+                    "status": "error",
+                    "reportId": None,
+                    "reportPath": None,
+                    "libraryRevision": self._library_revision,
+                    "blockers": [],
+                    "warnings": [],
+                    "cleanup": {"previewedEmptyDirs": [], "removedEmptyDirs": []},
+                    "errorMessage": error,
+                }
+            return result
+
+    def cancel_finalize(self) -> None:
+        with self._lock:
+            if self._pipeline_phase == "finalize" and self._pipeline_running:
+                self._cancel_requested = True
+
+    def read_finalize_report(self, save_root: Path, report_id: str) -> dict[str, Any]:
+        from application.finalize_report import read_finalize_report
+
+        return read_finalize_report(save_root, self.finalize_session_id(), report_id)
 
     def refresh_index_from_disk(self) -> None:
         with self._lock:

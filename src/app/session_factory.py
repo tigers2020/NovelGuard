@@ -13,12 +13,14 @@ from app.build_quality_repair_plan import BuildQualityRepairPlanUseCase
 from app.preview_apply_guard import PreviewApplyGuard
 from app.quality_repair_guard import QualityRepairGuard
 from application.audit_log import AuditLog
+from application.finalize_runner import FinalizeRunner
 from application.library_session import LibrarySession
 from application.ports.filesystem_apply import FilesystemApplyPort
 from application.ports.filesystem_repair import FilesystemRepairPort
 from application.ports.library_index import LibraryIndexPort
 from infrastructure.content_hasher import hash_file
 from infrastructure.filesystem_scanner import scan_folder
+from infrastructure.finalize_cleanup import LocalFinalizeCleanupAdapter
 from infrastructure.local_filesystem_apply import LocalFilesystemApplyAdapter
 from infrastructure.local_filesystem_repair import LocalFilesystemRepairAdapter
 from infrastructure.sqlite_library_index import SqliteLibraryIndex
@@ -34,6 +36,10 @@ def default_audit_log_path() -> Path:
 
 def default_repair_backup_root() -> Path:
     return Path.home() / ".novelguard" / "SAVE" / "repair_backup"
+
+
+def default_finalize_save_root() -> Path:
+    return Path.home() / ".novelguard" / "SAVE" / "finalize"
 
 
 def _scan_with_content_hash(
@@ -60,11 +66,20 @@ def create_library_session(
     index: LibraryIndexPort | None = None,
     *,
     db_path: Path | None = None,
+    audit_log_path: Path | None = None,
 ) -> LibrarySession:
     if index is None:
         path = db_path or default_library_db_path()
         index = SqliteLibraryIndex(path)
-    return LibrarySession(index, scan_folder=_scan_with_content_hash)
+    session = LibrarySession(index, scan_folder=_scan_with_content_hash)
+    audit_path = audit_log_path or default_audit_log_path()
+    finalize_runner = FinalizeRunner(
+        cleanup=LocalFinalizeCleanupAdapter(),
+        save_root=default_finalize_save_root(),
+        audit_log_path=audit_path,
+    )
+    session.configure_finalize(finalize_runner)
+    return session
 
 
 def create_bridge_api(
