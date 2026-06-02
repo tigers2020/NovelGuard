@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from application.dto_mapper import empty_file_rows_page
+from application.file_row_query import text_sort_key
 from domain.models import FileRecord
 
 
@@ -69,12 +70,12 @@ def _filter_rows(rows: list[dict[str, Any]], query: dict[str, Any]) -> list[dict
     search = query.get("search")
     if not isinstance(search, str) or not search.strip():
         return rows
-    term = search.strip().lower()
+    term = text_sort_key(search.strip())
     result: list[dict[str, Any]] = []
     for row in rows:
-        name = str(row.get("name", "")).lower()
-        path = str(row.get("path", "")).lower()
-        ext = str(row.get("extension", "")).lower()
+        name = text_sort_key(str(row.get("name", "")))
+        path = text_sort_key(str(row.get("path", "")))
+        ext = text_sort_key(str(row.get("extension", "")))
         if term in name or term in path or term in ext:
             result.append(row)
     return result

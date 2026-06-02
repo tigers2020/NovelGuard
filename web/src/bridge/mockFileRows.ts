@@ -1,4 +1,6 @@
-import { getAllReviewRows, paginateRows } from "./mockData";
+import { getAllReviewRows, paginateRows, textSortKey } from "./mockData";
+
+export { textSortKey };
 import type { FileRow, FileRowsPage, FileRowsQuery } from "../types/fileRows";
 import { clampFileRowsLimit } from "../contracts/fileRowsPageContract";
 
@@ -36,12 +38,13 @@ export function getAllMockFileRows(count = 1284): FileRow[] {
 }
 
 export function filterMockFileRows(rows: FileRow[], search?: string): FileRow[] {
-  const term = search?.trim().toLowerCase();
-  if (!term) {
+  const trimmed = search?.trim();
+  if (!trimmed) {
     return rows;
   }
+  const term = textSortKey(trimmed);
   return rows.filter((row) => {
-    const haystack = `${row.name} ${row.path} ${row.extension ?? ""}`.toLowerCase();
+    const haystack = `${textSortKey(row.name)} ${textSortKey(row.path)} ${textSortKey(row.extension ?? "")}`;
     return haystack.includes(term);
   });
 }

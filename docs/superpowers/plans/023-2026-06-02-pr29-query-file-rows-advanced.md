@@ -233,11 +233,11 @@ CREATE INDEX IF NOT EXISTS idx_file_review_folder_group_key_id
 - Modify: `web/src/bridge/mockFileRows.ts`
 - Test: `tests/test_bridge_contract.py`, `web/src/bridge/bridgeParity.test.ts`
 
-- [ ] **Step 1:** Refactor `file_query._filter_rows` / sort to use `text_sort_key` on name/path/extension (in-memory reference).
+- [x] **Step 1:** Refactor `file_query._filter_rows` / sort to use `text_sort_key` on name/path/extension (in-memory reference).
 
-- [ ] **Step 2:** TS `textSortKey` in `mockFileRows.ts` — same NFC + casefold semantics (export for tests).
+- [x] **Step 2:** TS `textSortKey` re-exported from `mockFileRows.ts` (shared `mockData.textSortKey`).
 
-- [ ] **Step 3:** Fixtures — ASCII case pair, Korean filename pair, accent Unicode pair (`café` / `CAFE`), extension case-insensitive filter.
+- [x] **Step 3:** Fixtures — ASCII case pair, Korean filename pair, accent Unicode pair (`café` / `CAFE`), extension case-insensitive filter.
 
 **Verify:** Python + TS parity tests green on small fixture set.
 

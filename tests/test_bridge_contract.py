@@ -160,6 +160,13 @@ def test_normalize_file_rows_query_limit_clamped_to_500() -> None:
     assert normalized.limit == 500
 
 
+def test_text_sort_key_case_and_unicode_parity() -> None:
+    assert text_sort_key("File.TXT") == text_sort_key("file.txt")
+    assert text_sort_key("토끼.txt") == text_sort_key("토끼.txt")
+    assert text_sort_key("café") == text_sort_key("CAFÉ")
+    assert text_sort_key(".Md") == text_sort_key(".md")
+
+
 def test_normalize_file_rows_query_malformed_cursor_is_zero() -> None:
     normalized = normalize_file_rows_query({"cursor": "not-a-number", "limit": 10})
     assert normalized.cursor_offset == 0

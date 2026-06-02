@@ -10,7 +10,8 @@ import {
 import { resolveBridge, resolveBridgeAsync } from "./bridgeFactory";
 import { PYWEBVIEW_READY_EVENT } from "./waitForPywebviewApi";
 import { mockBridge } from "./mockBridge";
-import { getAllReviewRows, sortQualityRows, textSortKey } from "./mockData";
+import { textSortKey } from "./mockFileRows";
+import { getAllReviewRows, sortQualityRows } from "./mockData";
 import { createPywebviewBridge } from "./pywebviewBridge";
 import {
   NOVEL_GUARD_BRIDGE_METHODS,
@@ -236,6 +237,13 @@ describe("bridge parity", () => {
       expect(row.action).toBe("move_duplicate");
     }
     expect(preview.summary.operationCount).toBe(moveIds.length);
+  });
+
+  it("textSortKey case-folds file-row search fixtures", () => {
+    expect(textSortKey("File.TXT")).toBe(textSortKey("file.txt"));
+    expect(textSortKey("café")).toBe(textSortKey("CAFÉ"));
+    expect(textSortKey("토끼.txt")).toBe(textSortKey("토끼.txt"));
+    expect(textSortKey(".Md")).toBe(textSortKey(".md"));
   });
 
   it("queryFileRows returns empty page shape when search matches nothing", async () => {
