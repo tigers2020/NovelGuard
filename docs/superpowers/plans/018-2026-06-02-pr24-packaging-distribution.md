@@ -171,13 +171,14 @@
 
 ## Task 7: `scripts/package_windows.py`
 
-- [ ] Clean `web/build`, `build/`, `dist/NovelGuard` (not whole repo)
-- [ ] `npm ci` or `npm install` in `web/` if `node_modules` missing
-- [ ] `npm run build` → verify `web/build/index.html`
-- [ ] Run PyInstaller with `packaging/NovelGuard.spec`
-- [ ] Verify bundled assets under `dist/NovelGuard/`
-- [ ] Write build manifest (version, commit, timestamp, paths)
-- [ ] Exit non-zero on any failure
+- [x] Preflight: Python path/version, `PyInstaller`, `webview`, `npm`
+- [x] Clean `web/build`, `build/`, `dist/NovelGuard`, `src/app/_build_stamp.py`
+- [x] `npm ci` / `npm install` + `npm run build` → `web/build/index.html`
+- [x] `apply_build_stamp` → generated `src/app/_build_stamp.py` (gitignored)
+- [x] PyInstaller + `--hidden-import app._build_stamp`
+- [x] Verify exe + bundled `web/build/index.html`
+- [x] `dist/NovelGuard/build-manifest.json`
+- [x] Windows locked-dir rename fallback for `dist/NovelGuard`
 - [ ] Optional `package_windows.bat` → delegates to Python script
 
 ---
