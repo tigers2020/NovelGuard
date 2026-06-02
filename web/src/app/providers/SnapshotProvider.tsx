@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { AppSnapshot } from "../../types/snapshot";
 import type { NovelGuardBridge } from "../../bridge/NovelGuardBridge";
 import type { BridgeHealth, BridgeKind } from "../../bridge/bridgeHealth";
-import { mockBridge } from "../../bridge/mockBridge";
+import { getBridgeErrorCode } from "../../bridge/bridgeErrors";
+import { resolveBridge } from "../../bridge/bridgeFactory";
 import {
   BridgeContext,
   BridgeKindContext,
@@ -10,29 +11,40 @@ import {
   SnapshotContext,
   SnapshotRefreshContext,
 } from "./snapshotContexts";
-import {
-  createPywebviewBridge,
-  getPywebviewApi,
-  getPywebviewState,
-} from "../../bridge/pywebviewBridge";
 import { createTestBridge, readTestBridgeFailMode } from "../../bridge/testBridge";
 
-function resolveBridge(override?: NovelGuardBridge): { bridge: NovelGuardBridge; kind: BridgeKind } {
+type BridgeSelection =
+  | { status: "ok"; bridge: NovelGuardBridge; kind: BridgeKind }
+  | { status: "unavailable"; unavailableCode: string };
+
+function selectBridge(override?: NovelGuardBridge): BridgeSelection {
   if (override) {
-    return { bridge: override, kind: "mock" };
+    return { status: "ok", bridge: override, kind: "mock" };
   }
 
   const failMode = readTestBridgeFailMode();
   if (failMode !== "none") {
-    return { bridge: createTestBridge(failMode), kind: "mock" };
+    return { status: "ok", bridge: createTestBridge(failMode), kind: "mock" };
   }
 
-  const api = getPywebviewApi();
-  if (api) {
-    return { bridge: createPywebviewBridge(api), kind: "pywebview" };
+  try {
+    const resolved = resolveBridge();
+    return { status: "ok", bridge: resolved.bridge, kind: resolved.kind };
+  } catch (error) {
+    return { status: "unavailable", unavailableCode: getBridgeErrorCode(error) };
   }
+}
 
-  return { bridge: mockBridge, kind: "mock" };
+function BridgeUnavailableScreen({ code }: { code: string }) {
+  return (
+    <HealthContext.Provider value="unavailable">
+      <BridgeKindContext.Provider value="pywebview">
+        <div className="p-6 text-error" data-testid="bridge-unavailable">
+          Bridge unavailable. {code}
+        </div>
+      </BridgeKindContext.Provider>
+    </HealthContext.Provider>
+  );
 }
 
 export function SnapshotProvider({
@@ -42,18 +54,33 @@ export function SnapshotProvider({
   children: ReactNode;
   bridge?: NovelGuardBridge;
 }) {
-  const pyState = useMemo(() => getPywebviewState(), []);
-  const [{ bridge, kind }] = useState(() => resolveBridge(bridgeOverride));
-  const [snapshot, setSnapshot] = useState<AppSnapshot | null>(null);
-  const [health, setHealth] = useState<BridgeHealth>(pyState === "broken" ? "unavailable" : "ok");
-  const [connectionDetail, setConnectionDetail] = useState<string | undefined>(
-    pyState === "broken" ? "pywebview.api is missing" : undefined,
+  const [selection] = useState(() => selectBridge(bridgeOverride));
+
+  if (selection.status === "unavailable") {
+    return <BridgeUnavailableScreen code={selection.unavailableCode} />;
+  }
+
+  return (
+    <SnapshotProviderInner bridge={selection.bridge} kind={selection.kind}>
+      {children}
+    </SnapshotProviderInner>
   );
+}
+
+function SnapshotProviderInner({
+  children,
+  bridge,
+  kind,
+}: {
+  children: ReactNode;
+  bridge: NovelGuardBridge;
+  kind: BridgeKind;
+}) {
+  const [snapshot, setSnapshot] = useState<AppSnapshot | null>(null);
+  const [health, setHealth] = useState<BridgeHealth>("ok");
+  const [connectionDetail, setConnectionDetail] = useState<string | undefined>(undefined);
 
   const refreshSnapshot = useCallback(async () => {
-    if (pyState === "broken") {
-      return;
-    }
     try {
       const next = await bridge.getSnapshot();
       setSnapshot(next);
@@ -64,13 +91,9 @@ export function SnapshotProvider({
       setHealth("degraded");
       setConnectionDetail(message);
     }
-  }, [bridge, pyState]);
+  }, [bridge]);
 
   useEffect(() => {
-    if (pyState === "broken") {
-      return;
-    }
-
     let alive = true;
 
     const tick = async () => {
@@ -86,19 +109,7 @@ export function SnapshotProvider({
       alive = false;
       window.clearInterval(id);
     };
-  }, [pyState, refreshSnapshot]);
-
-  if (pyState === "broken") {
-    return (
-      <HealthContext.Provider value="unavailable">
-        <BridgeKindContext.Provider value="pywebview">
-          <div className="p-6 text-error" data-testid="bridge-unavailable">
-            Bridge unavailable. {connectionDetail}
-          </div>
-        </BridgeKindContext.Provider>
-      </HealthContext.Provider>
-    );
-  }
+  }, [refreshSnapshot]);
 
   if (!snapshot && health !== "ok") {
     return (

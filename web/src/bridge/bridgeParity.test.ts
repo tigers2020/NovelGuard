@@ -2,6 +2,11 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import {
+  BRIDGE_ERROR_CODES,
+  BridgeUnavailableError,
+} from "./bridgeErrors";
+import { resolveBridge } from "./bridgeFactory";
 import { mockBridge } from "./mockBridge";
 import { getAllReviewRows } from "./mockData";
 import { createPywebviewBridge } from "./pywebviewBridge";
@@ -26,10 +31,12 @@ describe("bridge parity", () => {
   });
 
   it("exports stable method list", () => {
+    expect(NOVEL_GUARD_BRIDGE_METHODS).toContain("getAppInfo");
     expect(NOVEL_GUARD_BRIDGE_METHODS).toContain("getSnapshot");
     expect(NOVEL_GUARD_BRIDGE_METHODS).toContain("queryQualityRows");
     expect(NOVEL_GUARD_BRIDGE_METHODS).toContain("applyResolvedActions");
     expect(NOVEL_GUARD_BRIDGE_METHODS).toContain("discardMovePreview");
+    expect(PYWEBVIEW_API_METHODS).toContain("get_app_info");
     expect(PYWEBVIEW_API_METHODS).toContain("get_snapshot");
     expect(PYWEBVIEW_API_METHODS).toContain("query_quality_rows");
     expect(PYWEBVIEW_API_METHODS).toContain("discard_move_preview");
@@ -48,6 +55,29 @@ describe("bridge parity", () => {
     const src = readFileSync(join(webRoot, "bridge/pywebviewBridge.ts"), "utf8");
     expect(src).not.toMatch(/import\s+.*mockBridge/);
     expect(src).not.toMatch(/\bmockBridge\s*\(/);
+  });
+
+  it("resolveBridge in PROD without pywebview throws PRODUCTION_BRIDGE_UNAVAILABLE", () => {
+    expect(() =>
+      resolveBridge({ PROD: true, DEV: false }, {}),
+    ).toThrowError(
+      new BridgeUnavailableError(BRIDGE_ERROR_CODES.productionUnavailable),
+    );
+  });
+
+  it("resolveBridge in DEV without flag throws DEV_BRIDGE_UNAVAILABLE", () => {
+    expect(() =>
+      resolveBridge({ PROD: false, DEV: true, VITE_USE_MOCK_BRIDGE: "false" }, {}),
+    ).toThrowError(new BridgeUnavailableError(BRIDGE_ERROR_CODES.devUnavailable));
+  });
+
+  it("resolveBridge in DEV with VITE_USE_MOCK_BRIDGE=true returns mockBridge", () => {
+    const { bridge, kind } = resolveBridge(
+      { PROD: false, DEV: true, VITE_USE_MOCK_BRIDGE: "true" },
+      {},
+    );
+    expect(bridge).toBe(mockBridge);
+    expect(kind).toBe("mock");
   });
 
   it("mockBridge returns empty page for unknown issueType", async () => {

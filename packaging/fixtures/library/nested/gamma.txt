@@ -1,0 +1,2 @@
+Gamma fixture in nested folder.
+Exercises subdirectory scan during smoke.

@@ -43,9 +43,13 @@ function applyErrorMessage(err: unknown): {
       APPLY_FAILED: formatApplyFailedMessage(details),
       LIBRARY_BUSY: "스캔 또는 적용이 진행 중입니다. 완료 후 다시 시도하세요.",
       REPAIR_PREVIEW_ACTIVE: "품질 복구 미리보기가 활성 상태입니다. 먼저 닫으세요.",
+      INVALID_REVIEW_COMMAND: "지원하지 않는 검토 명령입니다.",
+      NEAR_DUPLICATE_APPLY_UNSUPPORTED: "유사 중복 항목은 적용할 수 없습니다.",
+      RELATION_APPLY_UNSUPPORTED: "관계 항목은 적용할 수 없습니다.",
     };
-    if (reason) {
-      return { message: byReason[reason], reason, details };
+    if (reason && reason in byReason) {
+      const previewReason = reason as PreviewApplyErrorCode;
+      return { message: byReason[previewReason], reason: previewReason, details };
     }
     return { message: err.message };
   }

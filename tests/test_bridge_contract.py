@@ -17,6 +17,7 @@ from app.bridge_contract import (
     RepairPreviewError,
     SnapshotContractError,
     clamp_query_limit,
+    validate_app_info,
     validate_app_snapshot,
     validate_duplicate_group_detail,
     validate_finalize_result,
@@ -30,7 +31,6 @@ from app.bridge_contract import (
 from app.bridge_parity import PYWEBVIEW_API_METHODS
 from app.selection_fingerprint import selection_fingerprint
 from app.session_factory import create_bridge_api, create_library_session
-from application.library_session import LibrarySession
 from application.ports.filesystem_apply import ApplyRowResult
 from application.quality_analyzer import analyze_quality
 from domain.apply_models import PreviewOperation
@@ -81,6 +81,7 @@ def test_clamp_query_limit_max_200() -> None:
 def test_pywebview_api_methods_match_locked_contract() -> None:
     """Locked contract; must match web/src/contracts/bridgeParity.ts PYWEBVIEW_API_METHODS."""
     locked = [
+        "get_app_info",
         "get_snapshot",
         "select_folder",
         "start_scan",
@@ -112,6 +113,17 @@ def test_bridge_api_exposes_pywebview_methods() -> None:
     for name in PYWEBVIEW_API_METHODS:
         assert hasattr(api, name), f"BridgeApi missing {name}"
         assert callable(getattr(api, name))
+
+
+def test_get_app_info_returns_required_keys() -> None:
+    api = _memory_api()
+    info = api.get_app_info()
+    validate_app_info(info)
+    assert info["appName"] == "NovelGuard"
+    assert info["version"]
+    assert info["buildType"] in ("dev", "production", "packaged")
+    assert info["frontendBuild"] == "web/build"
+    assert isinstance(info["pythonRuntime"], str)
 
 
 def test_bridge_api_get_snapshot_valid() -> None:
@@ -224,7 +236,7 @@ def test_bridge_api_scan_populates_file_count(tmp_path: Path) -> None:
 
 def test_cancel_scan_discards_partial(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     (tmp_path / "a.txt").write_text("x", encoding="utf-8")
-    session = LibrarySession(MemoryLibraryIndex(), scan_folder=filesystem_scanner.scan_folder)
+    session = create_library_session(MemoryLibraryIndex())
     session.select_folder(str(tmp_path))
     api = create_bridge_api(session)
     api.start_scan()

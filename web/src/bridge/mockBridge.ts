@@ -655,7 +655,10 @@ export const mockBridge: NovelGuardBridge = {
           ? "complete_with_warnings"
           : "complete";
     const reportId = `finalize-mock-${Date.now()}`;
-    const cleanup = { previewedEmptyDirs: [], removedEmptyDirs: [] };
+    const cleanup: FinalizeResult["cleanup"] = {
+      previewedEmptyDirs: [],
+      removedEmptyDirs: [],
+    };
     if (request.includeCleanup && summary.blockers.length === 0) {
       cleanup.previewedEmptyDirs = ["duplicate/empty-slot"];
     }
@@ -672,17 +675,6 @@ export const mockBridge: NovelGuardBridge = {
       cleanup,
     };
     lastFinalizeReport = doc;
-    if (status === "cancelled" || status === "error") {
-      return {
-        status,
-        reportId: null,
-        reportPath: null,
-        libraryRevision,
-        blockers: summary.blockers,
-        warnings: summary.warnings,
-        cleanup,
-      } as FinalizeResult;
-    }
     return {
       status,
       reportId,
@@ -703,5 +695,17 @@ export const mockBridge: NovelGuardBridge = {
 
   async cancelFinalize() {
     state.pipelineRunning = false;
+  },
+
+  async getAppInfo() {
+    return {
+      appName: "NovelGuard",
+      version: "0.24.0",
+      buildType: "dev",
+      gitCommit: null,
+      builtAt: null,
+      frontendBuild: "web/build",
+      pythonRuntime: "3.12.0",
+    };
   },
 };

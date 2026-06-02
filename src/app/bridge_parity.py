@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 PYWEBVIEW_API_METHODS: tuple[str, ...] = (
+    "get_app_info",
     "get_snapshot",
     "select_folder",
     "start_scan",

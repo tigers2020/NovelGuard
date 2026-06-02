@@ -12,34 +12,35 @@ from app.build_preview_plan import BuildPreviewPlanUseCase
 from app.build_quality_repair_plan import BuildQualityRepairPlanUseCase
 from app.preview_apply_guard import PreviewApplyGuard
 from app.quality_repair_guard import QualityRepairGuard
+from app.runtime_paths import (
+    LibraryRuntimePaths,
+    ensure_library_state_dirs,
+    library_runtime_paths,
+    pending_library_runtime_paths,
+)
 from application.audit_log import AuditLog
-from application.finalize_runner import FinalizeRunner
 from application.library_session import LibrarySession
 from application.ports.filesystem_apply import FilesystemApplyPort
 from application.ports.filesystem_repair import FilesystemRepairPort
 from application.ports.library_index import LibraryIndexPort
 from infrastructure.content_hasher import hash_file
 from infrastructure.filesystem_scanner import scan_folder
-from infrastructure.finalize_cleanup import LocalFinalizeCleanupAdapter
 from infrastructure.local_filesystem_apply import LocalFilesystemApplyAdapter
 from infrastructure.local_filesystem_repair import LocalFilesystemRepairAdapter
+from infrastructure.memory_library_index import MemoryLibraryIndex
 from infrastructure.sqlite_library_index import SqliteLibraryIndex
 
 
-def default_library_db_path() -> Path:
-    return Path.home() / ".novelguard" / "library.db"
+class SessionAuditLog(AuditLog):
+    """Audit log whose path follows the active library binding on LibrarySession."""
 
+    def __init__(self, session: LibrarySession) -> None:
+        super().__init__(session.audit_log_path())
+        self._session = session
 
-def default_audit_log_path() -> Path:
-    return Path.home() / ".novelguard" / "apply-audit.jsonl"
-
-
-def default_repair_backup_root() -> Path:
-    return Path.home() / ".novelguard" / "SAVE" / "repair_backup"
-
-
-def default_finalize_save_root() -> Path:
-    return Path.home() / ".novelguard" / "SAVE" / "finalize"
+    def append(self, event: str, **fields: object) -> None:
+        self._path = self._session.audit_log_path()
+        super().append(event, **fields)
 
 
 def _scan_with_content_hash(
@@ -62,23 +63,45 @@ def _scan_with_content_hash(
     )
 
 
+def bind_library_runtime(session: LibrarySession, folder: str) -> LibraryRuntimePaths:
+    paths = library_runtime_paths(Path(folder))
+    ensure_library_state_dirs(paths)
+    session.apply_library_runtime(
+        paths, rebind_sqlite=not isinstance(session.index, MemoryLibraryIndex)
+    )
+    return paths
+
+
 def create_library_session(
     index: LibraryIndexPort | None = None,
     *,
     db_path: Path | None = None,
     audit_log_path: Path | None = None,
 ) -> LibrarySession:
+    pending = pending_library_runtime_paths()
+    ensure_library_state_dirs(pending)
+
     if index is None:
-        path = db_path or default_library_db_path()
+        path = db_path or pending.db_path
+        path.parent.mkdir(parents=True, exist_ok=True)
         index = SqliteLibraryIndex(path)
-    session = LibrarySession(index, scan_folder=_scan_with_content_hash)
-    audit_path = audit_log_path or default_audit_log_path()
-    finalize_runner = FinalizeRunner(
-        cleanup=LocalFinalizeCleanupAdapter(),
-        save_root=default_finalize_save_root(),
-        audit_log_path=audit_path,
+
+    session = LibrarySession(
+        index,
+        scan_folder=_scan_with_content_hash,
+        on_library_selected=bind_library_runtime,
     )
-    session.configure_finalize(finalize_runner)
+    paths = pending
+    if audit_log_path is not None:
+        paths = LibraryRuntimePaths(
+            library_root=pending.library_root,
+            library_id=pending.library_id,
+            db_path=db_path or pending.db_path,
+            audit_log_path=audit_log_path,
+            finalize_save_root=pending.finalize_save_root,
+            repair_backup_root=pending.repair_backup_root,
+        )
+    session.apply_library_runtime(paths, rebind_sqlite=False)
     return session
 
 
@@ -94,10 +117,16 @@ def create_bridge_api(
     resolved_session = session or create_library_session()
     move_guard = PreviewApplyGuard()
     repair_guard = QualityRepairGuard()
-    audit = AuditLog(audit_log_path or default_audit_log_path())
+
+    if audit_log_path is not None:
+        audit: AuditLog = AuditLog(audit_log_path)
+    else:
+        audit = SessionAuditLog(resolved_session)
+
     fs = filesystem or LocalFilesystemApplyAdapter()
     repair_fs = repair_filesystem or LocalFilesystemRepairAdapter()
-    backup_root = repair_backup_root or default_repair_backup_root()
+    _ = repair_backup_root  # explicit override reserved for tests; repair reads session path
+
     preview_use_case = BuildPreviewPlanUseCase(
         resolved_session, move_guard, repair_guard, audit, fs
     )
@@ -111,7 +140,6 @@ def create_bridge_api(
         repair_guard,
         audit,
         repair_fs,
-        backup_root=backup_root,
     )
     return BridgeApi(
         resolved_session,

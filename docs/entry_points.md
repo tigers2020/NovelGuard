@@ -14,7 +14,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:5173 — uses `mockBridge` in the browser.
+Open http://localhost:5173 — requires `VITE_USE_MOCK_BRIDGE=true` in `.env.development.local` for browser mock (see `web/.env.development.example`). Without pywebview and without the flag, the app shows `DEV_BRIDGE_UNAVAILABLE`.
 
 ## Web UI (lint / build)
 
@@ -33,11 +33,11 @@ npm run lint
 npm run build
 ```
 
-Output: `web/dist/`
+Output: `web/build/`
 
 ## Desktop (pywebview smoke)
 
-Requires built `web/dist/` and optional dependency:
+Requires built `web/build/` and optional dependency:
 
 ```bash
 pip install -e ".[gui]"

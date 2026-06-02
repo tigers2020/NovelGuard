@@ -367,6 +367,27 @@ class FinalizeError(Exception):
         return json.dumps({"reason": self.reason, "details": self.details}, ensure_ascii=False)
 
 
+def validate_app_info(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise PageContractError("AppInfo must be a dict")
+    required = (
+        "appName",
+        "version",
+        "buildType",
+        "gitCommit",
+        "builtAt",
+        "frontendBuild",
+        "pythonRuntime",
+    )
+    for key in required:
+        if key not in payload:
+            raise PageContractError(f"AppInfo missing {key}")
+    if payload["buildType"] not in ("dev", "production", "packaged"):
+        raise PageContractError("AppInfo.buildType invalid")
+    if not isinstance(payload["appName"], str) or not isinstance(payload["version"], str):
+        raise PageContractError("AppInfo appName/version must be str")
+
+
 def validate_finalize_summary(payload: Any) -> None:
     if not isinstance(payload, dict):
         raise PageContractError("FinalizeSummary must be a dict")

@@ -1,11 +1,37 @@
 import type { ApplyFailedDetails, PreviewApplyErrorCode } from "../types/movePreview";
+import type { RepairApplyErrorCode, RepairPreviewErrorCode } from "../types/qualityRepair";
 
 export type BridgeErrorCode = "timeout" | "rejected" | "missing_method";
+
+export const BRIDGE_ERROR_CODES = {
+  productionUnavailable: "PRODUCTION_BRIDGE_UNAVAILABLE",
+  devUnavailable: "DEV_BRIDGE_UNAVAILABLE",
+} as const;
+
+export class BridgeUnavailableError extends Error {
+  readonly code: string;
+
+  constructor(code: string) {
+    super(code);
+    this.name = "BridgeUnavailableError";
+    this.code = code;
+  }
+}
+
+export function getBridgeErrorCode(error: unknown): string {
+  if (error instanceof BridgeUnavailableError) {
+    return error.code;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return "BRIDGE_UNAVAILABLE";
+}
 
 export class BridgeCallError extends Error {
   readonly code: BridgeErrorCode;
   readonly method: string;
-  readonly reason?: PreviewApplyErrorCode;
+  readonly reason?: PreviewApplyErrorCode | RepairApplyErrorCode | RepairPreviewErrorCode;
   readonly details?: ApplyFailedDetails;
 
   constructor(
@@ -13,7 +39,7 @@ export class BridgeCallError extends Error {
     options: {
       code: BridgeErrorCode;
       method: string;
-      reason?: PreviewApplyErrorCode;
+      reason?: PreviewApplyErrorCode | RepairApplyErrorCode | RepairPreviewErrorCode;
       details?: ApplyFailedDetails;
       cause?: unknown;
     },

@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-WEB_DIST = REPO_ROOT / "web" / "dist" / "index.html"
+from app.runtime_paths import frontend_asset_root
 
 
 def main() -> int:
@@ -19,8 +17,13 @@ def main() -> int:
         )
         return 1
 
-    if not WEB_DIST.is_file():
-        print(f"Build web UI first: cd web && npm run build\nMissing: {WEB_DIST}", file=sys.stderr)
+    index_path = frontend_asset_root() / "index.html"
+    if not index_path.is_file():
+        print(
+            f"Frontend build not found: {index_path}\n"
+            "Run `npm run build` in web/ (output: web/build/).",
+            file=sys.stderr,
+        )
         return 1
 
     from app.session_factory import create_bridge_api, create_library_session
@@ -29,7 +32,7 @@ def main() -> int:
     # Use file path (not file:// URI alone) so relative ./assets/* from Vite build resolve.
     webview.create_window(
         "NovelGuard",
-        str(WEB_DIST),
+        str(index_path),
         js_api=api,
         width=1280,
         height=800,

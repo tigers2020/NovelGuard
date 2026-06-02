@@ -11,7 +11,7 @@ last_reviewed: 2026-06-02
 
 **Parent:** [000 master roadmap](./000-2026-06-01-novelguard-master-roadmap.md)
 
-**Position (2026-06-02):** PR-23 **Done** (merged PR #14). **Next:** PR-24 — spec 012 + plan 018 (packaging / distribution).
+**Position (2026-06-02):** PR-23 **Done** (merged PR #14). **Next:** PR-24 — spec 012 + plan 018 **approved** → implement packaging / distribution.
 
 **Sequencing (locked):** `real apply safety → review state → near/relation detection → quality repair → packaging → shell FileDock`. Quality-first ordering before apply remains **rejected** ([000 § Rejected ordering](./000-2026-06-01-novelguard-master-roadmap.md#rejected-ordering-do-not-revive)).
 
@@ -61,7 +61,7 @@ flowchart TD
 | **PR-21** | Quality issue detail | D | No | [009 quality detail](../specs/009-2026-06-02-quality-issue-detail-design.md) | [015 pr21 plan](../plans/015-2026-06-02-pr21-quality-issue-detail.md) | **Done** |
 | **PR-22** | Quality repair execution | D | **Yes** | [010 quality repair](../specs/010-2026-06-02-quality-repair-execution-design.md) | [016 pr22 plan](../plans/016-2026-06-02-pr22-quality-repair-execution.md) | **Done** |
 | **PR-23** | Finalize / cleanup pipeline | D | Limited | [011 finalize](../specs/011-2026-06-02-finalize-cleanup-pipeline-design.md) | [017 pr23 plan](../plans/017-2026-06-02-pr23-finalize-cleanup-pipeline.md) | **Done** (PR #14) |
-| **PR-24** | Packaging / distribution | E | No | [012 packaging](../specs/012-2026-06-02-packaging-distribution-design.md) | [018 pr24 plan](../plans/018-2026-06-02-pr24-packaging-distribution.md) | Not written |
+| **PR-24** | Packaging / distribution | E | No | [012 packaging](../specs/012-2026-06-02-packaging-distribution-design.md) | [018 pr24 plan](../plans/018-2026-06-02-pr24-packaging-distribution.md) | Spec + plan **approved** |
 | **PR-25** | Shell FileDock | F | No | [013 shell filedock](../specs/013-2026-06-02-shell-filedock-design.md) | [019 pr25 plan](../plans/019-2026-06-02-pr25-shell-filedock.md) | Not written |
 
 ---
@@ -346,6 +346,8 @@ Additional contract behavior:
 - [x] PR-22 spec 010 + plan 016 **approved** (grill G1–G6 + B1–B5 + LOCK-1..10)
 - [x] PR-23 spec 011 + plan 017 approved (G1–G6, B1–B4, 2026-06-02)
 - [x] PR-23 implement (plan 017 tasks 1–7; merged PR #14)
+- [x] PR-24 spec 012 + plan 018 **approved** (G1–G5, LOCK-G1, LOCK-G2 — 2026-06-02)
+- [ ] PR-24 implement (plan 018 tasks 1–11)
 - [ ] PR-24: no feature creep
 - [ ] PR-25: FileDock only — no full IA rewrite
 

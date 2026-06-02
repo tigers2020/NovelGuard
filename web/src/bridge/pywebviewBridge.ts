@@ -14,6 +14,7 @@ import type {
 } from "../types/reviewDecisions";
 import type { SelectionScope } from "../types/selection";
 import type { FinalizeReportDocument, FinalizeResult, FinalizeSummary, RunFinalizeRequest } from "../types/finalize";
+import type { AppInfo } from "../types/appInfo";
 import type { WorkMode } from "../types/snapshot";
 import { BridgeCallError } from "./bridgeErrors";
 import { callBridge } from "./callBridge";
@@ -60,6 +61,8 @@ export function getPywebviewApi(): PyApi | null {
 /** Maps Python js_api (snake_case) to NovelGuardBridge. Does not fall back to mockBridge. */
 export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
   return {
+    getAppInfo: () =>
+      callBridge(() => call<AppInfo>(api, "get_app_info"), { method: "get_app_info" }),
     getSnapshot: () =>
       callBridge(() => call<AppSnapshot>(api, "get_snapshot"), { method: "get_snapshot" }),
     selectFolder: () =>

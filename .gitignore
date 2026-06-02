@@ -26,11 +26,16 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# Packaging-generated (scripts/package_windows.py)
+src/app/_build_stamp.py
+
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
+!packaging/
+!packaging/*.spec
 
 # Installer logs
 pip-log.txt
@@ -232,6 +237,8 @@ SAVE/
 
 # npm (DESIGN.md linter tooling)
 node_modules/
+web/build/
+web/dist/
 
 Sample/
 

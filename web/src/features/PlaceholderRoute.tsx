@@ -1,3 +1,5 @@
+import { AppInfoDiagnostics } from "./AppInfoDiagnostics";
+
 export function PlaceholderRoute({ title }: { title: string }) {
   return (
     <div className="h-full overflow-y-auto bg-background p-6">
@@ -6,6 +8,7 @@ export function PlaceholderRoute({ title }: { title: string }) {
         <p className="mt-2 text-sm text-on-surface-variant">
           v1 shell parity. Review workspace ships in later PRs.
         </p>
+        {title === "Settings" ? <AppInfoDiagnostics /> : null}
       </div>
     </div>
   );

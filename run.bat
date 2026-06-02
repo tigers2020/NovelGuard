@@ -36,6 +36,11 @@ if errorlevel 1 (
 )
 popd
 
+if not exist "web\build\index.html" (
+  echo [error] Frontend build missing: web\build\index.html
+  exit /b 1
+)
+
 pip show pywebview >nul 2>&1
 if errorlevel 1 (
   echo [3/3] pip install -e ".[gui]" ...
