@@ -38,6 +38,14 @@ export const validAppSnapshot: AppSnapshot = {
       integrityIssueCount: 0,
       encodingIssueCount: 0,
       smallFileAnomalyCount: 0,
+      hasPendingQualityRepair: false,
+    },
+    finalize: {
+      lastReportId: null,
+      lastStatus: "idle",
+      lastRunAt: null,
+      blockerCount: 0,
+      warningCount: 0,
     },
   },
   fileListSummary: {

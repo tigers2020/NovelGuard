@@ -61,27 +61,28 @@ export function buildMockDuplicateGroupDetail(
     };
   }
 
-  const members: DuplicateGroupMemberDetail[] = fileRows
-    .map((row) => {
-      const fileId = fileIdFromRowId(row.id);
-      if (!fileId) return null;
-      const path = row.path ?? row.name;
-      const isKeeper = row.proposedAction === "keep";
-      return {
-        rowId: row.id,
-        fileId,
-        name: row.name,
-        path,
-        sizeBytes: row.sizeBytes ?? 0,
-        status: row.status,
-        isKeeper,
-        proposedAction: row.proposedAction,
-        targetFolder: row.targetFolder,
-        encoding: row.encoding ?? "Unknown",
-        integrity: memberIntegrity(path, qualityByPath),
-      };
-    })
-    .filter((m): m is DuplicateGroupMemberDetail => m !== null);
+  const members: DuplicateGroupMemberDetail[] = [];
+  for (const row of fileRows) {
+    const fileId = fileIdFromRowId(row.id);
+    if (!fileId) {
+      continue;
+    }
+    const path = row.path ?? row.name;
+    const isKeeper = row.proposedAction === "keep";
+    members.push({
+      rowId: row.id,
+      fileId,
+      name: row.name,
+      path,
+      sizeBytes: row.sizeBytes ?? 0,
+      status: row.status,
+      isKeeper,
+      proposedAction: row.proposedAction,
+      targetFolder: row.targetFolder,
+      encoding: row.encoding ?? "Unknown",
+      integrity: memberIntegrity(path, qualityByPath),
+    });
+  }
 
   if (members.length === 0) {
     return {

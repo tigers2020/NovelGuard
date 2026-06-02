@@ -61,12 +61,19 @@ export type IssueEvidence =
   | IssueEvidenceInvalidUtf8
   | IssueEvidenceReadError;
 
-export interface RepairEligibility {
-  eligible: false;
-  reason: "repair_not_implemented" | "issue_not_repairable" | "read_error" | "ready";
-  futureAction?: "utf8_convert";
-  label: string;
-}
+export type RepairEligibility =
+  | {
+      eligible: true;
+      reason: "ready";
+      futureAction: "utf8_convert";
+      label: string;
+    }
+  | {
+      eligible: false;
+      reason: "repair_not_implemented" | "issue_not_repairable" | "read_error";
+      futureAction?: "utf8_convert";
+      label: string;
+    };
 
 export interface QualityIssueDetail {
   id: string;
