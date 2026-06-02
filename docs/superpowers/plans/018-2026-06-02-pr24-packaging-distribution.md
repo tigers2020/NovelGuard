@@ -209,9 +209,9 @@
 
 ## Task 10: Release docs + changelog
 
-- [x] `docs/release/packaging-windows.md` — delivered in Task 9 (Task 10 may extend)
-- [ ] `docs/release/known-limitations.md` — Windows-only, no installer/signing/auto-update, onedir, mock block, no legacy migration
-- [ ] `CHANGELOG.md` — PR-24 entry
+- [x] `docs/release/packaging-windows.md` — Task 9 + links to limitations/changelog/smoke
+- [x] `docs/release/known-limitations.md` — platform, runtime, data, smoke, CI vs local
+- [x] `CHANGELOG.md` — PR-24 Unreleased entry (Added/Changed/Known limitations)
 
 ---
 
