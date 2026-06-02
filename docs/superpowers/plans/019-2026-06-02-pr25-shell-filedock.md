@@ -10,7 +10,7 @@
 
 **Spec:** [013-2026-06-02-shell-filedock-design.md](../specs/013-2026-06-02-shell-filedock-design.md) (**approved** 2026-06-02 — LOCK-B1..B5, LOCK-1..10)
 
-**Plan status:** **Draft** — human approval required before Task 1
+**Plan status:** **Approved** (2026-06-02) — Task 1+ implementation in progress
 
 **Prerequisite:** Spec 013 approved; PR-24 merged to `main` (`ac5ad5a` or later includes spec 013 commit)
 
@@ -160,10 +160,10 @@ Invalid/corrupt values → safe defaults (collapsed, default height %, comfortab
 
 ## Task 0: Plan gate
 
-- [ ] Spec 013 **approved** on `main`
-- [ ] Plan 019 **approved** by human
-- [ ] Branch from `main` after PR-24 merge
-- [ ] Confirm **no** README/roadmap edits in implementation commits
+- [x] Spec 013 **approved** on `main`
+- [x] Plan 019 **approved** by human (2026-06-02)
+- [x] Branch from `main` after PR-24 merge
+- [x] Confirm **no** README/roadmap edits in implementation commits
 
 **Verify:**
 
@@ -178,9 +178,10 @@ git log --oneline -5
 
 **Files:** `web/src/types/fileRows.ts`, `web/src/bridge/NovelGuardBridge.ts`
 
-- [ ] Add `FileRowsQuery`, `FileRow`, `FileRowsPage`, preset/density types
-- [ ] Add `queryFileRows(query: FileRowsQuery): Promise<FileRowsPage>` to `NovelGuardBridge`
-- [ ] `npm run build` (types only) passes
+- [x] Add `FileRowsQuery`, `FileRow`, `FileRowsPage`, preset/density types
+- [x] Add `queryFileRows(query: FileRowsQuery): Promise<FileRowsPage>` to `NovelGuardBridge`
+- [x] Stub `mockBridge` / `pywebviewBridge`; parity lists updated
+- [x] `npm run build` passes
 
 **Suggested commit:** `[pr25] add file rows query contract`
 
@@ -357,7 +358,7 @@ PR-25 implementation complete when:
 
 | Field | Value |
 |-------|-------|
-| Approved by | TBD |
-| Date | TBD |
+| Approved by | Human |
+| Date | 2026-06-02 |
 
-Human approval required before **Task 1** implementation.
+**Next:** Task 1 — File row types + bridge interface
