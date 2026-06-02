@@ -68,7 +68,7 @@ flowchart TD
 | PR | Name | Wave | Mutation | Spec (proposed) | Plan (proposed) | Status |
 |----|------|------|----------|-----------------|-----------------|--------|
 | **PR-26** | Snapshot invalidation events | F | No | `specs/014-2026-06-02-snapshot-invalidation-design.md` | `plans/020-2026-06-02-pr26-snapshot-invalidation.md` | **Done** (2026-06-02) |
-| **PR-27** | Quality grid parity with Resolve | F | No | `specs/015-2026-06-02-quality-grid-parity-design.md` | `plans/021-2026-06-02-pr27-quality-grid-parity.md` | **Spec approved**; plan **proposed** (2026-06-02) |
+| **PR-27** | Quality grid parity with Resolve | F | No | `specs/015-2026-06-02-quality-grid-parity-design.md` | `plans/021-2026-06-02-pr27-quality-grid-parity.md` | **Done** (2026-06-02) |
 | **PR-28** | Settings/Logs v1 (minimal subset) | F | Limited | `specs/016-2026-06-02-settings-logs-design.md` | `plans/022-2026-06-02-pr28-settings-logs.md` | **Proposed** |
 | **PR-29** | `queryFileRows` advanced / library grid | F | No | `specs/017-2026-06-02-query-file-rows-advanced-design.md` | `plans/023-2026-06-02-pr29-query-file-rows-advanced.md` | **Proposed** |
 | **PR-30** | Bridge / app hygiene refactor | G | No | `specs/018-2026-06-02-bridge-hygiene-design.md` | `plans/024-2026-06-02-pr30-bridge-hygiene.md` | **Proposed** |
@@ -404,7 +404,7 @@ python scripts/verify_phase_completion.py
 - [ ] PR-26 spec 014 → grill-me (transport only; LOCK-26 copied)
 - [ ] PR-26 plan 020 approved
 - [x] PR-27 spec 015 approved (2026-06-02)
-- [ ] PR-27 plan 021 → approval (written 2026-06-02) → implement
+- [x] PR-27 plan 021 approved + implemented (2026-06-02)
 - [ ] PR-28 spec 016 → **grill required** (LOCK-28; log source)
 - [ ] PR-29 spec 017 → grill-me (index rebuild; no dock ownership move)
 - [ ] PR-30 spec 018 → grill-me (early-pull rules + characterization gate)

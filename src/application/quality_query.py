@@ -113,7 +113,8 @@ def _sort_rows(rows: list[dict[str, Any]], query: dict[str, Any]) -> list[dict[s
 
     def primary_key(row: dict[str, Any]) -> Any:
         if field == "severity":
-            ordinal = _SEVERITY_ORDINAL.get(row.get("severity"), 99)
+            severity = row.get("severity")
+            ordinal = _SEVERITY_ORDINAL.get(severity, 99) if isinstance(severity, str) else 99
             return -ordinal
         return _text_sort_key(row.get(field))
 

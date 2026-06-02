@@ -19,7 +19,7 @@ prerequisite: PR-12 VirtualizedDataGrid; PR-14d/PR-21 Quality bridge + detail; P
 
 ## Status
 
-**Approved** (2026-06-02) — implementation plan [021](../plans/021-2026-06-02-pr27-quality-grid-parity.md) (**proposed** 2026-06-02; await Task 0 approval).
+**Approved** (2026-06-02) — implemented per [plan 021](../plans/021-2026-06-02-pr27-quality-grid-parity.md) (**complete** 2026-06-02).
 
 **Approval note:** Approved with amendment — `path` / `name` sort uses deterministic normalized case-insensitive keys (no OS `ko` locale dependency). Default column visibility unchanged (`path`, `issueType` off by default).
 

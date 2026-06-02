@@ -10,7 +10,7 @@
 
 **Spec:** [015-2026-06-02-quality-grid-parity-design.md](../specs/015-2026-06-02-quality-grid-parity-design.md) (**approved** 2026-06-02 — LOCK-27, D1–D7)
 
-**Plan status:** **Proposed** — awaiting human approval before Task 1+
+**Plan status:** **Complete** (2026-06-02)
 
 **Prerequisite:** Spec 015 approved; PR-26 on branch/main recommended; PR-21 detail drawer intact
 

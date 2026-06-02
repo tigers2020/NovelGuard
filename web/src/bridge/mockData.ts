@@ -88,23 +88,20 @@ export function sortQualityRows(
   const field = sort.field;
 
   const indexed = rows.map((row, index) => ({ row, index }));
+  const readField = (row: QualityRow): string | undefined => {
+    if (field === "path") return row.path;
+    if (field === "name") return row.name;
+    if (field === "issueType") return row.issueType;
+    if (field === "encoding") return row.encoding;
+    if (field === "integrity") return row.integrity;
+    return undefined;
+  };
+
   indexed.sort((a, b) => {
-    let cmp = 0;
-    if (field === "severity") {
-      const ao = -(SEVERITY_ORDINAL[a.row.severity] ?? 99);
-      const bo = -(SEVERITY_ORDINAL[b.row.severity] ?? 99);
-      cmp = ao - bo;
-    } else {
-      const readField = (row: QualityRow): string | undefined => {
-        if (field === "path") return row.path;
-        if (field === "name") return row.name;
-        if (field === "issueType") return row.issueType;
-        if (field === "encoding") return row.encoding;
-        if (field === "integrity") return row.integrity;
-        return undefined;
-      };
-      cmp = textSortKey(readField(a.row)).localeCompare(textSortKey(readField(b.row)), "en-US");
-    }
+    const cmp =
+      field === "severity"
+        ? -(SEVERITY_ORDINAL[a.row.severity] ?? 99) - -(SEVERITY_ORDINAL[b.row.severity] ?? 99)
+        : textSortKey(readField(a.row)).localeCompare(textSortKey(readField(b.row)), "en-US");
     if (cmp !== 0) return reverse ? -cmp : cmp;
     if (a.index !== b.index) return a.index - b.index;
     return a.row.id.localeCompare(b.row.id);

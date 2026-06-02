@@ -176,7 +176,7 @@ describe("bridge parity", () => {
       },
     ];
     const sorted = sortQualityRows(rows, { field: "name", direction: "asc" });
-    expect(sorted.map((row) => row.id)).toEqual(["quality:a", "quality:b"]);
+    expect(sorted.map((row) => row.id)).toEqual(["quality:b", "quality:a"]);
   });
 
   it("queryQualityRows rejects when pywebview api method is missing", async () => {

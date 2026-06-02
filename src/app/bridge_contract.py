@@ -51,9 +51,7 @@ class RepairApplyError(ValueError):
         super().__init__(message or reason)
 
 
-QUALITY_SORT_FIELDS = frozenset(
-    {"name", "path", "issueType", "severity", "encoding", "integrity"}
-)
+QUALITY_SORT_FIELDS = frozenset({"name", "path", "issueType", "severity", "encoding", "integrity"})
 
 
 class QualityQueryError(ValueError):

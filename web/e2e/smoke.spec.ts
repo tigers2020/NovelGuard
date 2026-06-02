@@ -166,4 +166,22 @@ test.describe("NovelGuard smoke", () => {
     await page.goto("/");
     await expect(page.getByTestId("bridge-unavailable")).toBeVisible();
   });
+
+  test("quality grid header sort shows sort indicator", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("work-mode-tab-quality").click();
+    await expect(page.getByTestId("quality-issue-grid")).toBeVisible({ timeout: 15_000 });
+    const header = page.getByTestId("quality-grid-header-name");
+    await header.click();
+    await expect(header).toHaveText(/▲|▼/);
+  });
+
+  test("quality column chooser reveals path column", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("work-mode-tab-quality").click();
+    await expect(page.getByTestId("quality-issue-grid")).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId("quality-column-chooser").locator("summary").click();
+    await page.getByTestId("column-toggle-path").check();
+    await expect(page.getByTestId("quality-grid-header-path")).toBeVisible();
+  });
 });
