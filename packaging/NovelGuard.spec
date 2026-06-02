@@ -17,6 +17,10 @@ datas = [
     (str(WEB_BUILD), "web/build"),
 ]
 
+_stamp_module = ROOT / "src" / "app" / "_build_stamp.py"
+if _stamp_module.is_file():
+    datas.append((str(_stamp_module), "app"))
+
 hiddenimports: list[str] = [
     "webview",  # delayed import in webview_main; PyInstaller warn-NovelGuard.txt
 ]

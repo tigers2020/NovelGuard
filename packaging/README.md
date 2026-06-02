@@ -7,6 +7,18 @@
 - `pip install pyinstaller`
 - Node.js/npm — `cd web && npm install && npm run build` → `web/build/index.html`
 
+## Canonical build (Task 7)
+
+From repository root (same Python as PyInstaller; GUI extras installed):
+
+```bash
+pip install -e ".[gui]"
+pip install pyinstaller
+python scripts/package_windows.py
+```
+
+Preflight fails fast if `pywebview` or PyInstaller is missing on that interpreter.
+
 ## Manual onedir build (Task 6 smoke)
 
 From repository root:
