@@ -4,13 +4,13 @@ export function AppShell({
   header,
   sidebar,
   children,
-  strip,
+  fileDock,
   commandBar,
 }: {
   header: ReactNode;
   sidebar: ReactNode;
   children: ReactNode;
-  strip: ReactNode;
+  fileDock: ReactNode;
   commandBar: ReactNode;
 }) {
   return (
@@ -18,9 +18,11 @@ export function AppShell({
       <div className="shrink-0">{header}</div>
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="w-56 shrink-0 overflow-hidden">{sidebar}</div>
-        <main className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</main>
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
+          {fileDock}
+        </main>
       </div>
-      <div className="shrink-0">{strip}</div>
       <div className="shrink-0">{commandBar}</div>
     </div>
   );

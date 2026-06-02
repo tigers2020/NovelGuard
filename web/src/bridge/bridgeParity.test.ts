@@ -38,6 +38,7 @@ describe("bridge parity", () => {
     expect(NOVEL_GUARD_BRIDGE_METHODS).toContain("discardMovePreview");
     expect(PYWEBVIEW_API_METHODS).toContain("get_app_info");
     expect(PYWEBVIEW_API_METHODS).toContain("get_snapshot");
+    expect(PYWEBVIEW_API_METHODS).toContain("query_file_rows");
     expect(PYWEBVIEW_API_METHODS).toContain("query_quality_rows");
     expect(PYWEBVIEW_API_METHODS).toContain("discard_move_preview");
     expect(PYWEBVIEW_API_METHODS).toContain("update_review_decisions");
@@ -146,5 +147,34 @@ describe("bridge parity", () => {
       expect(row.action).toBe("move_duplicate");
     }
     expect(preview.summary.operationCount).toBe(moveIds.length);
+  });
+
+  it("queryFileRows returns empty page shape when search matches nothing", async () => {
+    const page = await mockBridge.queryFileRows({
+      search: "__no_match_pr25__",
+      cursor: null,
+      limit: 50,
+    });
+    expect(page.rows).toEqual([]);
+    expect(page.pageInfo.totalFiltered).toBe(0);
+    expect(page.pageInfo.hasMore).toBe(false);
+  });
+
+  it("queryFileRows filters by name case-insensitively", async () => {
+    const page = await mockBridge.queryFileRows({
+      search: "토끼",
+      cursor: null,
+      limit: 100,
+    });
+    expect(page.rows.length).toBeGreaterThan(0);
+    expect(page.pageInfo.totalFiltered).toBeGreaterThan(0);
+    for (const row of page.rows) {
+      expect(`${row.name} ${row.path}`.toLowerCase()).toContain("토끼");
+    }
+  });
+
+  it("queryFileRows clamps limit to 200", async () => {
+    const page = await mockBridge.queryFileRows({ cursor: null, limit: 999 });
+    expect(page.rows.length).toBeLessThanOrEqual(200);
   });
 });

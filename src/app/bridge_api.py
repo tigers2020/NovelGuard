@@ -16,6 +16,7 @@ from app.bridge_contract import (
     validate_app_info,
     validate_app_snapshot,
     validate_duplicate_group_detail,
+    validate_file_rows_page,
     validate_finalize_result,
     validate_finalize_summary,
     validate_move_preview,
@@ -88,6 +89,12 @@ class BridgeApi:
         _ = clamp_query_limit(query)
         payload = self._session.query_quality_rows(query)
         validate_quality_rows_page(payload)
+        return payload
+
+    def query_file_rows(self, query: dict[str, Any]) -> dict[str, Any]:
+        _ = clamp_query_limit(query)
+        payload = self._session.query_file_rows(query)
+        validate_file_rows_page(payload)
         return payload
 
     def get_duplicate_group_detail(self, group_id: str) -> dict[str, Any]:

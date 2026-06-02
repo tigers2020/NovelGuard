@@ -24,6 +24,18 @@ def empty_review_page() -> dict[str, Any]:
     }
 
 
+def empty_file_rows_page(cursor: Any = None) -> dict[str, Any]:
+    return {
+        "rows": [],
+        "pageInfo": {
+            "cursor": cursor,
+            "nextCursor": None,
+            "hasMore": False,
+            "totalFiltered": 0,
+        },
+    }
+
+
 def empty_quality_page() -> dict[str, Any]:
     return {
         "rows": [],

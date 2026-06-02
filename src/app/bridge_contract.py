@@ -108,6 +108,17 @@ def validate_review_rows_page(page: Any) -> None:
         raise PageContractError("ReviewRowsPage.pageInfo or summary invalid")
 
 
+def validate_file_rows_page(page: Any) -> None:
+    if not isinstance(page, dict):
+        raise PageContractError("FileRowsPage must be a dict")
+    rows = page.get("rows")
+    if not isinstance(rows, list) or len(rows) > MAX_QUERY_LIMIT:
+        raise PageContractError("FileRowsPage.rows invalid or exceeds limit")
+    page_info = page.get("pageInfo")
+    if not isinstance(page_info, dict) or not isinstance(page_info.get("totalFiltered"), int):
+        raise PageContractError("FileRowsPage.pageInfo invalid")
+
+
 def validate_quality_rows_page(page: Any) -> None:
     if not isinstance(page, dict):
         raise PageContractError("QualityRowsPage must be a dict")
