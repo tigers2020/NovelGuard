@@ -29,7 +29,8 @@ export function getAllReviewRows(count = 1284): ReviewRow[] {
   if (cachedRows) return cachedRows;
 
   cachedRows = Array.from({ length: count }, (_, index) => {
-    const type = TYPES[index % TYPES.length];
+    // row-2: exact + move_duplicate for apply E2E (near rows are preview-blocked).
+    const type = index === 1 ? "exact" : TYPES[index % TYPES.length];
     const status = STATUSES[index % STATUSES.length];
     const proposedAction = ACTIONS[index % ACTIONS.length];
     const integrity = INTEGRITIES[index % INTEGRITIES.length];

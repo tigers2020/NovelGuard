@@ -268,6 +268,22 @@ describe("bridge parity", () => {
   });
 });
 
+describe("logs and settings", () => {
+  it("queryLogEntries filters by minimum severity inclusive", async () => {
+    const page = await mockBridge.queryLogEntries({ level: "WARNING", limit: 50 });
+    const messages = page.entries.map((entry) => entry.message);
+    expect(messages).not.toContain("mock log seed debug");
+    expect(messages).not.toContain("mock log seed info");
+  });
+
+  it("getAppSetting returns typed response", async () => {
+    const payload = await mockBridge.getAppSetting("scan.includeHidden");
+    expect(payload.key).toBe("scan.includeHidden");
+    expect(typeof payload.value).toBe("boolean");
+    expect(payload.source).toMatch(/default|persisted/);
+  });
+});
+
 describe("snapshot invalidation", () => {
   afterEach(() => {
     vi.useRealTimers();

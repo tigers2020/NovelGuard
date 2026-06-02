@@ -37,7 +37,9 @@ class SessionLogBuffer:
         with self._lock:
             self._entries.append(entry)
 
-    def query(self, *, level: str | None = None, limit: int = DEFAULT_LOG_LIMIT) -> list[dict[str, Any]]:
+    def query(
+        self, *, level: str | None = None, limit: int = DEFAULT_LOG_LIMIT
+    ) -> list[dict[str, Any]]:
         with self._lock:
             snapshot = list(self._entries)
         filtered = filter_entries_by_min_level(snapshot, min_level=level)
@@ -54,7 +56,9 @@ class SessionLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         if not accepts_novelguard_logger(record.name):
             return
-        timestamp = datetime.fromtimestamp(record.created, tz=UTC).isoformat().replace("+00:00", "Z")
+        timestamp = (
+            datetime.fromtimestamp(record.created, tz=UTC).isoformat().replace("+00:00", "Z")
+        )
         level = record.levelname
         if level not in {"DEBUG", "INFO", "WARNING", "ERROR"}:
             level = "INFO"

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from application.app_settings import SettingValue, SettingsSource, _DEFAULTS
+from application.app_settings import _DEFAULTS, SettingsSource, SettingValue
 from domain.settings_keys import ALL_SETTING_KEYS, BOOL_SETTING_KEYS, STRING_SETTING_KEYS
 from infrastructure.json_settings_store import JsonSettingsStore
 

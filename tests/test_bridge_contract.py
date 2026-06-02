@@ -35,8 +35,8 @@ from app.selection_fingerprint import selection_fingerprint
 from app.session_factory import create_bridge_api, create_library_session
 from application.app_settings import AppSettings
 from application.ports.filesystem_apply import ApplyRowResult
-from application.scan_settings import SettingsValidationError, parse_extension_filter
 from application.quality_analyzer import analyze_quality
+from application.scan_settings import SettingsValidationError, parse_extension_filter
 from domain.apply_models import PreviewOperation
 from domain.apply_path_policy import build_move_duplicate_dest_relative, validate_move_operation
 from domain.duplicate_exact import find_exact_duplicate_groups
@@ -317,7 +317,7 @@ def test_bridge_api_scan_populates_file_count(tmp_path: Path) -> None:
 
 def test_cancel_scan_discards_partial(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     (tmp_path / "a.txt").write_text("x", encoding="utf-8")
-    session = create_library_session(MemoryLibraryIndex())
+    session = create_library_session(MemoryLibraryIndex(), settings=AppSettings())
     session.select_folder(str(tmp_path))
     api = create_bridge_api(session)
     api.start_scan()
@@ -341,7 +341,9 @@ def test_cancel_scan_discards_partial(monkeypatch: pytest.MonkeyPatch, tmp_path:
         cancel_check,
         out,
         extensions=None,
+        include_hidden=False,
     ) -> None:
+        _ = include_hidden
         for i in range(50):
             if cancel_check():
                 cancel_flag["hit"] = True

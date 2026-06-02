@@ -30,21 +30,21 @@ from app.bridge_contract import (
     validate_review_rows_page,
     validate_selection_scope,
 )
-from app.runtime_paths import logs_dir
-from application.app_settings import (
-    InvalidSettingValueError,
-    UnknownSettingKeyError,
-)
-from application.log_query import LogQueryError
-from application.scan_settings import SettingsValidationError
 from app.build_preview_plan import BuildPreviewPlanUseCase
 from app.build_quality_repair_plan import BuildQualityRepairPlanUseCase
 from app.preview_apply_guard import PreviewApplyGuard
 from app.quality_repair_guard import QualityRepairGuard
+from app.runtime_paths import logs_dir
 from app.selection_fingerprint import selection_fingerprint
+from application.app_settings import (
+    InvalidSettingValueError,
+    UnknownSettingKeyError,
+)
 from application.issue_selection_fingerprint import issue_selection_fingerprint
 from application.library_session import LibrarySession
+from application.log_query import LogQueryError
 from application.review_errors import ReviewDecisionError
+from application.scan_settings import SettingsValidationError
 
 
 class BridgeApi:

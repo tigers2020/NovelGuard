@@ -137,6 +137,9 @@ function appendMockLog(level: LogEntry["level"], message: string): void {
   }
 }
 
+appendMockLog("DEBUG", "mock log seed debug");
+appendMockLog("INFO", "mock log seed info");
+
 function mockScanOptionsLabels(): string[] {
   const extensionFilter = String(mockSettingValues["scan.extensionFilter"] ?? ".txt,.md");
   const includeHidden = Boolean(mockSettingValues["scan.includeHidden"]);
@@ -436,6 +439,7 @@ export const mockBridge: NovelGuardBridge = {
       rejectApply("start_scan", "LIBRARY_BUSY");
     }
     stopScanSimulation();
+    appendMockLog("INFO", "Mock scan started");
     state.pipelineRunning = true;
     emitSnapshotInvalidation("pipelinePhase", { pipelinePhase: "scan" });
     let pct = 0;

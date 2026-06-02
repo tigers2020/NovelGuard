@@ -20,13 +20,13 @@ from app.runtime_paths import (
     pending_library_runtime_paths,
 )
 from application.app_settings import AppSettings
-from application.log_buffer import attach_session_log_handler
-from application.settings_store import SettingsStore
 from application.audit_log import AuditLog
 from application.library_session import LibrarySession
+from application.log_buffer import attach_session_log_handler
 from application.ports.filesystem_apply import FilesystemApplyPort
 from application.ports.filesystem_repair import FilesystemRepairPort
 from application.ports.library_index import LibraryIndexPort
+from application.settings_store import SettingsStore
 from infrastructure.content_hasher import hash_file
 from infrastructure.filesystem_scanner import scan_folder
 from infrastructure.local_filesystem_apply import LocalFilesystemApplyAdapter

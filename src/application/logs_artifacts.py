@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+
 def _artifact_id(kind: str, path: Path) -> str:
     digest = hashlib.sha256(f"{kind}:{path}".encode("utf-8")).hexdigest()
     return digest[:16]

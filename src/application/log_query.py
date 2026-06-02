@@ -22,9 +22,16 @@ class LogQueryError(ValueError):
 
 
 def clamp_log_limit(raw: object) -> int:
-    try:
-        value = int(raw)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
+    if raw is None:
+        value = DEFAULT_LOG_LIMIT
+    elif isinstance(raw, bool):
+        value = DEFAULT_LOG_LIMIT
+    elif isinstance(raw, (int, float, str)):
+        try:
+            value = int(raw)
+        except ValueError:
+            value = DEFAULT_LOG_LIMIT
+    else:
         value = DEFAULT_LOG_LIMIT
     return min(max(1, value), MAX_LOG_LIMIT)
 

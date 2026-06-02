@@ -9,14 +9,13 @@ from pathlib import Path
 from typing import Any
 
 from application.app_settings import AppSettings, InvalidSettingValueError
-from application.log_buffer import query_log_entries
-from application.logs_artifacts import list_logs_artifacts
-from application.scan_settings import build_scan_options_labels, parse_extension_filter
 from application.dto_mapper import (
     build_snapshot,
     scan_timestamp,
 )
 from application.file_query import file_record_to_row, query_file_page
+from application.log_buffer import query_log_entries
+from application.logs_artifacts import list_logs_artifacts
 from application.ports.library_index import LibraryIndexPort
 from application.quality_analyzer import analyze_quality
 from application.quality_issue_detail import build_quality_issue_detail
@@ -26,6 +25,7 @@ from application.review_query import query_review_page
 from application.review_rows_builder import build_review_rows
 from application.review_snapshot_counts import file_row_status_counts
 from application.review_state_merge import rebuild_rows_with_review_state
+from application.scan_settings import build_scan_options_labels, parse_extension_filter
 from domain.duplicate_exact import find_exact_duplicate_groups
 from domain.duplicate_near import NearDuplicateGroup
 from domain.filename_relation import RelationGroup
