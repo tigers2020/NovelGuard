@@ -185,14 +185,13 @@
 
 ## Task 8: Packaging verification helper
 
-**Files:** `scripts/verify_packaging.py`, `verify_phase_completion.py`
+**Files:** `scripts/verify_packaging.py`, `scripts/verify_phase_completion.py`
 
-- [ ] Check spec/plan files exist
-- [ ] Check `packaging/NovelGuard.spec`, `package_windows.py`, `runtime_paths.py`, `version.py`
-- [ ] Check vite `outDir` is `build` (parse or grep)
-- [ ] Subprocess or import checks for resolver unit tests (via pytest subset)
-- [ ] `verify_phase_completion.py` calls `verify_packaging.py` as step 6 or post-lint (document order)
-- [ ] Full exe build **not** required on every CI run — document “local package smoke” vs CI static checks
+- [x] Static checks: spec 012, plan 018, spec/script/runtime/version/vite/bridge guards
+- [x] `web/build` in runtime paths; no `web/dist` in runtime-critical files
+- [x] Optional artifact checks when `dist/NovelGuard` exists (exe, manifest, bundled index)
+- [x] `verify_phase_completion.py` step 6/6 → `verify_packaging.py` (no PyInstaller run)
+- [x] Full exe build **not** required on CI — use `python scripts/package_windows.py` locally
 
 ---
 
