@@ -17,9 +17,9 @@ from app.bridge_contract import (
     RepairPreviewError,
     SnapshotContractError,
     clamp_query_limit,
+    validate_app_info,
     validate_app_snapshot,
     validate_duplicate_group_detail,
-    validate_app_info,
     validate_finalize_result,
     validate_finalize_summary,
     validate_move_preview,
@@ -31,7 +31,6 @@ from app.bridge_contract import (
 from app.bridge_parity import PYWEBVIEW_API_METHODS
 from app.selection_fingerprint import selection_fingerprint
 from app.session_factory import create_bridge_api, create_library_session
-from application.library_session import LibrarySession
 from application.ports.filesystem_apply import ApplyRowResult
 from application.quality_analyzer import analyze_quality
 from domain.apply_models import PreviewOperation

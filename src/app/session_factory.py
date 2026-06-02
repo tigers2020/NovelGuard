@@ -66,7 +66,9 @@ def _scan_with_content_hash(
 def bind_library_runtime(session: LibrarySession, folder: str) -> LibraryRuntimePaths:
     paths = library_runtime_paths(Path(folder))
     ensure_library_state_dirs(paths)
-    session.apply_library_runtime(paths, rebind_sqlite=not isinstance(session.index, MemoryLibraryIndex))
+    session.apply_library_runtime(
+        paths, rebind_sqlite=not isinstance(session.index, MemoryLibraryIndex)
+    )
     return paths
 
 

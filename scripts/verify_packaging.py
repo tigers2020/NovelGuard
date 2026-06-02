@@ -71,9 +71,7 @@ def check_runtime_uses_web_build(errors: list[str]) -> None:
 def check_package_artifacts(warnings: list[str], errors: list[str]) -> None:
     package_dir = ROOT / "dist" / "NovelGuard"
     if not package_dir.exists():
-        warnings.append(
-            "optional package artifact check skipped: dist/NovelGuard not found"
-        )
+        warnings.append("optional package artifact check skipped: dist/NovelGuard not found")
         return
 
     exe = package_dir / "NovelGuard.exe"

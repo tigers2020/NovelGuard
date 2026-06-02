@@ -33,17 +33,14 @@ def run(cmd: list[str], *, cwd: Path | None = None) -> None:
 
 def require_module(module_name: str, install_hint: str) -> None:
     if importlib.util.find_spec(module_name) is None:
-        raise SystemExit(
-            f"Missing required module: {module_name}\nInstall hint: {install_hint}"
-        )
+        raise SystemExit(f"Missing required module: {module_name}\nInstall hint: {install_hint}")
 
 
 def require_npm() -> str:
     npm = shutil.which("npm")
     if npm is None:
         raise SystemExit(
-            "Missing required command: npm\n"
-            "Install Node.js and ensure npm is on PATH."
+            "Missing required command: npm\n" "Install Node.js and ensure npm is on PATH."
         )
     return npm
 
