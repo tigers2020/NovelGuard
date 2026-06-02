@@ -39,10 +39,13 @@ class LibrarySession:
         index: LibraryIndexPort,
         *,
         scan_folder: Callable[..., None],
+        on_library_selected: Callable[["LibrarySession", str], Any] | None = None,
     ) -> None:
         self._lock = threading.RLock()
         self._index = index
         self._scan_folder = scan_folder
+        self._on_library_selected = on_library_selected
+        self._runtime_paths: Any | None = None
         self._library_revision = 0
         self._active_mode = "resolve"
         self._pipeline_running = False
@@ -81,6 +84,52 @@ class LibrarySession:
         self._relation_groups_by_id: dict[str, RelationGroup] = {}
         self._settings = AppSettings()
 
+    @property
+    def index(self) -> LibraryIndexPort:
+        return self._index
+
+    def apply_library_runtime(
+        self,
+        paths: Any,
+        *,
+        rebind_sqlite: bool,
+    ) -> None:
+        with self._lock:
+            if rebind_sqlite:
+                from infrastructure.sqlite_library_index import SqliteLibraryIndex
+
+                self._index = SqliteLibraryIndex(paths.db_path)
+            self._runtime_paths = paths
+            from application.finalize_runner import FinalizeRunner
+            from infrastructure.finalize_cleanup import LocalFinalizeCleanupAdapter
+
+            self._finalize_runner = FinalizeRunner(
+                cleanup=LocalFinalizeCleanupAdapter(),
+                save_root=paths.finalize_save_root,
+                audit_log_path=paths.audit_log_path,
+            )
+
+    def audit_log_path(self) -> Path:
+        with self._lock:
+            if self._runtime_paths is None:
+                raise RuntimeError("Library runtime paths not configured")
+            path: Path = self._runtime_paths.audit_log_path
+            return path
+
+    def finalize_save_root(self) -> Path:
+        with self._lock:
+            if self._runtime_paths is None:
+                raise RuntimeError("Library runtime paths not configured")
+            path: Path = self._runtime_paths.finalize_save_root
+            return path
+
+    def repair_backup_root(self) -> Path:
+        with self._lock:
+            if self._runtime_paths is None:
+                raise RuntimeError("Library runtime paths not configured")
+            path: Path = self._runtime_paths.repair_backup_root
+            return path
+
     def select_folder(self, path: str | None = None) -> None:
         folder = path
         if folder is None:
@@ -99,6 +148,9 @@ class LibrarySession:
             if not picked:
                 return
             folder = picked
+
+        if self._on_library_selected is not None:
+            self._on_library_selected(self, folder)
 
         with self._lock:
             self._index.replace_files(folder, [])
@@ -427,10 +479,16 @@ class LibrarySession:
             if last_status != "running":
                 self._finalize_last_run_at = scan_timestamp()
 
-    def get_finalize_summary(self, audit_log_path: Path) -> dict[str, Any]:
+    def get_finalize_summary(self, audit_log_path: Path | None = None) -> dict[str, Any]:
         from application.finalize_summary import build_finalize_summary
 
         with self._lock:
+            if audit_log_path is not None:
+                resolved_audit = audit_log_path
+            elif self._runtime_paths is not None:
+                resolved_audit = self._runtime_paths.audit_log_path
+            else:
+                raise RuntimeError("Library runtime paths not configured")
             return build_finalize_summary(
                 library_revision=self._library_revision,
                 scan_state=self._scan_state,
@@ -443,7 +501,7 @@ class LibrarySession:
                 encoding_issue_count=self._encoding_issue_count,
                 integrity_issue_count=self._integrity_issue_count,
                 small_file_anomaly_count=self._small_file_anomaly_count,
-                audit_log_path=audit_log_path,
+                audit_log_path=resolved_audit,
             )
 
     def run_finalize_verification(self, request: dict[str, Any]) -> dict[str, Any]:
@@ -518,10 +576,11 @@ class LibrarySession:
             if self._pipeline_phase == "finalize" and self._pipeline_running:
                 self._cancel_requested = True
 
-    def read_finalize_report(self, save_root: Path, report_id: str) -> dict[str, Any]:
+    def read_finalize_report(self, save_root: Path | None, report_id: str) -> dict[str, Any]:
         from application.finalize_report import read_finalize_report
 
-        return read_finalize_report(save_root, self.finalize_session_id(), report_id)
+        root = save_root if save_root is not None else self.finalize_save_root()
+        return read_finalize_report(root, self.finalize_session_id(), report_id)
 
     def refresh_index_from_disk(self) -> None:
         with self._lock:

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any
 
 from app.apply_quality_repair import ApplyQualityRepairUseCase
@@ -32,14 +31,6 @@ from app.selection_fingerprint import selection_fingerprint
 from application.issue_selection_fingerprint import issue_selection_fingerprint
 from application.library_session import LibrarySession
 from application.review_errors import ReviewDecisionError
-
-
-def _default_audit_log_path() -> Path:
-    return Path.home() / ".novelguard" / "apply-audit.jsonl"
-
-
-def _default_finalize_save_root() -> Path:
-    return Path.home() / ".novelguard" / "SAVE" / "finalize"
 
 
 class BridgeApi:
@@ -234,7 +225,7 @@ class BridgeApi:
     def get_finalize_summary(self) -> dict[str, Any]:
         if not self._session.library_root_path():
             raise FinalizeError("NO_LIBRARY")
-        payload = self._session.get_finalize_summary(_default_audit_log_path())
+        payload = self._session.get_finalize_summary()
         validate_finalize_summary(payload)
         return payload
 
@@ -255,10 +246,7 @@ class BridgeApi:
         if not isinstance(report_id, str) or not report_id.strip():
             raise FinalizeError("INVALID_REQUEST", "reportId required")
         try:
-            return self._session.read_finalize_report(
-                _default_finalize_save_root(),
-                report_id.strip(),
-            )
+            return self._session.read_finalize_report(None, report_id.strip())
         except FileNotFoundError as exc:
             raise FinalizeError("REPORT_NOT_FOUND") from exc
 

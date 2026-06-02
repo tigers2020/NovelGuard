@@ -32,15 +32,12 @@ class ApplyQualityRepairUseCase:
         repair_guard: QualityRepairGuard,
         audit: AuditLog,
         filesystem: FilesystemRepairPort,
-        *,
-        backup_root: Path,
     ) -> None:
         self._session = session
         self._move_guard = move_guard
         self._repair_guard = repair_guard
         self._audit = audit
         self._filesystem = filesystem
-        self._backup_root = backup_root
 
     def execute(
         self,
@@ -195,7 +192,7 @@ class ApplyQualityRepairUseCase:
         except UnicodeDecodeError as exc:
             return {"outcome": "error", "error": str(exc)}
 
-        backup_dir = self._backup_root / session_id / op.file_id
+        backup_dir = self._session.repair_backup_root() / session_id / op.file_id
         backup_result = self._filesystem.backup_original(
             backup_dir,
             original_bytes=original_bytes,

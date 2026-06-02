@@ -224,7 +224,7 @@ def test_bridge_api_scan_populates_file_count(tmp_path: Path) -> None:
 
 def test_cancel_scan_discards_partial(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     (tmp_path / "a.txt").write_text("x", encoding="utf-8")
-    session = LibrarySession(MemoryLibraryIndex(), scan_folder=filesystem_scanner.scan_folder)
+    session = create_library_session(MemoryLibraryIndex())
     session.select_folder(str(tmp_path))
     api = create_bridge_api(session)
     api.start_scan()

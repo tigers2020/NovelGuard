@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 APP_NAME = "NovelGuard"
@@ -123,3 +124,49 @@ def save_dir_for_library(library_root: Path) -> Path:
 
 def reports_dir_for_library(library_root: Path) -> Path:
     return save_dir_for_library(library_root) / "reports"
+
+
+PENDING_LIBRARY_ID = "_pending"
+
+
+@dataclass(frozen=True, slots=True)
+class LibraryRuntimePaths:
+    library_root: Path
+    library_id: str
+    db_path: Path
+    audit_log_path: Path
+    finalize_save_root: Path
+    repair_backup_root: Path
+
+
+def library_runtime_paths(library_root: Path) -> LibraryRuntimePaths:
+    root = normalize_library_root(library_root)
+    library_id = library_id_for_root(root)
+    save_root = save_dir_for_library(root)
+    return LibraryRuntimePaths(
+        library_root=root,
+        library_id=library_id,
+        db_path=library_db_path(library_id),
+        audit_log_path=apply_audit_path(library_id),
+        finalize_save_root=save_root / "finalize",
+        repair_backup_root=save_root / "repair_backup",
+    )
+
+
+def pending_library_runtime_paths() -> LibraryRuntimePaths:
+    """Placeholder paths before the user selects a library folder."""
+    placeholder_root = state_root() / "_pending" / "library_root"
+    save_root = save_dir_for_library(placeholder_root)
+    return LibraryRuntimePaths(
+        library_root=placeholder_root,
+        library_id=PENDING_LIBRARY_ID,
+        db_path=library_db_path(PENDING_LIBRARY_ID),
+        audit_log_path=apply_audit_path(PENDING_LIBRARY_ID),
+        finalize_save_root=save_root / "finalize",
+        repair_backup_root=save_root / "repair_backup",
+    )
+
+
+def ensure_library_state_dirs(paths: LibraryRuntimePaths) -> None:
+    paths.db_path.parent.mkdir(parents=True, exist_ok=True)
+    paths.audit_log_path.parent.mkdir(parents=True, exist_ok=True)

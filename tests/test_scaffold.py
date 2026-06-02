@@ -7,6 +7,9 @@ from pathlib import Path
 import pytest
 
 from app import runtime_paths
+from app.session_factory import bind_library_runtime, create_library_session
+from infrastructure.memory_library_index import MemoryLibraryIndex
+from infrastructure.sqlite_library_index import SqliteLibraryIndex
 
 
 def test_scaffold_passes() -> None:
@@ -63,3 +66,48 @@ def test_runtime_paths_save_is_library_scoped(tmp_path: Path) -> None:
 def test_runtime_paths_invalid_library_id() -> None:
     with pytest.raises(ValueError, match="invalid library_id"):
         runtime_paths.library_state_dir("../escape")
+
+
+def test_session_factory_binds_per_library_db_and_audit(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    local = tmp_path / "local"
+    monkeypatch.setenv("NOVELGUARD_LOCALAPPDATA", str(local))
+
+    library = tmp_path / "novels"
+    library.mkdir()
+    session = create_library_session(MemoryLibraryIndex())
+    paths = bind_library_runtime(session, str(library))
+
+    assert paths.db_path == runtime_paths.library_db_path(paths.library_id)
+    assert paths.audit_log_path == runtime_paths.apply_audit_path(paths.library_id)
+    assert "/state/libraries/" in paths.db_path.as_posix()
+    assert session.audit_log_path() == paths.audit_log_path
+
+
+def test_session_factory_finalize_and_repair_under_library_save(tmp_path: Path) -> None:
+    library = tmp_path / "lib"
+    library.mkdir()
+    session = create_library_session(MemoryLibraryIndex())
+    paths = bind_library_runtime(session, str(library))
+
+    assert session.finalize_save_root() == library / "SAVE" / "finalize"
+    assert session.repair_backup_root() == library / "SAVE" / "repair_backup"
+    assert paths.finalize_save_root == library / "SAVE" / "finalize"
+
+
+def test_sqlite_session_rebinds_db_on_select_folder(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    local = tmp_path / "local"
+    monkeypatch.setenv("NOVELGUARD_LOCALAPPDATA", str(local))
+
+    library = tmp_path / "collection"
+    library.mkdir()
+    session = create_library_session()
+    session.select_folder(str(library))
+
+    assert isinstance(session.index, SqliteLibraryIndex)
+    library_id = runtime_paths.library_id_for_root(library)
+    expected_db = runtime_paths.library_db_path(library_id)
+    assert session.index._db_path == expected_db
