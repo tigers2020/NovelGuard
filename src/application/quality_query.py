@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Any
 
+from app.bridge_contract import QUALITY_SORT_FIELDS, QualityQueryError
 from application.dto_mapper import empty_quality_page
 
 _VALID_ISSUE_TYPES = frozenset({"integrity", "encoding", "small_file"})
+_SEVERITY_ORDINAL = {"error": 0, "warning": 1}
 
 
 def query_quality_page(
@@ -82,18 +85,42 @@ def _filter_rows(
     return result
 
 
+def _text_sort_key(value: Any) -> str:
+    if not isinstance(value, str):
+        value = "" if value is None else str(value)
+    return unicodedata.normalize("NFC", value).casefold()
+
+
+def _validate_sort_field(query: dict[str, Any]) -> None:
+    sort = query.get("sort")
+    if not isinstance(sort, dict):
+        return
+    field = sort.get("field")
+    if not field:
+        return
+    if field not in QUALITY_SORT_FIELDS:
+        raise QualityQueryError("INVALID_SORT_FIELD")
+
+
 def _sort_rows(rows: list[dict[str, Any]], query: dict[str, Any]) -> list[dict[str, Any]]:
+    _validate_sort_field(query)
     sort = query.get("sort")
     if not isinstance(sort, dict) or not sort.get("field"):
         return list(rows)
-    field = sort["field"]
-    direction = sort.get("direction", "asc")
-    reverse = direction == "desc"
 
-    def key(row: dict[str, Any]) -> Any:
-        value = row.get(field)
-        if value is None:
-            return ""
-        return value
+    field = str(sort["field"])
+    reverse = sort.get("direction", "asc") == "desc"
 
-    return sorted(rows, key=key, reverse=reverse)
+    def primary_key(row: dict[str, Any]) -> Any:
+        if field == "severity":
+            severity = row.get("severity")
+            ordinal = _SEVERITY_ORDINAL.get(severity, 99) if isinstance(severity, str) else 99
+            return -ordinal
+        return _text_sort_key(row.get(field))
+
+    indexed = list(enumerate(rows))
+    indexed.sort(
+        key=lambda pair: (primary_key(pair[1]), pair[0], str(pair[1].get("id", ""))),
+        reverse=reverse,
+    )
+    return [row for _, row in indexed]

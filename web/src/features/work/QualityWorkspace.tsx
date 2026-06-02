@@ -1,12 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { SortingState } from "@tanstack/react-table";
 import { useBridge, useSnapshot } from "../../app/providers/snapshotHooks";
 import type {
   QualityIssueDetail,
   QualityIssueType,
   QualityRow,
 } from "../../types/quality";
+import { ColumnChooser } from "../../components/grid/ColumnChooser";
 import { StatChip } from "../../components/ui/StatChip";
-import { QualityIssueGrid } from "./quality/QualityIssueGrid";
+import {
+  OPTIONAL_QUALITY_COLUMN_KEYS,
+  QUALITY_GRID_SIZING_KEY,
+} from "./quality/qualityGridColumns";
+import {
+  loadQualityColumnSizing,
+  loadQualityColumnVisibility,
+  saveQualityColumnVisibility,
+} from "./quality/qualityGridPersistence";
+import { VirtualizedQualityGrid } from "./quality/VirtualizedQualityGrid";
 import { RepairSubflowDialog } from "./RepairSubflowDialog";
 
 const issueTabs: { id: QualityIssueType; label: string }[] = [
@@ -22,10 +33,14 @@ export function QualityWorkspace() {
   const libraryRevision = snapshot.work.resolve.libraryRevision;
 
   const [issueType, setIssueType] = useState<QualityIssueType>("integrity");
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [rows, setRows] = useState<QualityRow[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
+  const [columnVisibility, setColumnVisibility] = useState(loadQualityColumnVisibility);
+  const [columnSizing, setColumnSizing] = useState(loadQualityColumnSizing);
   const [selected, setSelected] = useState<QualityRow | null>(null);
   const [detail, setDetail] = useState<QualityIssueDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -36,6 +51,15 @@ export function QualityWorkspace() {
     () => detail !== null && detail.libraryRevision !== libraryRevision,
     [detail, libraryRevision],
   );
+
+  const currentSort = useMemo(() => {
+    const primary = sorting[0];
+    if (!primary) return undefined;
+    return {
+      field: primary.id,
+      direction: primary.desc ? ("desc" as const) : ("asc" as const),
+    };
+  }, [sorting]);
 
   const loadDetail = useCallback(
     (row: QualityRow | null) => {
@@ -68,9 +92,15 @@ export function QualityWorkspace() {
   const loadPage = useCallback(
     async (cursor: string | null, append: boolean) => {
       if (append) setLoadingMore(true);
+      else setLoading(true);
       try {
         setQueryError(null);
-        const page = await bridge.queryQualityRows({ issueType, cursor, limit: 100 });
+        const page = await bridge.queryQualityRows({
+          issueType,
+          cursor,
+          limit: 100,
+          sort: currentSort,
+        });
         setNextCursor(page.pageInfo.nextCursor);
         setRows((prev) => (append ? [...prev, ...page.rows] : page.rows));
         if (!append) {
@@ -85,10 +115,11 @@ export function QualityWorkspace() {
           setNextCursor(null);
         }
       } finally {
+        setLoading(false);
         setLoadingMore(false);
       }
     },
-    [bridge, issueType, loadDetail],
+    [bridge, issueType, currentSort, loadDetail],
   );
 
   useEffect(() => {
@@ -97,6 +128,17 @@ export function QualityWorkspace() {
     });
     return () => cancelAnimationFrame(frame);
   }, [loadPage]);
+
+  const seenRevisionRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (seenRevisionRef.current === null) {
+      seenRevisionRef.current = libraryRevision;
+      return;
+    }
+    if (seenRevisionRef.current === libraryRevision) return;
+    seenRevisionRef.current = libraryRevision;
+    void loadPage(null, false);
+  }, [libraryRevision, loadPage]);
 
   const loadingMoreRef = useRef(false);
   const handleNearEnd = () => {
@@ -129,7 +171,7 @@ export function QualityWorkspace() {
           <StatChip label="Encoding" value={quality.encodingIssueCount} tone="warn" />
           <StatChip label="Small files" value={quality.smallFileAnomalyCount} />
         </div>
-        <div className="mt-4 flex gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           {issueTabs.map((tab) => (
             <button
               key={tab.id}
@@ -144,7 +186,24 @@ export function QualityWorkspace() {
               {tab.label}
             </button>
           ))}
+          <ColumnChooser
+            testId="quality-column-chooser"
+            visibility={columnVisibility}
+            optionalKeys={OPTIONAL_QUALITY_COLUMN_KEYS}
+            onChange={(key, visible) => {
+              setColumnVisibility((prev) => {
+                const next = { ...prev, [key]: visible };
+                saveQualityColumnVisibility(next);
+                return next;
+              });
+            }}
+          />
         </div>
+        {loading && !queryError && (
+          <p className="mt-2 text-xs text-muted" data-testid="quality-grid-loading">
+            Loading rows…
+          </p>
+        )}
         {queryError && (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <p className="text-sm text-error" data-testid="quality-query-error">
@@ -163,12 +222,20 @@ export function QualityWorkspace() {
       </section>
 
       <div className="mt-4 grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_280px]">
-        <QualityIssueGrid
+        <VirtualizedQualityGrid
           rows={rows}
-          selectedId={selected?.id ?? null}
-          onSelect={handleSelect}
+          selectedRowId={selected?.id ?? null}
+          onSelectRow={handleSelect}
           onNearEnd={handleNearEnd}
           loadingMore={loadingMore}
+          sorting={sorting}
+          onSortingChange={setSorting}
+          userColumnVisibility={columnVisibility}
+          columnSizing={columnSizing}
+          onColumnSizingChange={(next) => {
+            setColumnSizing(next);
+            localStorage.setItem(QUALITY_GRID_SIZING_KEY, JSON.stringify(next));
+          }}
         />
         <aside className="overflow-y-auto rounded-md border border-outline bg-surface p-4 text-sm">
           <p className="font-semibold text-on-surface">Issue detail</p>

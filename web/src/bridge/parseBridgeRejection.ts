@@ -1,5 +1,5 @@
 import type { ApplyFailedDetails, PreviewApplyErrorCode } from "../types/movePreview";
-import { BridgeCallError } from "./bridgeErrors";
+import { BridgeCallError, type QualityQueryErrorCode } from "./bridgeErrors";
 
 const PREVIEW_APPLY_CODES: readonly PreviewApplyErrorCode[] = [
   "MISSING_PREVIEW_TOKEN",
@@ -15,14 +15,24 @@ function isPreviewApplyCode(value: string): value is PreviewApplyErrorCode {
   return (PREVIEW_APPLY_CODES as readonly string[]).includes(value);
 }
 
-function parseJsonRejection(raw: string): { reason: PreviewApplyErrorCode; details?: ApplyFailedDetails } | null {
+function isQualityQueryCode(value: string): value is QualityQueryErrorCode {
+  return value === "INVALID_SORT_FIELD";
+}
+
+function parseJsonRejection(raw: string): {
+  reason: PreviewApplyErrorCode | QualityQueryErrorCode;
+  details?: ApplyFailedDetails;
+} | null {
   const trimmed = raw.trim();
   if (!trimmed.startsWith("{")) {
     return null;
   }
   try {
     const parsed = JSON.parse(trimmed) as { reason?: unknown; details?: unknown };
-    if (typeof parsed.reason !== "string" || !isPreviewApplyCode(parsed.reason)) {
+    if (typeof parsed.reason !== "string") {
+      return null;
+    }
+    if (!isPreviewApplyCode(parsed.reason) && !isQualityQueryCode(parsed.reason)) {
       return null;
     }
     const details =
@@ -53,7 +63,7 @@ export function toBridgeCallError(err: unknown, method: string): BridgeCallError
     });
   }
 
-  if (isPreviewApplyCode(message)) {
+  if (isPreviewApplyCode(message) || isQualityQueryCode(message)) {
     return new BridgeCallError(`Bridge call rejected: ${message}`, {
       code: "rejected",
       method,

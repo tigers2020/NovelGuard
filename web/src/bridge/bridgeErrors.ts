@@ -1,6 +1,8 @@
 import type { ApplyFailedDetails, PreviewApplyErrorCode } from "../types/movePreview";
 import type { RepairApplyErrorCode, RepairPreviewErrorCode } from "../types/qualityRepair";
 
+export type QualityQueryErrorCode = "INVALID_SORT_FIELD";
+
 export type BridgeErrorCode = "timeout" | "rejected" | "missing_method";
 
 export const BRIDGE_ERROR_CODES = {
@@ -31,7 +33,11 @@ export function getBridgeErrorCode(error: unknown): string {
 export class BridgeCallError extends Error {
   readonly code: BridgeErrorCode;
   readonly method: string;
-  readonly reason?: PreviewApplyErrorCode | RepairApplyErrorCode | RepairPreviewErrorCode;
+  readonly reason?:
+    | PreviewApplyErrorCode
+    | RepairApplyErrorCode
+    | RepairPreviewErrorCode
+    | QualityQueryErrorCode;
   readonly details?: ApplyFailedDetails;
 
   constructor(
@@ -39,7 +45,11 @@ export class BridgeCallError extends Error {
     options: {
       code: BridgeErrorCode;
       method: string;
-      reason?: PreviewApplyErrorCode | RepairApplyErrorCode | RepairPreviewErrorCode;
+      reason?:
+        | PreviewApplyErrorCode
+        | RepairApplyErrorCode
+        | RepairPreviewErrorCode
+        | QualityQueryErrorCode;
       details?: ApplyFailedDetails;
       cause?: unknown;
     },

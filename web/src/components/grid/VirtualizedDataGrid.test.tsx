@@ -86,6 +86,55 @@ describe("VirtualizedDataGrid review columns", () => {
   });
 });
 
+describe("mergeQualityColumnVisibility", () => {
+  it("hides optional quality columns on narrow widths", async () => {
+    const { mergeQualityColumnVisibility } = await import(
+      "../../features/work/quality/qualityGridLayout"
+    );
+    expect(mergeQualityColumnVisibility(0).name).toBe(true);
+    expect(mergeQualityColumnVisibility(0).severity).toBe(false);
+    expect(mergeQualityColumnVisibility(700).path).toBe(true);
+  });
+});
+
+describe("VirtualizedDataGrid quality columns perf", () => {
+  it("renders bounded DOM rows for 2000 logical quality rows", async () => {
+    const { buildQualityGridColumns } = await import(
+      "../../features/work/quality/qualityGridColumns"
+    );
+    const data = Array.from({ length: 2000 }, (_, i) => ({
+      id: `quality:q${i}`,
+      issueType: "encoding" as const,
+      name: `file-${i}.txt`,
+      path: `/lib/file-${i}.txt`,
+      encoding: "UTF-8",
+      integrity: "Decode error",
+      severity: (i % 2 === 0 ? "error" : "warning") as const,
+    }));
+    const { container } = render(
+      <div style={{ height: 400, width: 900, display: "flex" }}>
+        <VirtualizedDataGrid
+          testId="quality-perf-grid"
+          data={data}
+          columns={buildQualityGridColumns()}
+          getRowId={(r) => r.id}
+          mergeColumnVisibility={() => ({
+            name: true,
+            severity: true,
+            encoding: true,
+            integrity: true,
+            path: false,
+            issueType: false,
+          })}
+          overscan={6}
+        />
+      </div>,
+    );
+    const domRows = container.querySelectorAll('[data-testid="grid-row"]');
+    expect(domRows.length).toBeLessThanOrEqual(maxRenderedRowSlots({ overscan: 6 }));
+  });
+});
+
 describe("VirtualizedDataGrid perf", () => {
   it("renders bounded DOM rows for 2000 logical rows", () => {
     const data = Array.from({ length: 2000 }, (_, i) => ({ id: `r-${i}`, name: `Row ${i}` }));

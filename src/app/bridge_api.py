@@ -11,6 +11,7 @@ from app.apply_resolved_actions import ApplyResolvedActionsUseCase
 from app.bridge_contract import (
     FinalizeError,
     PreviewApplyError,
+    QualityQueryError,
     RepairApplyError,
     clamp_query_limit,
     validate_app_info,
@@ -87,7 +88,10 @@ class BridgeApi:
 
     def query_quality_rows(self, query: dict[str, Any]) -> dict[str, Any]:
         _ = clamp_query_limit(query)
-        payload = self._session.query_quality_rows(query)
+        try:
+            payload = self._session.query_quality_rows(query)
+        except QualityQueryError as exc:
+            raise PreviewApplyError(exc.reason, str(exc)) from exc
         validate_quality_rows_page(payload)
         return payload
 
