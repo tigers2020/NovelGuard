@@ -1,4 +1,4 @@
-"""Verification pipeline: pytest → ruff → mypy → black → npm lint → verify_packaging (fail-fast)."""
+"""Verification pipeline: pytest → ruff → mypy → black → npm lint → npm test → verify_packaging (fail-fast)."""
 
 from __future__ import annotations
 
@@ -28,15 +28,17 @@ def main() -> None:
         sys.exit(1)
 
     verify_packaging = project_root / "scripts" / "verify_packaging.py"
+    web_dir = project_root / "web"
     steps: list[tuple[list[str], str]] = [
-        ([sys.executable, "-m", "pytest"], "1/6 python -m pytest"),
-        ([sys.executable, "-m", "ruff", "check", "."], "2/6 python -m ruff check ."),
-        ([sys.executable, "-m", "mypy", "src"], "3/6 python -m mypy src"),
-        ([sys.executable, "-m", "black", "--check", "."], "4/6 python -m black --check ."),
-        ([npm, "run", "lint"], "5/6 npm run lint"),
+        ([sys.executable, "-m", "pytest"], "1/7 python -m pytest"),
+        ([sys.executable, "-m", "ruff", "check", "."], "2/7 python -m ruff check ."),
+        ([sys.executable, "-m", "mypy", "src"], "3/7 python -m mypy src"),
+        ([sys.executable, "-m", "black", "--check", "."], "4/7 python -m black --check ."),
+        ([npm, "run", "lint"], "5/7 npm run lint"),
+        ([npm, "run", "test"], "6/7 npm run test (web vitest)"),
         (
             [sys.executable, str(verify_packaging)],
-            "6/6 packaging verification (static; no PyInstaller run)",
+            "7/7 packaging verification (static; no PyInstaller run)",
         ),
     ]
 
@@ -46,7 +48,8 @@ def main() -> None:
 
     results: list[tuple[str, bool]] = []
     for cmd, label in steps:
-        ok = run_command(cmd, label, cwd=root)
+        step_cwd = str(web_dir) if "npm run test" in label else root
+        ok = run_command(cmd, label, cwd=step_cwd)
         results.append((label, ok))
         if not ok:
             break

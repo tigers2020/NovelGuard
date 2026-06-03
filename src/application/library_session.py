@@ -38,7 +38,16 @@ from domain.settings_keys import (
 
 _MAX_QUERY_LIMIT = 200
 _DEFAULT_QUERY_LIMIT = 100
+_WORK_MODES = frozenset({"scan", "resolve", "quality"})
 _LOGGER = logging.getLogger(__name__)
+
+
+def _normalize_active_mode(mode: str) -> str:
+    if mode == "finalize":
+        return "resolve"
+    if mode in _WORK_MODES:
+        return mode
+    return "resolve"
 
 
 class LibrarySession:
@@ -202,9 +211,10 @@ class LibrarySession:
             self._cancel_requested = True
 
     def set_work_mode(self, mode: str) -> None:
+        if mode not in _WORK_MODES:
+            raise ValueError(f"INVALID_WORK_MODE:{mode}")
         with self._lock:
-            if mode in ("scan", "resolve", "quality", "finalize"):
-                self._active_mode = mode
+            self._active_mode = mode
 
     def _scan_options_labels(self) -> list[str]:
         extension_filter, _ = self._settings.get_value(SETTINGS_KEY_SCAN_EXTENSION_FILTER)
@@ -221,7 +231,7 @@ class LibrarySession:
                 file_count=self._index.file_count(),
                 total_bytes=self._index.total_bytes(),
                 library_revision=self._library_revision,
-                active_mode=self._active_mode,
+                active_mode=_normalize_active_mode(self._active_mode),
                 pipeline_phase=self._pipeline_phase,
                 pipeline_percent=self._pipeline_percent,
                 pipeline_label=self._pipeline_label,

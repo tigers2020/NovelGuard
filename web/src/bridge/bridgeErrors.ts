@@ -43,6 +43,7 @@ export class BridgeCallError extends Error {
     | FileRowQueryErrorCode
     | "NO_LIBRARY"
     | "LIBRARY_BUSY"
+    | "INVALID_WORK_MODE"
     | "FINALIZE_NOT_CONFIGURED"
     | "INVALID_REQUEST"
     | "REPORT_NOT_FOUND"
@@ -62,6 +63,7 @@ export class BridgeCallError extends Error {
         | FileRowQueryErrorCode
         | "NO_LIBRARY"
         | "LIBRARY_BUSY"
+        | "INVALID_WORK_MODE"
         | "FINALIZE_NOT_CONFIGURED"
         | "INVALID_REQUEST"
         | "REPORT_NOT_FOUND"

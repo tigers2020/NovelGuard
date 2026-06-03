@@ -259,6 +259,14 @@ def test_set_work_mode_updates_snapshot() -> None:
     assert snap["work"]["activeMode"] == "quality"
 
 
+def test_set_work_mode_rejects_finalize_mode() -> None:
+    api = _memory_api()
+    with pytest.raises(PreviewApplyError) as exc_info:
+        api.set_work_mode("finalize")
+    assert exc_info.value.reason == "INVALID_WORK_MODE"
+    assert api.get_snapshot()["work"]["activeMode"] == "resolve"
+
+
 def test_make_file_id_stable() -> None:
     a = make_file_id("novels/a.txt", 100, 1_700_000_000_000_000_000)
     b = make_file_id("novels/a.txt", 100, 1_700_000_000_000_000_000)
