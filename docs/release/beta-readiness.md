@@ -37,7 +37,7 @@ Use `packaging/fixtures/library/` or a disposable copy. **Do not** beta-test des
 
 | Role | Name | Date | Notes |
 |------|------|------|-------|
-| Engineering | | | Phase gate green |
+| Engineering | (automated) | 2026-06-03 | `verify_phase_completion` 7/7, e2e 29/29, PR #23 merged |
 | QA / operator | | | Fixture smoke record filed |
 
 Template: [smoke-record-template.md](smoke-record-template.md)

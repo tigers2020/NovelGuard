@@ -6,6 +6,10 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Scan session busy boundary through tail persist (`scan_persist` phase); `ScanStreamResult` cancel policy; folder-scoped SQLite batch reset; `deepAnalysisStatus` / `deepAnalysisError` in snapshot + ScanWorkspace error banner; Python `ruff`/`mypy` gates; e2e settings diagnostics navigation (PR #23, `main`).
+
 ### Added
 
 - **Platform release gate (PR-33..45):** 3-mode Work shell, unified scan section, resolve master-detail, FileDock global, app shell polish, Logs/Settings v2, finalize cleanup preview, bridge regression tests, E2E full pipeline smoke, packaging UI marker gate (`scripts/smoke_packaged_ui.py`), beta readiness doc.

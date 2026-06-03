@@ -10,6 +10,8 @@
 
 **Spec:** [028 streaming scan phases](../specs/028-2026-06-03-infra-scan-streaming-phases-design.md) (**approved** 2026-06-03)
 
+**Plan status:** Done (2026-06-03) — core streaming persist, signals, and hotfix busy boundary landed on `main` via PR #23.
+
 **Test policy:** Extend `tests/test_bridge_contract.py`, `web/src/bridge/bridgeParity.test.ts` only. No new `test_*.py` without user approval.
 
 **Non-goals:** Work hub IA change; incremental/mtime scan; new `scan_stream.py` unless `library_session._run_scan` exceeds ~200 lines after refactor (prefer `application/scan_stream.py` only if split is needed).

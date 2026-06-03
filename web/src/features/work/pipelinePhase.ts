@@ -3,6 +3,7 @@ export type NormalizedPipelinePhase =
   | "idle"
   | "probe"
   | "persist"
+  | "scan_persist"
   | "exact_index"
   | "analyze"
   | "finalize";
@@ -23,6 +24,7 @@ export function pipelinePhaseLabel(
   if (
     normalized === "probe" ||
     normalized === "persist" ||
+    normalized === "scan_persist" ||
     normalized === "exact_index" ||
     normalized === "analyze"
   ) {
