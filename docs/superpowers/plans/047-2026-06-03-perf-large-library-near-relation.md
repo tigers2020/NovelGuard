@@ -12,10 +12,11 @@
 - [x] Group count + near filter + review default filter `all`
 - [x] Relation before near in post-scan worker
 - [x] UI: show 심층 분석 track when `deepAnalysisStatus=running` and pipeline idle
-- [x] `pytest tests/test_bridge_contract.py` (139 passed)
-- [x] Commit slice on `main` (pending user push)
+- [x] `pytest tests/test_bridge_contract.py` (149 passed on main, 2026-06-03)
+- [x] Commit on `main` (`5ae1bbc`)
+- [x] Full gate `python scripts/verify_phase_completion.py` — **7/7 PASS** (2026-06-03)
 
 ## Non-goals
 
-- Full `verify_phase_completion` gate in this slice (run before PR if needed)
+- Full `package_windows.py` rebuild in this slice (operator manual per beta-readiness)
 - New test files

@@ -26,9 +26,7 @@ def load_config(path: Path | None = None) -> dict[str, Any]:
     cfg_path = path or config_path()
     if not cfg_path.is_file():
         example = cfg_path.parent / "config.example.yaml"
-        raise FileNotFoundError(
-            f"Missing {cfg_path}. Copy {example} to {cfg_path.name} and edit."
-        )
+        raise FileNotFoundError(f"Missing {cfg_path}. Copy {example} to {cfg_path.name} and edit.")
     text = cfg_path.read_text(encoding="utf-8")
     if cfg_path.suffix.lower() in (".yaml", ".yml"):
         try:

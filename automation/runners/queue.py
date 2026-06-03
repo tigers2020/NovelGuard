@@ -29,8 +29,7 @@ class JobQueue:
 
     def _init_db(self) -> None:
         with self._connect() as conn:
-            conn.execute(
-                """
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS jobs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     job_id TEXT NOT NULL UNIQUE,
@@ -42,8 +41,7 @@ class JobQueue:
                     result TEXT,
                     log_path TEXT
                 )
-                """
-            )
+                """)
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_jobs_status_created ON jobs(status, created_at)"
             )
@@ -65,14 +63,12 @@ class JobQueue:
 
     def claim_next(self) -> JobRecord | None:
         with self._connect() as conn:
-            row = conn.execute(
-                """
+            row = conn.execute("""
                 SELECT id, payload FROM jobs
                 WHERE status = 'queued'
                 ORDER BY created_at ASC
                 LIMIT 1
-                """
-            ).fetchone()
+                """).fetchone()
             if row is None:
                 return None
             now = time.time()

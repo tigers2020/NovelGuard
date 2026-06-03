@@ -40,6 +40,8 @@ Small/localized tasks should skip these docs and follow [AGENTS.md](../../AGENTS
 | 39 | [034](./plans/034-2026-06-02-feature-ui-shell-pr39-app-shell-polish.md) | App shell polish |
 | 40 | [035](./plans/035-2026-06-02-feature-ui-settings-pr40-logs-settings-v2.md) | Logs/Settings v2 |
 
-**Next:** Platform release gate (003) complete — package smoke on fresh `package_windows.py` build before beta sign-off.
+**Next:** Operator beta sign-off — [beta-readiness.md](../release/beta-readiness.md) manual flows; optional fresh `python scripts/package_windows.py` + [packaging-smoke-checklist.md](../release/packaging-smoke-checklist.md). Track 003 **closed** 2026-06-03.
+
+**Post-gate on `main`:** Plan [047](./plans/047-2026-06-03-perf-large-library-near-relation.md) (large-library perf) merged; automation runner in `automation/` (see [agent-automation.md](../agent-automation.md)).
 
 Historical specs and plans from before the full reset were removed with the codebase.
