@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from application.dto_mapper import empty_file_rows_page
 from application.file_row_query import NormalizedFileRowsQuery, text_sort_key
+from application.library_folder_persistence import normalize_library_folder_path
 from application.ports.review_state import LoadedReviewState
 from domain.duplicate_near import (
     NearDuplicateGroup,
@@ -194,7 +196,13 @@ class SqliteLibraryIndex:
             conn.commit()
 
     def _connect(self) -> sqlite3.Connection:
-        return sqlite3.connect(self._db_path)
+        conn = sqlite3.connect(self._db_path)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")
+        return conn
+
+    def _storage_folder_path(self, folder_path: str) -> str:
+        return normalize_library_folder_path(folder_path)
 
     def clear(self) -> None:
         self._current_folder = None
@@ -208,34 +216,100 @@ class SqliteLibraryIndex:
             conn.execute("DELETE FROM near_duplicate_pairs")
             conn.execute("DELETE FROM file_review_projection")
 
-    def replace_files(self, folder_path: str, files: list[FileRecord]) -> None:
+    def activate_library_folder(self, folder_path: str) -> None:
+        self._current_folder = self._storage_folder_path(folder_path)
+
+    def replace_files(
+        self,
+        folder_path: str,
+        files: list[FileRecord],
+        *,
+        on_save_progress: Callable[[int, int], None] | None = None,
+    ) -> None:
+        folder_path = self._storage_folder_path(folder_path)
         self._current_folder = folder_path
-        with self._connect() as conn:
-            conn.execute("DELETE FROM files WHERE folder_path = ?", (folder_path,))
-            conn.executemany(
-                """
+        total = len(files)
+        insert_sql = """
                 INSERT INTO files (
                   id, folder_path, relative_path, name, size_bytes, modified_at_ns,
                   extension, content_sha256, encoding_status,
                   name_key, relative_path_key, extension_key, encoding_key
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                [
-                    (
-                        f.id,
-                        folder_path,
-                        f.relative_path,
-                        f.name,
-                        f.size_bytes,
-                        f.modified_at_ns,
-                        f.extension,
-                        f.content_sha256,
-                        f.encoding_status,
-                        *_file_sort_keys(f),
-                    )
-                    for f in files
-                ],
-            )
+                """
+        batch_size = 800
+        with self._connect() as conn:
+            conn.execute("DELETE FROM files WHERE folder_path = ?", (folder_path,))
+            conn.commit()
+            saved = 0
+            for offset in range(0, total, batch_size):
+                chunk = files[offset : offset + batch_size]
+                conn.executemany(
+                    insert_sql,
+                    [
+                        (
+                            f.id,
+                            folder_path,
+                            f.relative_path,
+                            f.name,
+                            f.size_bytes,
+                            f.modified_at_ns,
+                            f.extension,
+                            f.content_sha256,
+                            f.encoding_status,
+                            *_file_sort_keys(f),
+                        )
+                        for f in chunk
+                    ],
+                )
+                conn.commit()
+                saved += len(chunk)
+                if on_save_progress is not None:
+                    on_save_progress(saved, total)
+
+    def append_files_batch(
+        self,
+        folder_path: str,
+        files: list[FileRecord],
+        *,
+        reset: bool = False,
+    ) -> None:
+        if not files and not reset:
+            return
+        folder_path = self._storage_folder_path(folder_path)
+        self._current_folder = folder_path
+        insert_sql = """
+                INSERT INTO files (
+                  id, folder_path, relative_path, name, size_bytes, modified_at_ns,
+                  extension, content_sha256, encoding_status,
+                  name_key, relative_path_key, extension_key, encoding_key
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """
+        with self._connect() as conn:
+            if reset:
+                conn.execute(
+                    "DELETE FROM files WHERE folder_path = ?",
+                    (folder_path,),
+                )
+            if files:
+                conn.executemany(
+                    insert_sql,
+                    [
+                        (
+                            f.id,
+                            folder_path,
+                            f.relative_path,
+                            f.name,
+                            f.size_bytes,
+                            f.modified_at_ns,
+                            f.extension,
+                            f.content_sha256,
+                            f.encoding_status,
+                            *_file_sort_keys(f),
+                        )
+                        for f in files
+                    ],
+                )
+            conn.commit()
 
     def replace_file_review_projection(
         self,
@@ -306,10 +380,24 @@ class SqliteLibraryIndex:
         ]
 
     def file_count(self) -> int:
-        return len(self.files())
+        if self._current_folder is None:
+            return 0
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM files WHERE folder_path = ?",
+                (self._current_folder,),
+            ).fetchone()
+        return int(row[0]) if row else 0
 
     def total_bytes(self) -> int:
-        return sum(f.size_bytes for f in self.files())
+        if self._current_folder is None:
+            return 0
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT COALESCE(SUM(size_bytes), 0) FROM files WHERE folder_path = ?",
+                (self._current_folder,),
+            ).fetchone()
+        return int(row[0]) if row else 0
 
     def replace_quality_issues(self, folder_path: str, issues: list[QualityIssue]) -> None:
         created_at = datetime.now(timezone.utc).isoformat()
