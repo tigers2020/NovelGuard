@@ -23,7 +23,7 @@ Roadmap entries are **proposed** until a matching spec is approved. Do not treat
 | File | Scope |
 |------|--------|
 | [000-2026-06-01-novelguard-master-roadmap.md](./000-2026-06-01-novelguard-master-roadmap.md) | PR-0..19 (done); program waves A–G |
-| [001-2026-06-02-pr20-pr25-development-roadmap.md](./001-2026-06-02-pr20-pr25-development-roadmap.md) | Closed track: PR-20..25 **Done** |
+| [001-2026-06-02-pr20-pr25-development-roadmap.md](./001-2026-06-02-pr20-pr25-development-roadmap.md) | **Closed:** PR-20..25 **Done** |
 | [002-2026-06-02-pr26-pr30-platform-polish-roadmap.md](./002-2026-06-02-pr26-pr30-platform-polish-roadmap.md) | **Closed track:** PR-26..32 **Done** |
 | [003-2026-06-02-platform-release-gate-roadmap.md](./003-2026-06-02-platform-release-gate-roadmap.md) | **Closed:** PR-33..45 — verify 7/7 on main (2026-06-03) |
 | [004-2026-06-03-post-release-beta-roadmap.md](./004-2026-06-03-post-release-beta-roadmap.md) | **Closed:** automated beta gate (2026-06-03) |

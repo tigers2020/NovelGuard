@@ -6,7 +6,7 @@ Checklist for a **local beta** of NovelGuard after roadmap PR-33..44. Not a publ
 
 | Check | Command |
 |-------|---------|
-| Full phase gate | `python scripts/verify_phase_completion.py` |
+| Full phase gate | `python scripts/verify_phase_completion.py` (includes fixture smoke; launch smoke if `dist/` built) |
 | Web E2E (mock) | `cd web && npm run test:e2e` |
 | Packaging static | `python scripts/verify_packaging.py` |
 

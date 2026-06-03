@@ -10,14 +10,6 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-
-from app.bridge_contract import validate_app_snapshot, validate_review_rows_page
-from app.session_factory import create_bridge_api, create_library_session
-from application.app_settings import AppSettings
-from application.settings_store import SettingsStore
-from infrastructure.sqlite_library_index import SqliteLibraryIndex
-
 FIXTURE = ROOT / "packaging" / "fixtures" / "library"
 
 
@@ -51,6 +43,15 @@ def _wait_deep_analysis(api, timeout: float = 120.0) -> dict:
 
 
 def main() -> int:
+    if str(ROOT / "src") not in sys.path:
+        sys.path.insert(0, str(ROOT / "src"))
+
+    from app.bridge_contract import validate_app_snapshot, validate_review_rows_page
+    from app.session_factory import create_bridge_api, create_library_session
+    from application.app_settings import AppSettings
+    from application.settings_store import SettingsStore
+    from infrastructure.sqlite_library_index import SqliteLibraryIndex
+
     if not FIXTURE.is_dir():
         print(f"FAIL: missing fixture {FIXTURE}")
         return 1
@@ -73,7 +74,11 @@ def main() -> int:
 
         snap = _wait_deep_analysis(api)
         if snap["work"]["scan"]["deepAnalysisStatus"] == "error":
-            print(json.dumps({"fail": "deep_analysis", "error": snap["work"]["scan"]["deepAnalysisError"]}))
+            print(
+                json.dumps(
+                    {"fail": "deep_analysis", "error": snap["work"]["scan"]["deepAnalysisError"]}
+                )
+            )
             return 1
         if not snap["work"]["scan"]["deepAnalysisComplete"]:
             print("FAIL: deep analysis timeout")

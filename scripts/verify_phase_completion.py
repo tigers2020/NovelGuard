@@ -28,19 +28,33 @@ def main() -> None:
         sys.exit(1)
 
     verify_packaging = project_root / "scripts" / "verify_packaging.py"
+    fixture_smoke = project_root / "scripts" / "fixture_library_smoke.py"
+    launch_smoke = project_root / "scripts" / "launch_packaged_smoke.py"
+    packaged_exe = project_root / "dist" / "NovelGuard" / "NovelGuard.exe"
     web_dir = project_root / "web"
     steps: list[tuple[list[str], str]] = [
-        ([sys.executable, "-m", "pytest"], "1/7 python -m pytest"),
-        ([sys.executable, "-m", "ruff", "check", "."], "2/7 python -m ruff check ."),
-        ([sys.executable, "-m", "mypy", "src"], "3/7 python -m mypy src"),
-        ([sys.executable, "-m", "black", "--check", "."], "4/7 python -m black --check ."),
-        ([npm, "run", "lint"], "5/7 npm run lint"),
-        ([npm, "run", "test"], "6/7 npm run test (web vitest)"),
+        ([sys.executable, "-m", "pytest"], "1/9 python -m pytest"),
+        ([sys.executable, "-m", "ruff", "check", "."], "2/9 python -m ruff check ."),
+        ([sys.executable, "-m", "mypy", "src"], "3/9 python -m mypy src"),
+        ([sys.executable, "-m", "black", "--check", "."], "4/9 python -m black --check ."),
+        ([npm, "run", "lint"], "5/9 npm run lint"),
+        ([npm, "run", "test"], "6/9 npm run test (web vitest)"),
         (
             [sys.executable, str(verify_packaging)],
-            "7/7 packaging verification (static; no PyInstaller run)",
+            "7/9 packaging verification (static; no PyInstaller run)",
+        ),
+        (
+            [sys.executable, str(fixture_smoke)],
+            "8/9 fixture library smoke (headless)",
         ),
     ]
+    if packaged_exe.is_file():
+        steps.append(
+            (
+                [sys.executable, str(launch_smoke)],
+                "9/9 packaged exe launch smoke",
+            )
+        )
 
     print("\nNovelGuard verification pipeline (fail-fast)")
     print(f"Time: {datetime.now().isoformat()}")

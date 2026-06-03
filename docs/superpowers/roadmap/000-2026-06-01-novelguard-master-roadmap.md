@@ -2,7 +2,7 @@
 title: NovelGuard Master Roadmap
 status: active
 date: 2026-06-01
-last_reviewed: 2026-06-02
+last_reviewed: 2026-06-03
 parent_spec: docs/superpowers/specs/000-2026-06-01-novelguard-ui-overhaul-design.md
 ---
 
@@ -16,7 +16,7 @@ parent_spec: docs/superpowers/specs/000-2026-06-01-novelguard-ui-overhaul-design
 | Contract / E2E / grid perf (PR-10..12) | **Done** |
 | Preview token & stale apply (PR-13) | **Done** |
 | Greenfield library session (PR-14a..14d) | **Done** |
-| **Next** | **PR-20** — Relation / filename-blocking signals — [001 PR-20..25 roadmap](./001-2026-06-02-pr20-pr25-development-roadmap.md) |
+| **Next** | Program tracks **001** (PR-20..25), **003** (PR-33..45), **004** (beta) **closed** — see [superpowers README](../README.md) |
 
 Verification baseline: `python scripts/verify_phase_completion.py` (recorded in completed plans).
 
