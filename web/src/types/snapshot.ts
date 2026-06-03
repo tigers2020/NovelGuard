@@ -42,7 +42,7 @@ export interface FinalizeSnapshot {
   warningCount: number;
 }
 
-export type WorkMode = "scan" | "resolve" | "quality" | "finalize";
+export type WorkMode = "scan" | "resolve" | "quality";
 
 export interface AppSnapshot {
   route: "work" | "settings" | "logs";

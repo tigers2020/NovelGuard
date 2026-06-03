@@ -49,12 +49,14 @@ export function RepairSubflowDialog({
   snapshotLibraryRevision,
   onClose,
   onSuccess,
+  onOpenFinalize,
 }: {
   open: boolean;
   issueId: string | null;
   snapshotLibraryRevision: number;
   onClose: () => void;
   onSuccess: () => void;
+  onOpenFinalize: () => void;
 }) {
   const bridge = useBridge();
   const refreshSnapshot = useRefreshSnapshot();
@@ -230,9 +232,21 @@ export function RepairSubflowDialog({
         )}
 
         {step === "done" && (
-          <p className="mt-3 text-success" data-testid="quality-repair-done">
-            복구가 완료되었습니다.
-          </p>
+          <div className="mt-3 rounded-md border border-success/40 bg-success/10 p-3 text-sm">
+            <p className="text-success" data-testid="quality-repair-done">
+              복구가 완료되었습니다.
+            </p>
+            <button
+              type="button"
+              data-testid="quality-repair-open-finalize"
+              className="mt-3 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-background"
+              onClick={() => {
+                void handleClose().then(onOpenFinalize);
+              }}
+            >
+              최종 검증으로 이동
+            </button>
+          </div>
         )}
 
         <div className="mt-5 flex flex-wrap justify-end gap-2">

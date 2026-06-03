@@ -1,0 +1,27 @@
+---
+description: Core repository rules for all AI coding work
+alwaysApply: true
+---
+
+# Core Rule
+
+- [AGENTS.md](mdc:AGENTS.md) is the canonical project guide.
+- Keep changes small, local, and reviewable.
+- Do not invent facts; check code, `docs/`, tests, and git state first.
+- Do not claim tests passed unless actually run.
+- Simple/localized tasks must skip specs, plans, Superpowers skills, and persona ceremony.
+- Non-trivial / PR / architecture tasks must read the relevant spec/plan before editing.
+- Read [agent-workflow.md](mdc:docs/superpowers/agent-workflow.md) only when Superpowers routing or plan continuity is needed.
+- Superpowers, persona files, and long workflow docs are opt-in context, not default behavior.
+- New specs/plans belong under `docs/superpowers/`, not `documents/`.
+- Python 3.12, `src/` layout, line length 100. Secrets in `.env` only.
+
+## Self-check
+
+1. Is this small direct work or large plan/spec work?
+2. Which layer is touched: domain, application, infrastructure, web, or app?
+3. Context7 checked before coding (or skipped + why)?
+4. Supabase MCP for DB work (or N/A)?
+5. Playwright / smallest gate run after coding (or explicitly not run)?
+
+Full workflow: [56-dev-mcp-workflow.mdc](mdc:.cursor/rules/56-dev-mcp-workflow.mdc).

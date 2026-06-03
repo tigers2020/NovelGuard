@@ -19,6 +19,8 @@ prerequisite_commit: "[pr22] quality repair execution"
 
 **Approved** (2026-06-02) — grill-me **G1–G6** + **B1–B4** locked below. Implementation per [plan 017](../plans/017-2026-06-02-pr23-finalize-cleanup-pipeline.md).
 
+**Superseded (UX navigation only, 2026-06-03):** [Spec 021](./021-2026-06-02-feature-fullstack-shell-ia-reconciliation-design.md) **LOCK-33-7** removes WorkMode `finalize` (4th tab). Backend finalize runner, bridge methods, and `work.finalize` snapshot slice remain authoritative.
+
 ## Scope sentence
 
 PR-23 wires **post-organize verification** into a product **Finalize** work mode: read-only summary of duplicate/quality state + move/repair audit tails, a **4-step background runner** (no blocking GUI event loop), optional **cleanup v1** (empty output folders only), JSON report under `SAVE/finalize/`, and UI for **「최종 검증 실행」** / **「완료 보고서 보기」**. It does **not** add new duplicate/repair mutations, packaging, or shell FileDock.

@@ -8,13 +8,13 @@ alwaysApply: false
 
 # Documentation Governance
 
-- **Authority:** existing docs unless contradicted by current code or tests.
-- **New design specs:** `docs/superpowers/specs/NNN-YYYY-MM-DD-<kind>-<layer>-<area>-<topic>-design.md`
-- **New implementation plans:** `docs/superpowers/plans/NNN-YYYY-MM-DD-<kind>-<layer>-<area>-prNN-<topic>.md`
-- **Naming detail:** [AGENTS.md § Spec & plan file naming](mdc:AGENTS.md) — directory-local `NNN`; `prNN` plan-only; `risk` in frontmatter; legacy docs grandfathered; active canonical docs may rename per AGENTS rename criteria
-- **Program roadmaps:** `docs/superpowers/roadmap/NNN-YYYY-MM-DD-<area>-<topic>-roadmap.md` (orientation only; spec still required per wave)
-- **Index:** [docs/superpowers/README.md](mdc:docs/superpowers/README.md)
-- **Architecture / runtime truth:** [docs/current_architecture.md](mdc:docs/current_architecture.md), [pyproject.toml](mdc:pyproject.toml)
-- **Historical research and old plans:** [documents/](mdc:documents/README.md) — do not add new specs/plans here
-- **Archive:** [docs/archive/](mdc:docs/archive/README.md) — may be stale; prefer current_architecture for behavior
+- Existing docs are authoritative unless contradicted by current code or tests.
+- Current architecture/runtime truth: [docs/current_architecture.md](mdc:docs/current_architecture.md), [pyproject.toml](mdc:pyproject.toml).
+- New design specs: `docs/superpowers/specs/NNN-YYYY-MM-DD-<kind>-<layer>-<area>-<topic>-design.md`.
+- New implementation plans: `docs/superpowers/plans/NNN-YYYY-MM-DD-<kind>-<layer>-<area>-prNN-<topic>.md`.
+- Naming detail: [agent-workflow.md](mdc:docs/superpowers/agent-workflow.md).
+- Program roadmaps: `docs/superpowers/roadmap/NNN-YYYY-MM-DD-<area>-<topic>-roadmap.md`.
+- Index: [docs/superpowers/README.md](mdc:docs/superpowers/README.md).
+- Historical research and old plans: [documents/](mdc:documents/README.md); do not add new specs/plans here.
+- Archive: [docs/archive/](mdc:docs/archive/README.md); may be stale.
 - Do not silently change public contracts without a spec and drift note in the plan.

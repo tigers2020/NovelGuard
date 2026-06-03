@@ -26,7 +26,7 @@ const issueTabs: { id: QualityIssueType; label: string }[] = [
   { id: "small_file", label: "소형 파일" },
 ];
 
-export function QualityWorkspace() {
+export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => void }) {
   const bridge = useBridge();
   const snapshot = useSnapshot();
   const quality = snapshot.work.quality;
@@ -198,6 +198,14 @@ export function QualityWorkspace() {
               });
             }}
           />
+          <button
+            type="button"
+            data-testid="quality-open-finalize"
+            className="rounded-md border border-outline px-3 py-2 text-sm font-semibold text-on-surface-variant hover:bg-hover"
+            onClick={onOpenFinalize}
+          >
+            최종 검증
+          </button>
         </div>
         {loading && !queryError && (
           <p className="mt-2 text-xs text-muted" data-testid="quality-grid-loading">
@@ -334,6 +342,7 @@ export function QualityWorkspace() {
             loadDetail(selected);
           }
         }}
+        onOpenFinalize={onOpenFinalize}
       />
     </main>
   );

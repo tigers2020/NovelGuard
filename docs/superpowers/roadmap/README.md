@@ -8,7 +8,7 @@ Program-level sequencing and status — **not** implementation detail.
 | **Spec** | `specs/NNN-YYYY-MM-DD-<kind>-<layer>-<area>-<topic>-design.md` | Approved design — human gate before plan |
 | **Plan** | `plans/NNN-YYYY-MM-DD-<kind>-<layer>-<area>-prNN-<topic>.md` | Task-level execution for one PR slice |
 
-Full taxonomy (`kind`, `layer`, `area`, `risk`, directory-local `NNN`): [AGENTS.md § Spec & plan file naming](../../../AGENTS.md#spec--plan-file-naming).
+Full taxonomy (`kind`, `layer`, `area`, `risk`, directory-local `NNN`): [agent-workflow.md § Spec & plan file naming](../agent-workflow.md#spec--plan-file-naming).
 
 ## Workflow
 
@@ -24,7 +24,8 @@ Roadmap entries are **proposed** until a matching spec is approved. Do not treat
 |------|--------|
 | [000-2026-06-01-novelguard-master-roadmap.md](./000-2026-06-01-novelguard-master-roadmap.md) | PR-0..19 (done); program waves A–G |
 | [001-2026-06-02-pr20-pr25-development-roadmap.md](./001-2026-06-02-pr20-pr25-development-roadmap.md) | Closed track: PR-20..25 **Done** |
-| [002-2026-06-02-pr26-pr30-platform-polish-roadmap.md](./002-2026-06-02-pr26-pr30-platform-polish-roadmap.md) | **Closed track:** PR-26..30 **Done** — next: spec 019 scan folder picker |
+| [002-2026-06-02-pr26-pr30-platform-polish-roadmap.md](./002-2026-06-02-pr26-pr30-platform-polish-roadmap.md) | **Closed track:** PR-26..32 **Done** |
+| [003-2026-06-02-platform-release-gate-roadmap.md](./003-2026-06-02-platform-release-gate-roadmap.md) | **Active:** PR-33..45 — IA → Work reassembly → release candidate |
 
 ## Adding a roadmap file
 

@@ -29,7 +29,13 @@ function loadColumnSizing(): Record<string, number> {
   }
 }
 
-export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: (selection: SelectionScope) => void }) {
+export function ResolveAndOrganizeWorkspace({
+  onOpenPreview,
+  onOpenFinalize,
+}: {
+  onOpenPreview: (selection: SelectionScope) => void;
+  onOpenFinalize: () => void;
+}) {
   const bridge = useBridge();
   const refreshSnapshot = useRefreshSnapshot();
   const snapshot = useSnapshot();
@@ -52,6 +58,25 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailMutating, setDetailMutating] = useState(false);
+  const [detailSheetOpen, setDetailSheetOpen] = useState(false);
+  const [isWideLayout, setIsWideLayout] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches,
+  );
+  const detailSeqRef = useRef(0);
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1024px)");
+    const onChange = () => {
+      setIsWideLayout(media.matches);
+      if (media.matches) {
+        setDetailSheetOpen(false);
+      }
+    };
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+
+  const explicitRowIdSet = useMemo(() => new Set(explicitIds), [explicitIds]);
 
   const rowTypeFilterTypes = useMemo((): ReviewRowType[] | undefined => {
     if (rowTypeFilter === "exact") return ["exact"];
@@ -75,8 +100,10 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
 
   const loadDetail = useCallback(
     async (row: ReviewRow | null) => {
+      const seq = ++detailSeqRef.current;
       const gid = row ? reviewRowGroupId(row) : null;
       if (!gid) {
+        if (seq !== detailSeqRef.current) return;
         setDetail(null);
         setDetailError(null);
         return;
@@ -84,12 +111,17 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
       setDetailLoading(true);
       try {
         setDetailError(null);
-        setDetail(await bridge.getDuplicateGroupDetail(gid));
+        const next = await bridge.getDuplicateGroupDetail(gid);
+        if (seq !== detailSeqRef.current) return;
+        setDetail(next);
       } catch (err) {
+        if (seq !== detailSeqRef.current) return;
         setDetailError(err instanceof Error ? err.message : "Failed to load group detail");
         setDetail(null);
       } finally {
-        setDetailLoading(false);
+        if (seq === detailSeqRef.current) {
+          setDetailLoading(false);
+        }
       }
     },
     [bridge],
@@ -152,9 +184,15 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
     });
   };
 
-  const toggleSelect = (row: ReviewRow) => {
+  const selectMasterRow = (row: ReviewRow) => {
     setSelectedRow(row);
+    if (!isWideLayout) {
+      setDetailSheetOpen(true);
+    }
     void loadDetail(row);
+  };
+
+  const toggleExplicitRow = (row: ReviewRow) => {
     setExplicitIds((ids) =>
       ids.includes(row.id) ? ids.filter((id) => id !== row.id) : [...ids, row.id],
     );
@@ -270,6 +308,16 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
           <StatChip label="Conflicts" value={resolve.conflictCount} tone="danger" />
           <StatChip label="Approved" value={resolve.approvedCount} tone="good" />
         </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            data-testid="resolve-open-finalize"
+            className="rounded-md border border-outline px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-hover"
+            onClick={onOpenFinalize}
+          >
+            최종 검증
+          </button>
+        </div>
         <div className="mt-4 flex flex-wrap gap-2" data-testid="resolve-type-filter">
           {(
             [
@@ -322,10 +370,27 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
       <div className="relative z-0 flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <FacetPanel viewMode={viewMode} onViewModeChange={setViewMode} />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {!isWideLayout && selectedRow && (
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-outline bg-surface px-3 py-2">
+              <p className="truncate text-xs text-on-surface-variant">
+                선택: <span className="font-semibold text-on-surface">{selectedRow.name}</span>
+              </p>
+              <button
+                type="button"
+                data-testid="resolve-detail-sheet-open"
+                className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-background"
+                onClick={() => setDetailSheetOpen(true)}
+              >
+                상세 보기
+              </button>
+            </div>
+          )}
           <VirtualizedReviewGrid
             rows={rows}
             selectedRowId={selectedRow?.id ?? null}
-            onSelectRow={toggleSelect}
+            onSelectRow={selectMasterRow}
+            explicitRowIds={explicitRowIdSet}
+            onToggleExplicit={toggleExplicitRow}
             onNearEnd={handleNearEnd}
             loadingMore={loadingMore}
             sorting={sorting}
@@ -339,21 +404,56 @@ export function ResolveAndOrganizeWorkspace({ onOpenPreview }: { onOpenPreview: 
             enableColumnResize
           />
         </div>
-        <DetailPanel
-          selectedRow={selectedRow}
-          detail={detail}
-          loading={detailLoading}
-          error={detailError}
-          mutating={detailMutating}
-          onSetKeeper={handleSetKeeper}
-          onMarkConflict={handleMarkConflict}
-          onReset={handleReset}
-          onRefreshDetail={() => {
-            void loadPage(null, false);
-            void loadDetail(selectedRow);
-          }}
-        />
+        {isWideLayout && (
+          <DetailPanel
+            className="w-[min(360px,36%)] shrink-0 border-l border-outline"
+            selectedRow={selectedRow}
+            detail={detail}
+            loading={detailLoading}
+            error={detailError}
+            mutating={detailMutating}
+            onSetKeeper={handleSetKeeper}
+            onMarkConflict={handleMarkConflict}
+            onReset={handleReset}
+            onRefreshDetail={() => {
+              if (detail?.status === "not_found") {
+                void loadPage(null, false, selectedRow?.id ?? null);
+              } else {
+                void loadDetail(selectedRow);
+              }
+            }}
+          />
+        )}
       </div>
+
+      {!isWideLayout && detailSheetOpen && (
+        <div
+          className="fixed inset-0 z-40 flex flex-col bg-background/95 backdrop-blur-sm"
+          data-testid="resolve-detail-sheet"
+          role="dialog"
+          aria-modal="true"
+        >
+          <DetailPanel
+            className="h-full"
+            selectedRow={selectedRow}
+            detail={detail}
+            loading={detailLoading}
+            error={detailError}
+            mutating={detailMutating}
+            onSetKeeper={handleSetKeeper}
+            onMarkConflict={handleMarkConflict}
+            onReset={handleReset}
+            onRefreshDetail={() => {
+              if (detail?.status === "not_found") {
+                void loadPage(null, false, selectedRow?.id ?? null);
+              } else {
+                void loadDetail(selectedRow);
+              }
+            }}
+            onClose={() => setDetailSheetOpen(false)}
+          />
+        </div>
+      )}
 
       <BatchActionBar
         selectionLabel={selectionLabel}

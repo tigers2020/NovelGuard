@@ -3,7 +3,6 @@ import { useBridge, useRefreshSnapshot, useSnapshot } from "../../app/providers/
 import { BridgeCallError } from "../../bridge/bridgeErrors";
 import type { WorkMode } from "../../types/snapshot";
 import type { SelectionScope } from "../../types/selection";
-import { FinalizeWorkspace } from "./FinalizeWorkspace";
 import { QualityWorkspace } from "./QualityWorkspace";
 import { ResolveAndOrganizeWorkspace } from "./ResolveAndOrganizeWorkspace";
 import { ScanWorkspace } from "./ScanWorkspace";
@@ -20,7 +19,13 @@ function workModeErrorMessage(err: unknown): string {
   return "Work mode change failed";
 }
 
-export function WorkRoute({ onOpenPreview }: { onOpenPreview: (selection: SelectionScope) => void }) {
+export function WorkRoute({
+  onOpenPreview,
+  onOpenFinalize,
+}: {
+  onOpenPreview: (selection: SelectionScope) => void;
+  onOpenFinalize: () => void;
+}) {
   const bridge = useBridge();
   const refreshSnapshot = useRefreshSnapshot();
   const snapshot = useSnapshot();
@@ -74,13 +79,13 @@ export function WorkRoute({ onOpenPreview }: { onOpenPreview: (selection: Select
           />
         </WorkModePanel>
         <WorkModePanel active={displayMode === "resolve"}>
-          <ResolveAndOrganizeWorkspace onOpenPreview={onOpenPreview} />
+          <ResolveAndOrganizeWorkspace
+            onOpenPreview={onOpenPreview}
+            onOpenFinalize={onOpenFinalize}
+          />
         </WorkModePanel>
         <WorkModePanel active={displayMode === "quality"}>
-          <QualityWorkspace />
-        </WorkModePanel>
-        <WorkModePanel active={displayMode === "finalize"}>
-          <FinalizeWorkspace />
+          <QualityWorkspace onOpenFinalize={onOpenFinalize} />
         </WorkModePanel>
       </div>
     </div>

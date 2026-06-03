@@ -35,7 +35,7 @@ function deriveSectionState(
   return "ready";
 }
 
-export function FinalizeWorkspace() {
+export function FinalizeSubflowContent({ compact = false }: { compact?: boolean }) {
   const bridge = useBridge();
   const snapshot = useSnapshot();
   const refreshSnapshot = useRefreshSnapshot();
@@ -137,115 +137,120 @@ export function FinalizeWorkspace() {
   }, [sectionState]);
 
   return (
+    <div className={compact ? "space-y-4" : "mx-auto max-w-6xl space-y-4"} data-testid="finalize-subflow-content">
+      <section className="rounded-md border border-outline bg-surface p-5">
+        <p className="text-xs font-semibold text-secondary">Finalize</p>
+        <h1 className="mt-1 text-2xl font-bold text-on-surface">적용 · 검증</h1>
+        <p className="mt-2 text-sm text-on-surface-variant">
+          정리 후 라이브러리 상태를 검증하고 완료 보고서를 저장합니다.
+        </p>
+        <p className="mt-1 text-xs text-muted">상태: {statusLabel}</p>
+      </section>
+
+      {summary && (
+        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatChip label="Scan" value={summary.scanState} />
+          <StatChip
+            label="Exact queue"
+            value={String(summary.resolve.exactUnresolvedQueueCount)}
+          />
+          <StatChip
+            label="Quality errors"
+            value={String(summary.quality.encodingIssueCount + summary.quality.integrityIssueCount)}
+          />
+          <StatChip label="Last run" value={finalize.lastRunAt ?? "—"} />
+        </section>
+      )}
+
+      {blockers.length > 0 && (
+        <section className="rounded-md border border-error/40 bg-surface p-4">
+          <h2 className="text-sm font-semibold text-error">차단 사유</h2>
+          <ul className="mt-2 space-y-1 text-sm text-on-surface">
+            {blockers.map((item) => (
+              <li key={item.code}>
+                {item.message}
+                {item.count != null ? ` (${item.count})` : ""}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {warnings.length > 0 && (
+        <section className="rounded-md border border-secondary/40 bg-surface p-4">
+          <h2 className="text-sm font-semibold text-secondary">경고</h2>
+          <ul className="mt-2 space-y-1 text-sm text-on-surface">
+            {warnings.map((item) => (
+              <li key={item.code}>
+                {item.message}
+                {item.count != null ? ` (${item.count})` : ""}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <section className="space-y-4 rounded-md border border-outline bg-surface p-5">
+        <label className="flex items-start gap-3 text-sm text-on-surface">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={includeCleanup}
+            disabled={cleanupDisabled}
+            onChange={(e) => setIncludeCleanup(e.target.checked)}
+          />
+          <span>
+            <span className="font-semibold">빈 출력 폴더(duplicate/, organized/) 삭제</span>
+            <span className="mt-1 block text-xs text-muted">
+              파일은 삭제하지 않고, 비어 있는 출력 폴더만 정리합니다.
+            </span>
+          </span>
+        </label>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            data-testid="finalize-run-button"
+            disabled={primaryDisabled}
+            title={primaryTooltip}
+            onClick={() => void onRun()}
+            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-background disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            최종 검증 실행
+          </button>
+          <button
+            type="button"
+            data-testid="finalize-report-button"
+            disabled={!finalize.lastReportId}
+            onClick={() => void onViewReport()}
+            className="rounded-md border border-outline px-4 py-2 text-sm font-semibold text-on-surface disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            완료 보고서 보기
+          </button>
+        </div>
+
+        {error && <p className="text-sm text-error">{error}</p>}
+      </section>
+
+      {reportJson && (
+        <section className="rounded-md border border-outline bg-surface p-4">
+          <h2 className="text-sm font-semibold text-on-surface">보고서</h2>
+          <pre className="mt-2 max-h-96 overflow-auto text-xs text-on-surface-variant">
+            {reportJson}
+          </pre>
+        </section>
+      )}
+    </div>
+  );
+}
+
+export function FinalizeWorkspace() {
+  return (
     <main
       className="h-full overflow-y-auto bg-background p-5"
-      data-state={sectionState}
       data-testid="finalize-workspace"
     >
-      <div className="mx-auto max-w-6xl space-y-4">
-        <section className="rounded-md border border-outline bg-surface p-5">
-          <p className="text-xs font-semibold text-secondary">Finalize</p>
-          <h1 className="mt-1 text-2xl font-bold text-on-surface">적용 · 검증</h1>
-          <p className="mt-2 text-sm text-on-surface-variant">
-            정리 후 라이브러리 상태를 검증하고 완료 보고서를 저장합니다.
-          </p>
-          <p className="mt-1 text-xs text-muted">상태: {statusLabel}</p>
-        </section>
-
-        {summary && (
-          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatChip label="Scan" value={summary.scanState} />
-            <StatChip
-              label="Exact queue"
-              value={String(summary.resolve.exactUnresolvedQueueCount)}
-            />
-            <StatChip
-              label="Quality errors"
-              value={String(summary.quality.encodingIssueCount + summary.quality.integrityIssueCount)}
-            />
-            <StatChip label="Last run" value={finalize.lastRunAt ?? "—"} />
-          </section>
-        )}
-
-        {blockers.length > 0 && (
-          <section className="rounded-md border border-error/40 bg-surface p-4">
-            <h2 className="text-sm font-semibold text-error">차단 사유</h2>
-            <ul className="mt-2 space-y-1 text-sm text-on-surface">
-              {blockers.map((item) => (
-                <li key={item.code}>
-                  {item.message}
-                  {item.count != null ? ` (${item.count})` : ""}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {warnings.length > 0 && (
-          <section className="rounded-md border border-secondary/40 bg-surface p-4">
-            <h2 className="text-sm font-semibold text-secondary">경고</h2>
-            <ul className="mt-2 space-y-1 text-sm text-on-surface">
-              {warnings.map((item) => (
-                <li key={item.code}>
-                  {item.message}
-                  {item.count != null ? ` (${item.count})` : ""}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        <section className="rounded-md border border-outline bg-surface p-5 space-y-4">
-          <label className="flex items-start gap-3 text-sm text-on-surface">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={includeCleanup}
-              disabled={cleanupDisabled}
-              onChange={(e) => setIncludeCleanup(e.target.checked)}
-            />
-            <span>
-              <span className="font-semibold">빈 출력 폴더(duplicate/, organized/) 삭제</span>
-              <span className="mt-1 block text-xs text-muted">
-                파일은 삭제하지 않고, 비어 있는 출력 폴더만 정리합니다.
-              </span>
-            </span>
-          </label>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              data-testid="finalize-run-button"
-              disabled={primaryDisabled}
-              title={primaryTooltip}
-              onClick={() => void onRun()}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-background disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              최종 검증 실행
-            </button>
-            <button
-              type="button"
-              data-testid="finalize-report-button"
-              disabled={!finalize.lastReportId}
-              onClick={() => void onViewReport()}
-              className="rounded-md border border-outline px-4 py-2 text-sm font-semibold text-on-surface disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              완료 보고서 보기
-            </button>
-          </div>
-
-          {error && <p className="text-sm text-error">{error}</p>}
-        </section>
-
-        {reportJson && (
-          <section className="rounded-md border border-outline bg-surface p-4">
-            <h2 className="text-sm font-semibold text-on-surface">보고서</h2>
-            <pre className="mt-2 max-h-96 overflow-auto text-xs text-on-surface-variant">
-              {reportJson}
-            </pre>
-          </section>
-        )}
-      </div>
+      <FinalizeSubflowContent />
     </main>
   );
 }

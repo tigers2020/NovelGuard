@@ -15,6 +15,7 @@ import { LogsRoute } from "../features/logs/LogsRoute";
 import { SettingsRoute } from "../features/settings/SettingsRoute";
 import { WorkRoute } from "../features/work/WorkRoute";
 import { ApplySubflowDialog } from "../features/work/ApplySubflowDialog";
+import { FinalizeSubflowDialog } from "../features/work/FinalizeSubflowDialog";
 import { PreflightPipelineDialog } from "../features/work/PreflightPipelineDialog";
 import type { AppSnapshot } from "../types/snapshot";
 import type { SelectionScope } from "../types/selection";
@@ -28,6 +29,7 @@ function AppContent() {
   const [preflightOpen, setPreflightOpen] = useState(false);
   const [pipelineOpen, setPipelineOpen] = useState(false);
   const [applyOpen, setApplyOpen] = useState(false);
+  const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [applySelection, setApplySelection] = useState<SelectionScope | null>(null);
 
   const handleFullPipeline = () => {
@@ -50,7 +52,7 @@ function AppContent() {
 
   let main: ReactNode;
   if (route === "work") {
-    main = <WorkRoute onOpenPreview={handleOpenPreview} />;
+    main = <WorkRoute onOpenPreview={handleOpenPreview} onOpenFinalize={() => setFinalizeOpen(true)} />;
   } else if (route === "settings") {
     main = <SettingsRoute />;
   } else {
@@ -127,11 +129,13 @@ function AppContent() {
         open={applyOpen}
         selection={applySelection}
         snapshotLibraryRevision={snapshot.work.resolve.libraryRevision}
+        onOpenFinalize={() => setFinalizeOpen(true)}
         onClose={() => {
           setApplyOpen(false);
           setApplySelection(null);
         }}
       />
+      <FinalizeSubflowDialog open={finalizeOpen} onClose={() => setFinalizeOpen(false)} />
     </>
   );
 }
