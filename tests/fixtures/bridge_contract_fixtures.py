@@ -21,10 +21,18 @@ VALID_SNAPSHOT: dict[str, Any] = {
         "percent": 0,
         "label": "idle",
         "cancellable": False,
+        "background": None,
     },
     "work": {
         "activeMode": "resolve",
-        "scan": {"state": "empty", "lastRun": None},
+        "scan": {
+            "state": "empty",
+            "lastRun": None,
+            "indexReady": False,
+            "deepAnalysisComplete": False,
+            "deepAnalysisStatus": "idle",
+            "deepAnalysisError": None,
+        },
         "resolve": {
             "queueCount": 0,
             "groupCount": 0,

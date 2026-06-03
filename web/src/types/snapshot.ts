@@ -1,13 +1,29 @@
+export interface PipelineBackgroundSnapshot {
+  active: boolean;
+  phase: string;
+  label: string;
+  step: number;
+  stepTotal: number;
+  percent: number;
+}
+
 export interface PipelineSnapshot {
   phase: string;
   percent: number;
   label: string;
   cancellable: boolean;
+  background: PipelineBackgroundSnapshot | null;
 }
+
+export type DeepAnalysisStatus = "idle" | "running" | "complete" | "error";
 
 export interface ScanSnapshot {
   state: "empty" | "ready" | "running" | "success" | "error";
   lastRun: string | null;
+  indexReady: boolean;
+  deepAnalysisComplete: boolean;
+  deepAnalysisStatus: DeepAnalysisStatus;
+  deepAnalysisError: string | null;
 }
 
 export interface ResolveSnapshot {

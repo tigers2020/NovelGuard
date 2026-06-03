@@ -11,8 +11,12 @@ import { resolveBridge, resolveBridgeAsync } from "./bridgeFactory";
 import { PYWEBVIEW_READY_EVENT } from "./waitForPywebviewApi";
 import { bumpLibraryRevisionForTest, mockBridge } from "./mockBridge";
 import { textSortKey } from "./mockFileRows";
-import { getAllReviewRows, sortQualityRows } from "./mockData";
+import { deriveShellFileDockState } from "../components/layout/shellFileDockState";
+import { shouldCollapseFileDockForWorkMode, shouldExpandFileDockForWorkMode } from "../components/layout/shellFileDockModePolicy";
+import { deriveScanSectionState } from "../features/work/scanSectionState";
+import { buildQualityRows, getAllReviewRows, sortQualityRows } from "./mockData";
 import { reviewRowGroupId } from "../types/review";
+import type { WorkMode } from "../types/snapshot";
 import { createPywebviewBridge } from "./pywebviewBridge";
 import {
   NOVEL_GUARD_BRIDGE_METHODS,
@@ -252,7 +256,9 @@ describe("bridge parity", () => {
   });
 
   it("setWorkMode rejects finalize mode", async () => {
-    await expect(mockBridge.setWorkMode("finalize")).rejects.toMatchObject({
+    await expect(
+      mockBridge.setWorkMode("finalize" as unknown as WorkMode),
+    ).rejects.toMatchObject({
       reason: "INVALID_WORK_MODE",
     });
     const snap = await mockBridge.getSnapshot();
@@ -457,10 +463,19 @@ describe("snapshot invalidation", () => {
     expect(Array.isArray(summary.warnings)).toBe(true);
   });
 
+  it("mockBridge previewFinalizeCleanup returns empty dir preview", async () => {
+    const preview = await mockBridge.previewFinalizeCleanup();
+    expect(preview.previewedEmptyDirs).toContain("duplicate/empty-slot");
+    expect(preview.previewedEmptyDirs).toContain("organized/empty-slot");
+  });
+
   it("mockBridge runFinalizeVerification returns report id and getFinalizeReport round-trips", async () => {
     const result = await mockBridge.runFinalizeVerification({ includeCleanup: false });
     expect(result.reportId).toBeTruthy();
     expect(["complete", "complete_with_warnings", "blocked"]).toContain(result.status);
+    if (result.reportId == null) {
+      throw new Error("expected reportId from runFinalizeVerification");
+    }
 
     const report = await mockBridge.getFinalizeReport(result.reportId);
     expect(report.reportId).toBe(result.reportId);
@@ -485,5 +500,149 @@ describe("snapshot invalidation", () => {
     vi.advanceTimersByTime(1000);
     expect(seen.length).toBe(last);
     await mockBridge.cancelRun();
+  });
+});
+
+describe("shell file dock mode policy (029)", () => {
+  it("shouldCollapseFileDockForWorkMode returns true for resolve and quality", () => {
+    expect(shouldCollapseFileDockForWorkMode("resolve")).toBe(true);
+    expect(shouldCollapseFileDockForWorkMode("quality")).toBe(true);
+  });
+
+  it("shouldCollapseFileDockForWorkMode returns false for scan", () => {
+    expect(shouldCollapseFileDockForWorkMode("scan")).toBe(false);
+  });
+
+  it("shouldExpandFileDockForWorkMode returns true for scan with files", () => {
+    expect(shouldExpandFileDockForWorkMode("scan", 10)).toBe(true);
+    expect(shouldExpandFileDockForWorkMode("scan", 0)).toBe(false);
+    expect(shouldExpandFileDockForWorkMode("resolve", 10)).toBe(false);
+  });
+});
+
+describe("shell file dock state (PR-38)", () => {
+  it("deriveShellFileDockState empty when no files", () => {
+    expect(deriveShellFileDockState({ fileCount: 0, expanded: true })).toBe("empty");
+  });
+
+  it("deriveShellFileDockState collapsed vs expanded", () => {
+    expect(deriveShellFileDockState({ fileCount: 10, expanded: false })).toBe("collapsed");
+    expect(deriveShellFileDockState({ fileCount: 10, expanded: true })).toBe("expanded");
+  });
+});
+
+describe("scan section state (PR-35)", () => {
+  it("deriveScanSectionState returns empty without folder", () => {
+    expect(
+      deriveScanSectionState({
+        folderPath: null,
+        scan: {
+          state: "ready",
+          lastRun: null,
+          indexReady: false,
+          deepAnalysisComplete: false,
+          deepAnalysisStatus: "idle",
+          deepAnalysisError: null,
+        },
+        pipeline: { phase: "idle", percent: 0, label: "대기", cancellable: false, background: null },
+      }),
+    ).toBe("empty");
+  });
+
+  it("deriveScanSectionState returns running when scan.state is running", () => {
+    expect(
+      deriveScanSectionState({
+        folderPath: "/tmp/lib",
+        scan: {
+          state: "running",
+          lastRun: null,
+          indexReady: false,
+          deepAnalysisComplete: false,
+          deepAnalysisStatus: "idle",
+          deepAnalysisError: null,
+        },
+        pipeline: { phase: "probe", percent: 10, label: "파일 확인 중…", cancellable: true, background: null },
+      }),
+    ).toBe("running");
+  });
+
+  it("deriveScanSectionState returns success while analyze phase runs", () => {
+    expect(
+      deriveScanSectionState({
+        folderPath: "/tmp/lib",
+        scan: {
+          state: "success",
+          lastRun: "today",
+          indexReady: true,
+          deepAnalysisComplete: false,
+          deepAnalysisStatus: "running",
+          deepAnalysisError: null,
+        },
+        pipeline: {
+          phase: "analyze",
+          percent: 33,
+          label: "근사 중복 분석 중…",
+          cancellable: false,
+          background: {
+            active: true,
+            phase: "near",
+            label: "근사 중복 분석 중…",
+            step: 1,
+            stepTotal: 3,
+            percent: 33,
+          },
+        },
+      }),
+    ).toBe("success");
+  });
+});
+
+describe("quality repair parity (PR-42)", () => {
+  function firstEncodingIssueId(): string {
+    const row = buildQualityRows().find((candidate) => candidate.issueType === "encoding");
+    if (!row?.id) {
+      throw new Error("expected mock encoding quality row (row-6 fixture)");
+    }
+    return row.id;
+  }
+
+  it("applyQualityRepair rejects STALE_REPAIR_PREVIEW after library revision bump", async () => {
+    const issueId = firstEncodingIssueId();
+    const preview = await mockBridge.getQualityRepairPreview({ issueIds: [issueId] });
+    bumpLibraryRevisionForTest({ clearPending: false });
+    await expect(
+      mockBridge.applyQualityRepair({
+        issueIds: [issueId],
+        repairPreviewToken: preview.repairPreviewToken,
+      }),
+    ).rejects.toMatchObject({ reason: "STALE_REPAIR_PREVIEW" });
+    const snap = await mockBridge.getSnapshot();
+    expect(snap.work.quality.hasPendingQualityRepair).toBe(false);
+  });
+
+  it("getMovePreview rejects REPAIR_PREVIEW_ACTIVE when repair preview pending", async () => {
+    const issueId = firstEncodingIssueId();
+    const preview = await mockBridge.getQualityRepairPreview({ issueIds: [issueId] });
+    await expect(
+      mockBridge.getMovePreview({ type: "explicit_rows", rowIds: ["row-1"] }),
+    ).rejects.toMatchObject({ reason: "REPAIR_PREVIEW_ACTIVE" });
+    await mockBridge.discardQualityRepairPreview({
+      repairPreviewToken: preview.repairPreviewToken,
+    });
+  });
+
+  it("getQualityRepairPreview rejects MOVE_PREVIEW_ACTIVE when move preview pending", async () => {
+    const sel = { type: "explicit_rows" as const, rowIds: ["row-1"] };
+    const movePreview = await mockBridge.getMovePreview(sel);
+    const issueId = firstEncodingIssueId();
+    await expect(
+      mockBridge.getQualityRepairPreview({ issueIds: [issueId] }),
+    ).rejects.toMatchObject({ reason: "MOVE_PREVIEW_ACTIVE" });
+    await mockBridge.discardMovePreview({ previewToken: movePreview.previewToken });
+  });
+
+  it("cancelFinalize is idempotent", async () => {
+    await mockBridge.cancelFinalize();
+    await expect(mockBridge.cancelFinalize()).resolves.toBeUndefined();
   });
 });
