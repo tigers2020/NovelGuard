@@ -4,6 +4,8 @@ repos:
   novelguard:
     path: "."  # repo root (absolute path recommended for Hermes)
     default_branch: main
+    # true = branch from current HEAD (dev on feature branches). false = checkout main first.
+    use_current_branch_as_base: true
     lock_name: NovelGuard.lock
 
 cursor:

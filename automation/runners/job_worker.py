@@ -74,20 +74,31 @@ def _working_tree_dirty(repo: Path) -> bool:
     return bool((status.stdout or "").strip())
 
 
-def prepare_branch(repo: Path, payload: dict[str, Any]) -> str:
+def prepare_branch(
+    repo: Path,
+    payload: dict[str, Any],
+    cfg: dict[str, Any],
+    repo_key: str,
+) -> str:
     if _working_tree_dirty(repo):
         raise RuntimeError(
             "Working tree dirty — commit or stash before automation job "
             "(runner refuses to checkout main over WIP)"
         )
 
-    base = str(payload.get("base_branch") or "main")
+    repos_cfg = (cfg.get("repos") or {}).get(repo_key) or {}
     prefix = str(payload.get("branch_prefix") or "ai/job-")
     branch = f"{prefix}{payload['id']}"
 
     _git(repo, "fetch", check=False)
-    _git(repo, "checkout", base)
-    _git(repo, "pull", "--ff-only", check=False)
+
+    if repos_cfg.get("use_current_branch_as_base"):
+        current = _git(repo, "branch", "--show-current", check=True)
+        base = (current.stdout or "main").strip()
+    else:
+        base = str(payload.get("base_branch") or repos_cfg.get("default_branch") or "main")
+        _git(repo, "checkout", base)
+        _git(repo, "pull", "--ff-only", check=False)
     exists = _git(repo, "rev-parse", "--verify", branch, check=False)
     if exists.returncode == 0:
         _git(repo, "checkout", branch)
@@ -158,7 +169,7 @@ def process_job(cfg: dict[str, Any], record: JobRecord) -> dict[str, Any]:
     result: dict[str, Any] = {"job_id": payload["id"], "repo": repo_key, "repo_path": str(repo)}
 
     with repo_lock(lock_path):
-        branch = prepare_branch(repo, payload)
+        branch = prepare_branch(repo, payload, cfg, repo_key)
         result["branch"] = branch
 
         prompt = render_prompt(cfg, payload, branch)
