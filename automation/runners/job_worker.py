@@ -168,11 +168,15 @@ def process_job(cfg: dict[str, Any], record: JobRecord) -> dict[str, Any]:
 
     result: dict[str, Any] = {"job_id": payload["id"], "repo": repo_key, "repo_path": str(repo)}
 
+    prefix = str(payload.get("branch_prefix") or "ai/job-")
+    planned_branch = f"{prefix}{payload['id']}"
+    # Load templates before git checkout (main may not contain automation/ yet).
+    prompt = render_prompt(cfg, payload, planned_branch)
+
     with repo_lock(lock_path):
         branch = prepare_branch(repo, payload, cfg, repo_key)
         result["branch"] = branch
 
-        prompt = render_prompt(cfg, payload, branch)
         cursor = run_prompt(repo, prompt, cfg)
         log_path.write_text(
             f"command: {cursor.command}\n"
