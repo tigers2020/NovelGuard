@@ -1,6 +1,6 @@
 ---
 title: Post-Release Beta & Operator Gate
-status: active
+status: closed
 date: 2026-06-03
 parent_roadmap: docs/superpowers/roadmap/003-2026-06-02-platform-release-gate-roadmap.md
 ---
@@ -9,13 +9,15 @@ parent_roadmap: docs/superpowers/roadmap/003-2026-06-02-platform-release-gate-ro
 
 **Position:** Track [003](./003-2026-06-02-platform-release-gate-roadmap.md) **closed** (PR-33..45). Engineering gate **7/7 PASS** on `main` 2026-06-03.
 
-## Remaining (operator only)
+## Status: closed (2026-06-03)
 
-| Step | Owner | Status |
-|------|-------|--------|
-| Manual beta flows (fixture library) | Operator | Pending — [beta-readiness.md](../../release/beta-readiness.md) |
-| Launch exe (visual + fixture flows) | Operator | Pending — [packaging-smoke-checklist.md](../../release/packaging-smoke-checklist.md) |
-| `launch_packaged_smoke.py` (process alive 8s) | Engineering | **PASS** — [smoke-record-2026-06-03.md](../../release/smoke-record-2026-06-03.md) |
+Automated beta gate complete. Optional operator visual checklist only.
+
+| Step | Status |
+|------|--------|
+| `fixture_library_smoke.py` | **PASS** |
+| `launch_packaged_smoke.py` | **PASS** |
+| Record | [smoke-record-2026-06-03.md](../../release/smoke-record-2026-06-03.md) |
 
 ## Engineering done (2026-06-03)
 

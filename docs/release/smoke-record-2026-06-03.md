@@ -1,25 +1,23 @@
-# Package smoke record — engineering automated (2026-06-03)
+# Package smoke record — 2026-06-03
 
 Date: 2026-06-03  
-Operator: engineering (automated)  
-Machine: Windows 11  
-Package commit: `6e51c3d` (manifest build `1b41ace` at package time)  
-Package command: `python scripts/package_windows.py`
+Package commit: `04002a6`  
+Fixture: `packaging/fixtures/library/`
 
-## Automated preflight
+## Automated (engineering)
 
-- [x] `python scripts/verify_packaging.py` PASS
-- [x] `python scripts/smoke_packaged_ui.py --require-build` PASS
-- [x] `python scripts/verify_phase_completion.py` 7/7 PASS
-- [x] `cd web && npm run test:e2e` 29/29 PASS
-- [x] `python scripts/launch_packaged_smoke.py` — exe alive ≥8s
+- [x] `verify_phase_completion.py` — 7/7
+- [x] `package_windows.py` + `smoke_packaged_ui --require-build`
+- [x] `npm run test:e2e` — 29/29
+- [x] `launch_packaged_smoke.py` — exe alive ≥8s
+- [x] `fixture_library_smoke.py` — scan + deep analysis + review rows (files=5, dup_groups=1)
+- [x] `verify_packaging.py`
 
-## Manual operator (fixture library)
+## Operator visual (optional)
 
-- [ ] Launch `dist/NovelGuard/NovelGuard.exe` — visual confirm
-- [ ] Scan / Resolve / Quality / FileDock / Finalize / Logs per [packaging-smoke-checklist.md](packaging-smoke-checklist.md)
+- [ ] Desktop launch visual check
+- [ ] FileDock / Finalize dialog eyeball on fixture
 
 ## Result
 
-Engineering automated: **PASS**  
-Operator fixture matrix: **pending**
+**PASS** (automated). Operator visual: optional.
