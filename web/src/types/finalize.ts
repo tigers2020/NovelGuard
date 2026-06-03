@@ -52,6 +52,10 @@ export interface RunFinalizeRequest {
   includeCleanup: boolean;
 }
 
+export interface FinalizeCleanupPreview {
+  previewedEmptyDirs: string[];
+}
+
 export interface FinalizeCleanupResult {
   previewedEmptyDirs: string[];
   removedEmptyDirs: string[];

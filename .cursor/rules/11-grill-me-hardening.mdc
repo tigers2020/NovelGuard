@@ -1,0 +1,35 @@
+---
+description: Phase 1 — one grill-me / hardening pass before code. Attach via 00-core rules index.
+alwaysApply: false
+---
+
+# Grill-me / Hardening Gate
+
+**Phase 1 only.** Do not write implementation code during this phase.
+
+Before coding, challenge the request once:
+
+- Exact scope and explicit out-of-scope
+- Likely files/modules and architecture layer
+- Tests and verification gates that prove completion
+- Destructive or irreversible operations (dry-run, user approval)
+- Merge target: commit-only, PR, or merge — and branch/base
+- Dominant specs/plans under `docs/superpowers/` when applicable
+
+## Output (single pass)
+
+- Assumptions
+- Risks
+- Proposed implementation sequence (numbered tasks)
+- Stop conditions (true blockers per always-on core rule)
+- Verification gates per phase
+
+Ask the user for approval **once**. Do not ask between future tasks.
+
+## After approval
+
+- Scope is **locked** — no re-scoping without explicit user message.
+- User attaches mission-execution rule and confirms autonomous run (see rules index in `00-core.mdc`).
+- No persona roleplay unless the user opts in.
+
+**Inactive for:** small one-file fixes, typos, lint-only, read-only Q&A, docs-only edits.

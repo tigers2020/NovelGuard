@@ -3,9 +3,20 @@
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+_SCRIPTS = ROOT / "scripts"
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
+
+from smoke_packaged_ui import (  # noqa: E402
+    check_frontend_build_markers,
+    check_packaged_bundle_markers,
+    check_source_markers,
+)
 
 RUNTIME_CRITICAL = [
     ROOT / "src" / "app" / "webview_main.py",
@@ -129,6 +140,9 @@ def main() -> int:
     require_contains(version_py, "apply_build_stamp", errors)
 
     check_package_artifacts(warnings, errors)
+    check_source_markers(errors)
+    check_frontend_build_markers(warnings, errors)
+    check_packaged_bundle_markers(warnings, errors)
 
     for warning in warnings:
         print(f"WARNING: {warning}")

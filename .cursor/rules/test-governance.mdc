@@ -11,4 +11,4 @@ alwaysApply: true
 - Do not expand test scope unless the task requires it.
 - Do not create new test files without explicit user approval.
 
-Full policy: [docs/agent-testing-policy.md](mdc:docs/agent-testing-policy.md). Commands: [40-testing-gates.mdc](mdc:.cursor/rules/40-testing-gates.mdc).
+Full policy: [docs/agent-testing-policy.md](mdc:docs/agent-testing-policy.md). Command table: attach `40-testing-gates` via `00-core` rules index.

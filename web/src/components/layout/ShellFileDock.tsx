@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useBridge, useSnapshot } from "../../app/providers/snapshotHooks";
+import { useBridge, useRefreshSnapshot, useSnapshot } from "../../app/providers/snapshotHooks";
 import { BridgeCallError } from "../../bridge/bridgeErrors";
 import { formatBytes } from "../../lib/format";
 import type {
@@ -18,6 +18,7 @@ import {
   persistShellFileDockState,
   SHELL_FILE_DOCK_DEFAULTS,
 } from "./shellFileDockStorage";
+import { deriveShellFileDockState } from "./shellFileDockState";
 
 const SEARCH_DEBOUNCE_MS = 220;
 const PAGE_LIMIT = 100;
@@ -29,14 +30,23 @@ type SortState = {
 
 const DEFAULT_SORT: SortState = { field: "path", direction: "asc" };
 
-export function ShellFileDock({ onOpenResolve }: { onOpenResolve: () => void }) {
+export function ShellFileDock({
+  expanded,
+  onExpandedChange,
+  preferFlexHeight = false,
+}: {
+  expanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+  /** When true (Scan primary), expanded dock fills remaining main column height. */
+  preferFlexHeight?: boolean;
+}) {
   const bridge = useBridge();
+  const refreshSnapshot = useRefreshSnapshot();
   const snapshot = useSnapshot();
   const library = snapshot.library;
+  const pipeline = snapshot.pipeline;
   const summary = snapshot.fileListSummary;
   const libraryRevision = snapshot.work.resolve.libraryRevision;
-
-  const [expanded, setExpanded] = useState(() => loadShellFileDockState().expanded);
   const [heightPx, setHeightPx] = useState(() => loadShellFileDockState().heightPx);
   const [density, setDensity] = useState<FileRowDensity>(() => loadShellFileDockState().density);
   const [columnPreset, setColumnPreset] = useState<FileRowColumnPreset>(
@@ -52,6 +62,9 @@ export function ShellFileDock({ onOpenResolve }: { onOpenResolve: () => void }) 
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
+  const [isSelectingFolder, setIsSelectingFolder] = useState(false);
+
+  const pipelineBusy = Boolean(pipeline.background?.active);
 
   const columns = useMemo(() => columnsForPreset(columnPreset), [columnPreset]);
   const rowClass =
@@ -62,15 +75,14 @@ export function ShellFileDock({ onOpenResolve }: { onOpenResolve: () => void }) 
     return () => window.clearTimeout(timer);
   }, [search]);
 
-  const persist = useCallback(
+  const persistLayout = useCallback(
     (patch: Partial<typeof SHELL_FILE_DOCK_DEFAULTS>) => {
-      const next = {
-        expanded: patch.expanded ?? expanded,
+      persistShellFileDockState({
+        expanded,
         heightPx: patch.heightPx ?? heightPx,
         density: patch.density ?? density,
         columnPreset: patch.columnPreset ?? columnPreset,
-      };
-      persistShellFileDockState(next);
+      });
     },
     [columnPreset, density, expanded, heightPx],
   );
@@ -103,11 +115,15 @@ export function ShellFileDock({ onOpenResolve }: { onOpenResolve: () => void }) 
         setHasMore(page.pageInfo.hasMore);
       } catch (err) {
         const message =
-          err instanceof BridgeCallError && err.reason
-            ? err.reason
-            : err instanceof Error
-              ? err.message
-              : "Failed to load files";
+          err instanceof BridgeCallError && err.code === "timeout"
+            ? pipelineBusy
+              ? "백그라운드 분석 중 파일 목록 로드가 지연되었습니다. 잠시 후 다시 시도하세요."
+              : `Bridge call timed out: query_file_rows`
+            : err instanceof BridgeCallError && err.reason
+              ? err.reason
+              : err instanceof Error
+                ? err.message
+                : "Failed to load files";
         setQueryError(message);
         if (!append) {
           setRows([]);
@@ -120,8 +136,18 @@ export function ShellFileDock({ onOpenResolve }: { onOpenResolve: () => void }) 
         setLoadingMore(false);
       }
     },
-    [bridge, buildQuery, expanded],
+    [bridge, buildQuery, expanded, pipelineBusy],
   );
+
+  const handleSelectFolder = async () => {
+    setIsSelectingFolder(true);
+    try {
+      await bridge.selectFolder();
+      await refreshSnapshot();
+    } finally {
+      setIsSelectingFolder(false);
+    }
+  };
 
   useEffect(() => {
     if (!expanded) return;
@@ -131,10 +157,17 @@ export function ShellFileDock({ onOpenResolve }: { onOpenResolve: () => void }) 
     return () => cancelAnimationFrame(frame);
   }, [expanded, fetchPage, libraryRevision]);
 
+  const dockState = deriveShellFileDockState({ fileCount: library.fileCount, expanded });
+
   const toggleExpanded = () => {
     const next = !expanded;
-    setExpanded(next);
-    persist({ expanded: next });
+    onExpandedChange(next);
+    persistShellFileDockState({
+      expanded: next,
+      heightPx,
+      density,
+      columnPreset,
+    });
   };
 
   const handleSortHeader = (field: FileRowSortField) => {
@@ -154,11 +187,16 @@ export function ShellFileDock({ onOpenResolve }: { onOpenResolve: () => void }) 
   const filteredLabel =
     debouncedSearch && expanded ? filteredCount.toLocaleString() : null;
 
+  const useFlexHeight = expanded && preferFlexHeight;
+
   return (
     <section
-      className={`shrink-0 border-t border-outline bg-surface ${expanded ? "flex min-h-0 flex-col" : ""}`}
+      className={`border-t border-outline bg-surface ${
+        expanded ? `flex min-h-0 flex-col ${useFlexHeight ? "min-h-0 flex-1" : "shrink-0"}` : "shrink-0"
+      }`}
       data-testid="shell-file-dock"
-      style={expanded ? { height: clampHeightPx(heightPx) } : undefined}
+      data-state={dockState}
+      style={expanded && !useFlexHeight ? { height: clampHeightPx(heightPx) } : undefined}
     >
       <header className="flex flex-wrap items-center gap-2 px-4 py-2">
         <button
@@ -169,22 +207,26 @@ export function ShellFileDock({ onOpenResolve }: { onOpenResolve: () => void }) 
         >
           {expanded ? "▾" : "▸"} 파일 목록
         </button>
-        <span className="text-sm text-muted">{totalLabel} files</span>
+        <span className="text-sm text-muted">{totalLabel}개 파일</span>
         {filteredLabel != null && (
-          <span className="text-sm text-muted">Showing {filteredLabel}</span>
+          <span className="text-sm text-muted">표시 {filteredLabel}개</span>
         )}
-        <StatChip label="Dup groups" value={library.duplicateGroups} tone="warn" />
-        <StatChip label="Integrity" value={library.integrityIssues} tone="danger" />
+        <StatChip label="중복 그룹" value={library.duplicateGroups} tone="warn" />
+        <StatChip label="무결성" value={library.integrityIssues} tone="danger" />
         <div className="min-w-0 flex-1 truncate text-xs text-muted">
           {library.folderPath ?? "폴더 미선택"}
         </div>
-        <button
-          type="button"
-          onClick={onOpenResolve}
-          className="rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-background hover:opacity-90"
-        >
-          검토 · 정리 열기
-        </button>
+        {preferFlexHeight && (
+          <button
+            type="button"
+            data-testid="shell-file-dock-select-folder"
+            disabled={isSelectingFolder || pipeline.phase === "probe" || pipeline.phase === "persist"}
+            onClick={() => void handleSelectFolder()}
+            className="shrink-0 rounded-md border border-outline px-3 py-1.5 text-sm font-semibold text-on-surface hover:bg-hover disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isSelectingFolder ? "선택 중…" : "폴더 선택"}
+          </button>
+        )}
       </header>
 
       {expanded && (
@@ -194,24 +236,25 @@ export function ShellFileDock({ onOpenResolve }: { onOpenResolve: () => void }) 
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search files..."
+              placeholder="파일 검색…"
               className="min-w-[12rem] flex-1 rounded-md border border-outline bg-surface-elevated px-3 py-1.5 text-sm text-on-surface"
-              aria-label="Search files"
+              aria-label="파일 검색"
+              data-testid="shell-file-dock-search"
             />
             <label className="flex items-center gap-1 text-xs text-muted">
-              Preset
+              프리셋
               <select
                 value={columnPreset}
                 onChange={(e) => {
                   const preset = e.target.value as FileRowColumnPreset;
                   setColumnPreset(preset);
-                  persist({ columnPreset: preset });
+                  persistLayout({ columnPreset: preset });
                 }}
                 className="rounded-md border border-outline bg-surface-elevated px-2 py-1 text-sm"
               >
-                <option value="basic">Basic</option>
-                <option value="review">Review</option>
-                <option value="technical">Technical</option>
+                <option value="basic">기본</option>
+                <option value="review">검토</option>
+                <option value="technical">기술</option>
               </select>
             </label>
             <button
@@ -220,21 +263,31 @@ export function ShellFileDock({ onOpenResolve }: { onOpenResolve: () => void }) 
               onClick={() => {
                 const next = density === "comfortable" ? "compact" : "comfortable";
                 setDensity(next);
-                persist({ density: next });
+                persistLayout({ density: next });
               }}
             >
-              Density: {density === "comfortable" ? "Comfortable" : "Compact"}
+              밀도: {density === "comfortable" ? "보통" : "촘촘"}
             </button>
           </div>
 
           {library.fileCount === 0 ? (
-            <p className="py-4 text-sm text-on-surface-variant">
-              스캔된 파일이 없습니다. 작업 탭에서 폴더를 선택하고 스캔하세요.
-            </p>
+            <div className="py-4 text-sm text-on-surface-variant">
+              <p>스캔된 파일이 없습니다. 위 스캔 탭에서 폴더를 선택하고 스캔하세요.</p>
+            </div>
           ) : queryError ? (
-            <p className="py-4 text-sm text-error" role="alert">
-              {queryError}
-            </p>
+            <div className="flex flex-col gap-2 py-4" role="alert">
+              <p className="text-sm text-error" data-testid="shell-file-dock-query-error">
+                {queryError}
+              </p>
+              <button
+                type="button"
+                data-testid="shell-file-dock-query-retry"
+                className="self-start rounded-md border border-outline px-3 py-1.5 text-sm font-semibold hover:bg-hover"
+                onClick={() => void fetchPage(null, false)}
+              >
+                다시 불러오기
+              </button>
+            </div>
           ) : (
             <div className="flex min-h-0 flex-1 flex-col gap-2">
               <div className="min-h-0 flex-1 overflow-auto rounded-md border border-outline">
@@ -266,18 +319,22 @@ export function ShellFileDock({ onOpenResolve }: { onOpenResolve: () => void }) 
                     {loading && rows.length === 0 ? (
                       <tr>
                         <td colSpan={columns.length} className="px-3 py-4 text-muted">
-                          Loading…
+                          불러오는 중…
                         </td>
                       </tr>
                     ) : rows.length === 0 ? (
                       <tr>
                         <td colSpan={columns.length} className="px-3 py-4 text-muted">
-                          No matching files.
+                          일치하는 파일이 없습니다.
                         </td>
                       </tr>
                     ) : (
                       rows.map((row) => (
-                        <tr key={row.id} className="border-t border-outline/60 hover:bg-hover">
+                        <tr
+                          key={row.id}
+                          className="border-t border-outline/60 hover:bg-hover"
+                          data-testid={`shell-file-dock-row-${row.id}`}
+                        >
                           {columns.map((col) => (
                             <td key={col.id} className="max-w-xs truncate px-3">
                               {col.cell(row)}
@@ -297,7 +354,7 @@ export function ShellFileDock({ onOpenResolve }: { onOpenResolve: () => void }) 
                   disabled={loadingMore}
                   onClick={() => void fetchPage(nextCursor, true)}
                 >
-                  {loadingMore ? "Loading…" : "Load more"}
+                  {loadingMore ? "불러오는 중…" : "더 보기"}
                 </button>
               )}
             </div>
@@ -307,7 +364,7 @@ export function ShellFileDock({ onOpenResolve }: { onOpenResolve: () => void }) 
             onResize={(delta) => {
               const next = clampHeightPx(heightPx + delta);
               setHeightPx(next);
-              persist({ heightPx: next });
+              persistLayout({ heightPx: next });
             }}
           />
         </div>

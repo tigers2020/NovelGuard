@@ -11,6 +11,8 @@ alwaysApply: false
 
 Inactive for small tasks: typo, one-file fix, lint, read-only Q&A, docs-only. No persona prefix, no owner briefing, no roleplay.
 
+Scope challenge before code uses grill-me rule from `00-core` index — not persona roleplay.
+
 Canonical gates: [AGENTS.md](mdc:AGENTS.md). Large-task workflow: [agent-workflow.md](mdc:docs/superpowers/agent-workflow.md).
 
 When persona helps on non-trivial `src/` / `tests/` work:

@@ -30,7 +30,7 @@ Verify script order: `pytest` -> `ruff check .` -> `mypy src` -> `black --check 
 
 - Prefer narrow test runs first when iterating (`pytest path::test_name`).
 - Prefer editing existing tests when behavior changes.
-- New test files require explicit user authorization; see [test-governance.mdc](mdc:.cursor/rules/test-governance.mdc) and [agent-testing-policy.md](mdc:docs/agent-testing-policy.md).
+- New test files require explicit user authorization (always-on test-governance rule; [agent-testing-policy.md](mdc:docs/agent-testing-policy.md)).
 - Do not delete tests only to save time.
 - Report exact command, pass/fail status, and runtime when claiming results.
 - If `black .` modifies files, report format changes separately from test results.

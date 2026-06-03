@@ -6,7 +6,7 @@ parent_roadmap: docs/superpowers/roadmap/000-2026-06-01-novelguard-master-roadma
 parent_spec: docs/superpowers/specs/000-2026-06-01-novelguard-ui-overhaul-design.md
 prior_track: docs/superpowers/roadmap/002-2026-06-02-pr26-pr30-platform-polish-roadmap.md
 last_reviewed: 2026-06-03
-reviewer_audit: 2026-06-03 — PR-33/34/36/37 done (plans 027–030); next MVP: PR-42 OR PR-43
+reviewer_audit: 2026-06-03 — PR-33..45 platform release gate track complete
 parent_spec_ia: docs/superpowers/specs/021-2026-06-02-feature-fullstack-shell-ia-reconciliation-design.md
 ---
 
@@ -109,17 +109,17 @@ flowchart TD
 |----|------|------|----------|-----------------|-----------------|--------|
 | **PR-33** | IA reconciliation + UI overhaul spec v2 | H | No | [021 ia-reconciliation](../specs/021-2026-06-02-feature-fullstack-shell-ia-reconciliation-design.md) | [027 ia-reconciliation](../plans/027-2026-06-02-feature-fullstack-shell-pr33-ia-reconciliation.md) | **Done** (2026-06-03) |
 | **PR-34** | **3-mode shell cleanup** (not hub scroll) | H | No | [021 LOCK-33-13](../specs/021-2026-06-02-feature-fullstack-shell-ia-reconciliation-design.md) | [028 work-mode shell](../plans/028-2026-06-02-feature-ui-shell-pr34-work-mode-shell-cleanup.md) | **Done** (2026-06-03) — **MVP** |
-| **PR-35** | Scan section reassembly | H | No | `specs/023-…-scan-section-design.md` | `plans/TBD-pr35-scan-section.md` | **Post-MVP defer** (LOCK-33-MVP-2) |
+| **PR-35** | Scan section reassembly | H | No | [023 scan section](../specs/023-2026-06-02-feature-ui-scan-scan-section-design.md) | [032 scan section](../plans/032-2026-06-02-feature-ui-scan-pr35-scan-section.md) | **Done** (2026-06-03) |
 | **PR-36** | Duplicate review master-detail | H | No | [021 LOCK-33-4](../specs/021-2026-06-02-feature-fullstack-shell-ia-reconciliation-design.md) | [029 master-detail](../plans/029-2026-06-02-feature-ui-resolve-pr36-duplicate-master-detail.md) | **Done** (2026-06-03) — **MVP** |
 | **PR-37** | FinalizeSubflowDialog + move/finalize integration | H | Limited | [021 LOCK-33-7..12](../specs/021-2026-06-02-feature-fullstack-shell-ia-reconciliation-design.md) | [030 finalize subflow](../plans/030-2026-06-02-feature-ui-work-pr37-finalize-subflow-dialog.md) | **Done** (2026-06-03) — **MVP** |
-| **PR-38** | FileDock / global bottom dock alignment | H | No | extends [013 shell filedock](../specs/013-2026-06-02-shell-filedock-design.md) | `plans/032-2026-06-02-feature-ui-shell-pr38-filedock-global.md` | Proposed |
-| **PR-39** | App shell / GlobalActionToolbar / design tokens | H | No | `specs/026-2026-06-02-feature-ui-shell-app-shell-polish-design.md` | `plans/033-2026-06-02-feature-ui-shell-pr39-app-shell-polish.md` | Proposed |
-| **PR-40** | Logs / Settings v2 (navigation, search) | H | Limited | extends [016 settings logs](../specs/016-2026-06-02-settings-logs-design.md) | `plans/034-2026-06-02-feature-ui-settings-pr40-logs-settings-v2.md` | Proposed |
-| **PR-41** | Finalize pipeline debt (cleanup placeholder, async UX) | I | No | extends [011 finalize](../specs/011-2026-06-02-finalize-cleanup-pipeline-design.md) | `plans/035-2026-06-02-feature-backend-finalize-pr41-finalize-debt.md` | Proposed |
-| **PR-42** | Regression — bridge contract, mock parity, stale apply | I | No | `specs/027-2026-06-02-infra-quality-bridge-regression-design.md` | `plans/036-2026-06-02-infra-quality-pr42-bridge-regression.md` | Proposed |
-| **PR-43** | E2E — scan → duplicate → move → finalize | I | No | extends E2E plan [002](../plans/002-2026-06-01-novelguard-ui-e2e-smoke.md) | `plans/037-2026-06-02-infra-quality-pr43-e2e-full-flow.md` | Proposed |
-| **PR-44** | Packaging smoke + known limitations | I | No | extends [012 packaging](../specs/012-2026-06-02-packaging-distribution-design.md) | `plans/038-2026-06-02-infra-release-pr44-packaging-smoke.md` | Proposed |
-| **PR-45** | Release candidate — UX copy, beta gate, docs | I | No | `specs/028-2026-06-02-docs-release-release-candidate-design.md` | `plans/039-2026-06-02-docs-release-pr45-release-candidate.md` | Proposed |
+| **PR-38** | FileDock / global bottom dock alignment | H | No | [024 filedock global](../specs/024-2026-06-02-feature-ui-shell-filedock-global-design.md) | [033 filedock](../plans/033-2026-06-02-feature-ui-shell-pr38-filedock-global.md) | **Done** (2026-06-03) |
+| **PR-39** | App shell / GlobalActionToolbar / design tokens | H | No | [025 app shell](../specs/025-2026-06-02-feature-ui-shell-app-shell-polish-design.md) | [034 app shell](../plans/034-2026-06-02-feature-ui-shell-pr39-app-shell-polish.md) | **Done** (2026-06-03) |
+| **PR-40** | Logs / Settings v2 (navigation, search) | H | Limited | [026 logs settings v2](../specs/026-2026-06-02-feature-ui-settings-logs-v2-design.md) | [035 logs settings v2](../plans/035-2026-06-02-feature-ui-settings-pr40-logs-settings-v2.md) | **Done** (2026-06-03) |
+| **PR-41** | Finalize pipeline debt (cleanup placeholder, async UX) | I | No | [027 finalize debt](../specs/027-2026-06-03-infra-quality-finalize-cleanup-debt-design.md) | [036 finalize debt](../plans/036-2026-06-03-infra-quality-pr41-finalize-debt.md) | **Done** (2026-06-03) |
+| **PR-42** | Regression — bridge contract, mock parity, stale apply | I | No | [022 bridge regression](../specs/022-2026-06-03-infra-bridge-quality-bridge-regression-design.md) | [031 bridge regression](../plans/031-2026-06-03-infra-bridge-quality-pr42-bridge-regression.md) | **Done** (2026-06-03) — **MVP** |
+| **PR-43** | E2E — scan → duplicate → move → finalize | I | No | extends E2E plan [002](../plans/002-2026-06-01-novelguard-ui-e2e-smoke.md) | extends plan 002 (PR-43 scenario in `web/e2e/smoke.spec.ts`) | **Done** (2026-06-03) |
+| **PR-44** | Packaging smoke + known limitations | I | No | extends [012 packaging](../specs/012-2026-06-02-packaging-distribution-design.md) | [038 packaging smoke](../plans/038-2026-06-02-infra-release-pr44-packaging-smoke.md) | **Done** (2026-06-03) |
+| **PR-45** | Release candidate — UX copy, beta gate, docs | I | No | (copy sweep; no separate spec) | [039 release candidate](../plans/039-2026-06-02-docs-release-pr45-release-candidate.md) | **Done** (2026-06-03) |
 
 **Waves:** H = UI overhaul & IA; I = stabilization & release.
 
@@ -527,7 +527,7 @@ cd web && npm run test
 | P6 | PR-39 | `specs/026-…-app-shell-polish-design.md` | Toolbar undo defer vs implement |
 | P7 | PR-40 | extends spec 016 | v2 scope vs MVP defer |
 | P8 | PR-41 | extends spec 011 | Cleanup scope; async contract |
-| P9 | PR-42 | `specs/027-…-bridge-regression-design.md` | Test file policy |
+| P9 | PR-42 | [022 bridge regression](../specs/022-2026-06-03-infra-bridge-quality-bridge-regression-design.md) | **Done** 2026-06-03 |
 | P10 | PR-43 | E2E extension | Mock-only vs pywebview CI |
 | P11 | PR-44 | extends spec 012 | Smoke matrix |
 | P12 | PR-45 | `specs/028-…-release-candidate-design.md` | Beta scope |
@@ -606,3 +606,12 @@ cd web && npm run test
 | 2026-06-03 | PR-33 done — spec 021 approved, plan 027; PR-34 done — 3-mode shell (plan 028) |
 | 2026-06-03 | PR-36 done — Resolve master-detail (plan 029); pre-PR-37 gate + plan 030 draft |
 | 2026-06-03 | PR-37 done — FinalizeSubflowDialog + entry CTAs (plan 030); next MVP PR-42 or PR-43 |
+| 2026-06-03 | PR-42 done — spec 022 + plan 031; mock repair parity, id resolution fix, `cancel_finalize` test; MVP 3B closed |
+| 2026-06-03 | PR-35 done — unified scan section (spec 023, plan 032); `data-state`, settings link, cancel |
+| 2026-06-03 | PR-38 done — FileDock global (spec 024); cross-links, `data-state`, KO copy |
+| 2026-06-03 | PR-39 done — app shell polish (spec 025); header/sidebar/command bar testids + KO |
+| 2026-06-03 | PR-40 done — Logs/Settings v2 (spec 026); section nav, log search, artifact detail |
+| 2026-06-03 | PR-41 done — `preview_finalize_cleanup`, cleanup preview/result UI, Logs link (spec 027, plan 036) |
+| 2026-06-03 | PR-43 done — E2E full pipeline in `smoke.spec.ts` (scan → approve → move → finalize) |
+| 2026-06-03 | PR-44 done — `smoke_packaged_ui.py`, packaging smoke checklist, docs/limitations (plan 038) |
+| 2026-06-03 | PR-45 done — beta-readiness.md, Korean destructive-path copy, CHANGELOG (plan 039) |

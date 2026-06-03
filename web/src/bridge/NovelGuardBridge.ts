@@ -17,6 +17,7 @@ import type {
   UpdateReviewDecisionsResult,
 } from "../types/reviewDecisions";
 import type {
+  FinalizeCleanupPreview,
   FinalizeReportDocument,
   FinalizeResult,
   FinalizeSummary,
@@ -57,6 +58,7 @@ export interface NovelGuardBridge {
   queryLogEntries(query: LogEntriesQuery): Promise<LogEntriesPage>;
   getLogsArtifacts(): Promise<LogsArtifactsResponse>;
   getFinalizeSummary(): Promise<FinalizeSummary>;
+  previewFinalizeCleanup(): Promise<FinalizeCleanupPreview>;
   runFinalizeVerification(request: RunFinalizeRequest): Promise<FinalizeResult>;
   getFinalizeReport(reportId: string): Promise<FinalizeReportDocument>;
   cancelFinalize(): Promise<void>;

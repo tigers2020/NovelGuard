@@ -82,17 +82,30 @@ See [docs/current_architecture.md](docs/current_architecture.md) for detail.
 
 ---
 
+## Agent phases (development missions)
+
+Question policy: **only during Phase 1** (or before scope lock). After lock, no "continue?" between tasks.
+
+| Phase | Name | Trigger |
+| ----- | ---- | ------- |
+| 0 | Intake | User states the development request |
+| 1 | Grill-me / hardening | Attach `11-grill-me-hardening` from [00-core](.cursor/rules/00-core.mdc) index — once, no code |
+| 2 | Lock | User: `Approved. Scope is locked.` (not bare `continue`) |
+| 3 | Autonomous dev loop | Attach `21-autonomous-mission-execution` from index |
+| 4 | Final gate | Lint / tests / build / e2e per locked plan |
+| 5 | Merge / PR | Attach `90-branch-pr-finish` from index; stop on protection/CI/conflict |
+
+Always-on: [00-core.mdc](.cursor/rules/00-core.mdc) (repo + mission + **only rules index**), [test-governance.mdc](.cursor/rules/test-governance.mdc).
+
+Prompts: [docs/agent-operating-prompt.md](docs/agent-operating-prompt.md). Plan Mode can replace Phase 1.
+
+---
+
 ## Development workflow (MCP)
 
-Before implementation, during DB work, and after UI changes — see [.cursor/rules/56-dev-mcp-workflow.mdc](.cursor/rules/56-dev-mcp-workflow.mdc).
+On demand only. Attach `57` / `58` / `59` from [00-core.mdc](.cursor/rules/00-core.mdc) rules index. Tools: Context7, Supabase MCP, Playwright.
 
-| Phase | Tool | When |
-| ----- | ---- | ---- |
-| Pre-code | **context7-mcp** / Context7 | Libraries, frameworks, APIs, version-specific behavior |
-| DB work | **Supabase MCP** | Schema, migrations, SQL, persistence adapters |
-| Post-code | **playwright** skill / Playwright MCP | UI, routing, browser-visible flows |
-
-Skip with reason for docs-only edits or pure local refactors. Non-UI tasks use `pytest` / lint gates instead of Playwright.
+Skip with reason for docs-only edits or pure local refactors.
 
 ---
 
@@ -140,8 +153,8 @@ python src/main.py
 | Architecture | [docs/current_architecture.md](docs/current_architecture.md) |
 | Entry points | [docs/entry_points.md](docs/entry_points.md) |
 | Testing policy | [docs/agent-testing-policy.md](docs/agent-testing-policy.md) |
-| Dev MCP workflow | [.cursor/rules/56-dev-mcp-workflow.mdc](.cursor/rules/56-dev-mcp-workflow.mdc) |
-| Cursor rules | `.cursor/rules/` |
+| Cursor rules (index only) | [00-core.mdc](.cursor/rules/00-core.mdc) |
+| Agent prompts | [docs/agent-operating-prompt.md](docs/agent-operating-prompt.md) |
 | Persona cards | `persona/` |
 | Historical docs | `documents/` |
 

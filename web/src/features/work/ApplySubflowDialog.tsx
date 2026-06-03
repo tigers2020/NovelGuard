@@ -54,7 +54,7 @@ function applyErrorMessage(err: unknown): {
     }
     return { message: err.message };
   }
-  return { message: err instanceof Error ? err.message : "Apply failed" };
+  return { message: err instanceof Error ? err.message : "적용에 실패했습니다." };
 }
 
 function formatApplyFailedMessage(details?: ApplyFailedDetails): string {
@@ -274,16 +274,16 @@ export function ApplySubflowDialog({
       >
         <h2 className="text-lg font-bold text-on-surface">이동 계획 적용</h2>
         <p className="mt-1 text-sm text-on-surface-variant">
-          dry-run → confirm → apply. Progress는 GlobalCommandBar만 표시합니다.
+          미리보기로 이동 대상을 확인한 뒤 적용합니다. 되돌리려면 백업·감사 로그를 확인하세요.
         </p>
 
         <ol className="mt-4 grid gap-2 md:grid-cols-4">
           {(
             [
-              ["preview", "1. Preview", "이동·충돌·대상 검토"],
-              ["confirm", "2. Confirm", "파괴적 작업 전 확인"],
-              ["apply", "3. Apply", "파일 이동 실행"],
-              ["done", "4. Done", "결과 확인"],
+              ["preview", "1. 미리보기", "이동·충돌·대상 검토"],
+              ["confirm", "2. 확인", "실제 파일 이동 전 최종 확인"],
+              ["apply", "3. 적용", "선택한 이동 실행"],
+              ["done", "4. 완료", "결과 확인"],
             ] as const
           ).map(([id, title, text]) => (
             <li

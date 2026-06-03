@@ -23,6 +23,7 @@ class FileRecord:
     extension: str
     content_sha256: str | None = None
     encoding_status: str | None = None
+    near_text_preview: str | None = None  # in-memory only; never persisted (spec 028)
 
 
 def make_file_id(relative_posix_path: str, size_bytes: int, modified_at_ns: int) -> str:

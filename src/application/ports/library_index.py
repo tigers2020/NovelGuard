@@ -14,6 +14,16 @@ class LibraryIndexPort(Protocol):
 
     def replace_files(self, folder_path: str, files: list[FileRecord]) -> None: ...
 
+    def append_files_batch(
+        self,
+        folder_path: str,
+        files: list[FileRecord],
+        *,
+        reset: bool = False,
+    ) -> None: ...
+
+    def activate_library_folder(self, folder_path: str) -> None: ...
+
     @property
     def folder_path(self) -> str | None: ...
 

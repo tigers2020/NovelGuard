@@ -3,9 +3,11 @@ import { FinalizeSubflowContent } from "./FinalizeWorkspace";
 export function FinalizeSubflowDialog({
   open,
   onClose,
+  onOpenLogs,
 }: {
   open: boolean;
   onClose: () => void;
+  onOpenLogs?: () => void;
 }) {
   if (!open) return null;
 
@@ -24,7 +26,7 @@ export function FinalizeSubflowDialog({
           <div>
             <h2 className="text-lg font-bold text-on-surface">최종 검증</h2>
             <p className="mt-1 text-sm text-on-surface-variant">
-              summary → blockers/warnings → cleanup opt-in → run → report. Progress는 GlobalCommandBar만 표시합니다.
+              차단·경고를 확인한 뒤 선택적으로 빈 출력 폴더를 정리하고 최종 검증을 실행합니다.
             </p>
           </div>
           <button
@@ -37,7 +39,7 @@ export function FinalizeSubflowDialog({
           </button>
         </div>
         <div className="min-h-0 overflow-y-auto pr-1">
-          <FinalizeSubflowContent compact />
+          <FinalizeSubflowContent compact onOpenLogs={onOpenLogs} />
         </div>
       </div>
     </div>

@@ -8,6 +8,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Platform release gate (PR-33..45):** 3-mode Work shell, unified scan section, resolve master-detail, FileDock global, app shell polish, Logs/Settings v2, finalize cleanup preview, bridge regression tests, E2E full pipeline smoke, packaging UI marker gate (`scripts/smoke_packaged_ui.py`), beta readiness doc.
 - Windows-first PyInstaller **onedir** packaging for NovelGuard (`scripts/package_windows.py`, `packaging/NovelGuard.spec`).
 - Bundled `web/build` frontend assets for the packaged desktop runtime.
 - Production bridge **fail-closed** behavior to block `mockBridge` in production builds (`PRODUCTION_BRIDGE_UNAVAILABLE` / `DEV_BRIDGE_UNAVAILABLE`).
@@ -18,6 +19,7 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- Work UI copy: Korean labels on resolve facets, apply subflow steps, and destructive-path hints (PR-45).
 - Vite production output directory from `web/dist` to `web/build` (avoids PyInstaller `dist/` collision).
 
 ### Known limitations

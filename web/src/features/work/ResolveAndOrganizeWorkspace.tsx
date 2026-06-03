@@ -12,8 +12,8 @@ import type {
 import { reviewRowGroupId } from "../../types/review";
 import type { ReviewDecisionCommand } from "../../types/reviewDecisions";
 import type { SelectionScope } from "../../types/selection";
-import { StatChip } from "../../components/ui/StatChip";
 import { FacetPanel } from "./resolve/FacetPanel";
+import { ResolveGridToolbar } from "./resolve/ResolveGridToolbar";
 import { VirtualizedReviewGrid } from "./resolve/VirtualizedReviewGrid";
 import { REVIEW_GRID_SIZING_KEY } from "./resolve/reviewGridColumns";
 import { mergeReviewColumnVisibility } from "./resolve/reviewGridLayout";
@@ -299,74 +299,6 @@ export function ResolveAndOrganizeWorkspace({
       className="flex h-full min-h-0 flex-col overflow-hidden bg-background"
       data-testid="resolve-workspace"
     >
-      <div className="shrink-0 border-b border-outline p-4">
-        <p className="text-xs font-semibold text-secondary">Resolve & Organize</p>
-        <h1 className="text-xl font-bold text-on-surface">중복 검토와 이동 정리를 한 큐에서 처리</h1>
-        <div className="mt-4 grid gap-2 sm:grid-cols-4">
-          <StatChip label="Queue" value={resolve.queueCount} tone="warn" />
-          <StatChip label="Groups" value={resolve.groupCount} />
-          <StatChip label="Conflicts" value={resolve.conflictCount} tone="danger" />
-          <StatChip label="Approved" value={resolve.approvedCount} tone="good" />
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button
-            type="button"
-            data-testid="resolve-open-finalize"
-            className="rounded-md border border-outline px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-hover"
-            onClick={onOpenFinalize}
-          >
-            최종 검증
-          </button>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-2" data-testid="resolve-type-filter">
-          {(
-            [
-              ["exact", "Exact only"],
-              ["near", "Near only"],
-              ["relation", "Relation only"],
-              ["all", "All types"],
-            ] as const
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              data-testid={`resolve-type-filter-${id}`}
-              onClick={() => setRowTypeFilter(id)}
-              className={
-                rowTypeFilter === id
-                  ? "rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-background"
-                  : "rounded-md border border-outline px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-hover"
-              }
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="파일명, keeper, target, type 검색"
-          className="mt-4 w-full rounded-md border border-outline bg-surface px-3 py-2 text-sm text-on-surface outline-none focus:ring-2 focus:ring-primary"
-        />
-        {loading && !queryError && <p className="mt-2 text-xs text-muted">Loading rows…</p>}
-        {queryError && (
-          <div
-            className="mt-2 flex items-center justify-between rounded-md border border-error/40 bg-error/10 px-3 py-2 text-sm text-error"
-            data-testid="resolve-query-error"
-          >
-            <span>{queryError}</span>
-            <button
-              type="button"
-              data-testid="resolve-query-retry"
-              className="rounded-md border border-outline px-2 py-1 text-xs font-semibold text-on-surface"
-              onClick={() => void loadPage(null, false)}
-            >
-              Retry
-            </button>
-          </div>
-        )}
-      </div>
-
       <div className="relative z-0 flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <FacetPanel viewMode={viewMode} onViewModeChange={setViewMode} />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -385,6 +317,20 @@ export function ResolveAndOrganizeWorkspace({
               </button>
             </div>
           )}
+          <ResolveGridToolbar
+            queueCount={resolve.queueCount}
+            groupCount={resolve.groupCount}
+            conflictCount={resolve.conflictCount}
+            approvedCount={resolve.approvedCount}
+            rowTypeFilter={rowTypeFilter}
+            onRowTypeFilterChange={setRowTypeFilter}
+            search={search}
+            onSearchChange={setSearch}
+            loading={loading}
+            queryError={queryError}
+            onRetry={() => void loadPage(null, false)}
+            onOpenFinalize={onOpenFinalize}
+          />
           <VirtualizedReviewGrid
             rows={rows}
             selectedRowId={selectedRow?.id ?? null}

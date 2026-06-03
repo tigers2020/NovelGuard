@@ -1,5 +1,5 @@
 ---
-description: MCP server config and routing; mandatory workflow in 56-dev-mcp-workflow.mdc
+description: MCP server config when editing .cursor/mcp.json. Implementation rules: 00-core index (57–59).
 globs:
   - ".cursor/mcp.json"
 alwaysApply: false
@@ -7,7 +7,7 @@ alwaysApply: false
 
 # MCP Usage
 
-**Mandatory workflow:** [56-dev-mcp-workflow.mdc](mdc:.cursor/rules/56-dev-mcp-workflow.mdc) — Context7 before code, Supabase for DB, Playwright after UI changes.
+Which implementation rule to attach: see **Rules index** in `00-core.mdc`.
 
 Config: workspace `.cursor/mcp.json`; user-global Cursor `mcp.json`.
 Never embed API keys in JSON; use `${env:VAR_NAME}`.

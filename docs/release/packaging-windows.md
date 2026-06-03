@@ -71,8 +71,21 @@ python scripts/verify_phase_completion.py
 ## Smoke
 
 1. Use fixture library: `packaging/fixtures/library/`
-2. Fill in `docs/release/smoke-record-template.md`
-3. **Destructive** finalize/cleanup/move tests: fixture library **only**
+2. Follow [packaging-smoke-checklist.md](packaging-smoke-checklist.md) (PR-44 post–UI-overhaul matrix)
+3. Fill in [smoke-record-template.md](smoke-record-template.md)
+4. **Destructive** finalize/cleanup/move tests: fixture library **only**
+
+Automated UI marker gate (no exe):
+
+```bash
+python scripts/smoke_packaged_ui.py
+```
+
+Strict (after `npm run build` or `package_windows.py`):
+
+```bash
+python scripts/smoke_packaged_ui.py --require-build
+```
 
 ## Fresh-machine runtime prerequisites
 

@@ -7,6 +7,7 @@ async function openResolveWorkspace(page: import("@playwright/test").Page) {
   });
   await page.reload();
   await page.getByTestId("work-mode-tab-resolve").click();
+  await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "collapsed");
   await expect(page.getByTestId("resolve-review-grid")).toBeVisible({ timeout: 15_000 });
 }
 
@@ -27,7 +28,7 @@ async function clickApplyPreviewRun(page: import("@playwright/test").Page) {
 
 /** Pick a mock row with executable move_duplicate so preview reaches confirm step. */
 async function selectExecutableMoveRow(page: import("@playwright/test").Page) {
-  await page.getByRole("button", { name: "Move Plan" }).click();
+  await page.getByTestId("resolve-facet-move").click();
   const row = page.getByTestId("grid-row-row-2");
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.scrollIntoViewIfNeeded();
@@ -39,6 +40,21 @@ async function runApplyPreview(page: import("@playwright/test").Page) {
   await selectExecutableMoveRow(page);
   await openApplyDialog(page);
   await clickApplyPreviewRun(page);
+}
+
+async function clickApplyConfirmRun(page: import("@playwright/test").Page) {
+  await page
+    .getByTestId("apply-subflow-dialog")
+    .getByTestId("apply-confirm-run")
+    .evaluate((el) => (el as HTMLButtonElement).click());
+}
+
+async function runScanToSuccess(page: import("@playwright/test").Page) {
+  await page.getByTestId("work-mode-tab-scan").click();
+  await page.getByTestId("scan-start").click();
+  await expect(page.getByTestId("scan-section")).toHaveAttribute("data-state", "success", {
+    timeout: 20_000,
+  });
 }
 
 test.describe("NovelGuard smoke", () => {
@@ -54,23 +70,79 @@ test.describe("NovelGuard smoke", () => {
     await expect(page.getByTestId("work-mode-tab-scan")).toHaveClass(/bg-primary/);
     await page.getByTestId("work-mode-tab-resolve").click();
     await expect(page.getByTestId("resolve-workspace")).toBeVisible();
+    await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "collapsed");
     await page.getByTestId("work-mode-tab-quality").click();
     await expect(page.getByTestId("work-mode-tab-quality")).toHaveClass(/bg-primary/);
+    await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "collapsed");
+  });
+
+  test("029 dock policy: collapse on Resolve, expand on Scan when files exist", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("work-mode-tab-scan").click();
+    await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "expanded");
+    await page.getByTestId("work-mode-tab-resolve").click();
+    await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "collapsed");
+    await page.getByTestId("work-mode-tab-scan").click();
+    await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "expanded");
   });
 
   test("PR-32 scan folder picker updates mock selected path", async ({ page }) => {
     await page.goto("/");
     await page.getByTestId("work-mode-tab-scan").click();
+    await expect(page.getByTestId("scan-section")).toBeVisible();
     await page.getByTestId("scan-select-folder").click();
     await expect(page.getByTestId("scan-folder-error")).toHaveCount(0);
     await expect(page.getByTitle("D:/Novels/Library/selected")).toBeVisible();
+    await expect(page.getByTestId("scan-section")).toHaveAttribute("data-state", /success|ready/);
+    await expect(page.getByTestId("scan-summary")).toBeVisible();
+  });
+
+  test("PR-38 work mode tab switches to scan from resolve default", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("work-mode-tab-scan").click();
+    await expect(page.getByTestId("work-mode-tab-scan")).toHaveClass(/bg-primary/);
+    await expect(page.getByTestId("scan-section")).toBeVisible();
+  });
+
+  test("PR-38 scan reveals expanded file dock", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("work-mode-tab-scan").click();
+    await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "expanded");
+    await page.getByTestId("shell-file-dock").getByRole("button", { name: /파일 목록/ }).click();
+    await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "collapsed");
+    await page.getByTestId("scan-open-file-dock").evaluate((el) => (el as HTMLButtonElement).click());
+    await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "expanded");
+    await expect(page.getByTestId("shell-file-dock-table")).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("PR-35 scan settings link opens settings route", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("work-mode-tab-scan").click();
+    await page.getByTestId("scan-open-settings").click();
+    await expect(page.getByTestId("settings-route")).toBeVisible();
+  });
+
+  test("PR-40 settings section nav shows app info", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("nav-settings").click();
+    await page.getByTestId("settings-nav-app").click();
+    await expect(page.getByTestId("settings-section-app")).toBeVisible();
+  });
+
+  test("PR-40 logs search filters entries", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("nav-logs").click();
+    await page.getByTestId("logs-search").fill("mock log seed info");
+    await expect(page.getByTestId("logs-live-list")).toContainText("mock log seed info");
+    await page.getByTestId("logs-search").fill("__no_such_log_message__");
+    await expect(page.getByTestId("logs-live-list")).toContainText("표시할 로그가 없습니다");
   });
 
   test("PR-31 rapid work mode tabs keep highlight and panel in sync", async ({ page }) => {
     await page.goto("/");
     const modes = ["scan", "resolve", "quality"] as const;
     const panelByMode = {
-      scan: page.getByRole("heading", { name: "라이브러리 인덱싱" }),
+      scan: page.getByTestId("scan-section"),
       resolve: page.getByTestId("resolve-workspace"),
       quality: page.getByTestId("quality-workspace"),
     };
@@ -291,5 +363,48 @@ test.describe("NovelGuard smoke", () => {
     await expect(page.getByTestId("logs-route")).toBeVisible();
     await expect(page.getByTestId("logs-live-list")).toBeVisible();
     await expect(page.getByTestId("logs-artifacts-list")).toBeVisible();
+  });
+
+  test("PR-43 full pipeline scan duplicate move finalize", async ({ page }) => {
+    await page.addInitScript(() => {
+      (
+        window as unknown as { __NOVELGUARD_TEST_RELAX_FINALIZE_BLOCKERS__?: boolean }
+      ).__NOVELGUARD_TEST_RELAX_FINALIZE_BLOCKERS__ = true;
+    });
+    await page.setViewportSize({ width: 1920, height: 900 });
+    await page.goto("/");
+    await page.evaluate(() => {
+      localStorage.removeItem("novelguard.reviewGrid.sizing.v1");
+    });
+    await page.reload();
+
+    await runScanToSuccess(page);
+
+    await openResolveWorkspace(page);
+    await expect(page.getByTestId("grid-row-row-2")).toBeVisible({ timeout: 15_000 });
+
+    await runApplyPreview(page);
+    await expect(page.getByTestId("apply-confirm-run")).toBeVisible();
+    await clickApplyConfirmRun(page);
+    await expect(page.getByTestId("apply-open-finalize")).toBeVisible({ timeout: 15_000 });
+    await page.evaluate(() => {
+      (
+        window as unknown as { __NOVELGUARD_TEST_PREPARE_FINALIZE_READY__?: () => void }
+      ).__NOVELGUARD_TEST_PREPARE_FINALIZE_READY__?.();
+    });
+    await page.getByTestId("apply-open-finalize").evaluate((el) => (el as HTMLButtonElement).click());
+
+    const finalizeDialog = page.getByTestId("finalize-subflow-dialog");
+    await expect(finalizeDialog).toBeVisible();
+    await expect(finalizeDialog.getByTestId("finalize-subflow-content")).toBeVisible();
+    await expect(finalizeDialog.getByTestId("finalize-run-button")).toBeEnabled({ timeout: 15_000 });
+    await finalizeDialog.getByTestId("finalize-run-button").click();
+    await expect(finalizeDialog.getByTestId("finalize-report-button")).toBeEnabled({
+      timeout: 15_000,
+    });
+    await expect(finalizeDialog.getByTestId("finalize-subflow-content")).toHaveAttribute(
+      "data-state",
+      /success|warning/,
+    );
   });
 });
