@@ -103,7 +103,7 @@ class NearDuplicateResult:
 class _PreparedFile:
     input: NearDuplicateInput
     norm_len: int
-    fingerprints: frozenset[str]
+    fingerprints: frozenset[bytes]
     fingerprint_count: int
     family: str
     length_bucket: int
@@ -117,8 +117,8 @@ def normalize_text_for_near_dup(text: str) -> str:
     return normalized.strip()
 
 
-def _fingerprint_token(gram: str) -> str:
-    return hashlib.blake2b(gram.encode("utf-8"), digest_size=8).hexdigest()
+def _fingerprint_token(gram: str) -> bytes:
+    return hashlib.blake2b(gram.encode("utf-8"), digest_size=8).digest()
 
 
 def _sample_indices(gram_count: int, *, max_items: int) -> range:
@@ -128,7 +128,7 @@ def _sample_indices(gram_count: int, *, max_items: int) -> range:
     return range(0, gram_count, step)[:max_items]
 
 
-def fingerprint_set(normalized: str) -> frozenset[str]:
+def fingerprint_set(normalized: str) -> frozenset[bytes]:
     tokens = normalized.split()
     if len(tokens) >= WORD_NGRAM_SIZE:
         gram_count = len(tokens) - WORD_NGRAM_SIZE + 1
@@ -146,7 +146,7 @@ def fingerprint_set(normalized: str) -> frozenset[str]:
     return frozenset()
 
 
-def jaccard_similarity(left: frozenset[str], right: frozenset[str]) -> float:
+def jaccard_similarity(left: frozenset[bytes], right: frozenset[bytes]) -> float:
     if not left or not right:
         return 0.0
     shared = len(left & right)
@@ -162,12 +162,8 @@ def _jaccard_from_sizes(shared: int, size_left: int, size_right: int) -> float:
     return shared / union
 
 
-def _shared_fingerprint_count(left: frozenset[str], right: frozenset[str]) -> int:
-    if len(left) <= len(right):
-        smaller, larger = left, right
-    else:
-        smaller, larger = right, left
-    return sum(1 for token in smaller if token in larger)
+def _shared_fingerprint_count(left: frozenset[bytes], right: frozenset[bytes]) -> int:
+    return len(left & right)
 
 
 def extension_family(extension: str) -> str | None:
@@ -200,6 +196,10 @@ def _should_skip_pair(
     if left_exact and right_exact and left_exact == right_exact:
         return True
     return False
+
+
+def prepare_near_duplicate_input(item: NearDuplicateInput) -> _PreparedFile | None:
+    return _prepare_file(item)
 
 
 def _prepare_file(item: NearDuplicateInput) -> _PreparedFile | None:
@@ -287,7 +287,7 @@ def _collect_pairs_in_items(
         bucket_items = bucket_items[:max_bucket_items]
 
     # Inverted index on fingerprints: O(n * fanout) candidates, not O(|band|²) per band.
-    fp_to_items: dict[str, list[_PreparedFile]] = defaultdict(list)
+    fp_to_items: dict[bytes, list[_PreparedFile]] = defaultdict(list)
     for item in bucket_items:
         for fp in item.fingerprints:
             fp_list = fp_to_items[fp]
@@ -366,7 +366,25 @@ def find_near_duplicate_groups(
             skipped += 1
         else:
             prepared.append(ready)
+    return find_near_duplicate_groups_from_prepared(
+        prepared,
+        skipped=skipped,
+        exact_group_by_file_id=exact_group_by_file_id,
+        near_batch_id=near_batch_id,
+        threshold=threshold,
+        large_library=large_library,
+    )
 
+
+def find_near_duplicate_groups_from_prepared(
+    prepared: Sequence[_PreparedFile],
+    *,
+    skipped: int,
+    exact_group_by_file_id: Mapping[str, str],
+    near_batch_id: str,
+    threshold: float,
+    large_library: bool,
+) -> NearDuplicateResult:
     by_family_bucket: dict[str, dict[int, list[_PreparedFile]]] = defaultdict(
         lambda: defaultdict(list)
     )
