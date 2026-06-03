@@ -279,6 +279,26 @@ def test_make_file_id_stable() -> None:
     assert make_file_id("novels/b.txt", 100, 1_700_000_000_000_000_000) != a
 
 
+def test_scan_hashes_same_stem_even_when_sizes_differ(tmp_path: Path) -> None:
+    body = "shared novel body " * 80
+    payload = body.encode("utf-8")
+    (tmp_path / "series-v1.txt").write_bytes(payload)
+    (tmp_path / "series-v2.txt").write_bytes(payload + b"\n")
+    files: list[FileRecord] = []
+
+    filesystem_scanner.scan_folder(
+        str(tmp_path),
+        on_progress=lambda _p, _l: None,
+        cancel_check=lambda: False,
+        out=files.append,
+        use_content_probe=True,
+    )
+    by_name = {record.name: record for record in files}
+    assert by_name["series-v1.txt"].size_bytes != by_name["series-v2.txt"].size_bytes
+    assert by_name["series-v1.txt"].content_sha256 is not None
+    assert by_name["series-v2.txt"].content_sha256 is not None
+
+
 def test_scan_folder_finds_txt_and_md(tmp_path: Path) -> None:
     (tmp_path / "a.txt").write_text("hello", encoding="utf-8")
     (tmp_path / "b.md").write_text("# x", encoding="utf-8")
@@ -866,6 +886,41 @@ def test_snapshot_includes_index_ready_and_deep_analysis_flags(tmp_path: Path) -
     assert snap["work"]["scan"]["deepAnalysisComplete"] is True
 
 
+def _wait_deep_analysis_complete(api: BridgeApi, *, timeout: float = 120.0) -> dict:
+    deadline = time.monotonic() + timeout
+    snap = api.get_snapshot()
+    while time.monotonic() < deadline:
+        if snap["work"]["scan"]["deepAnalysisComplete"]:
+            return snap
+        time.sleep(0.05)
+        snap = api.get_snapshot()
+    return snap
+
+
+def test_large_library_counts_near_duplicate_groups(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from application import scan_pipeline_constants
+
+    monkeypatch.setattr(scan_pipeline_constants, "SCAN_DEEP_ANALYSIS_BACKGROUND_THRESHOLD", 2)
+    (tmp_path / "alpha.txt").write_text(_near_similar_body("alpha"), encoding="utf-8")
+    (tmp_path / "beta.txt").write_text(_near_similar_body("beta"), encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    snap = _wait_deep_analysis_complete(api)
+    assert snap["work"]["scan"]["deepAnalysisComplete"] is True
+    assert snap["library"]["duplicateGroups"] >= 1
+    assert snap["pipeline"]["phase"] == "idle"
+    near_page = api.query_review_rows(
+        {"viewMode": "groups", "limit": 50, "filters": {"types": ["near"]}}
+    )
+    validate_review_rows_page(near_page)
+    assert any(row["type"] == "near" and row["rowKind"] == "group" for row in near_page["rows"])
+
+
 def test_snapshot_rejects_legacy_scan_phase(tmp_path: Path) -> None:
     session = create_library_session(MemoryLibraryIndex())
     session.select_folder(str(tmp_path))
@@ -1054,6 +1109,21 @@ def test_query_review_rows_near_filter_empty(tmp_path: Path) -> None:
     page = api.query_review_rows({"viewMode": "all", "limit": 50, "filters": {"types": ["near"]}})
     assert page["rows"] == []
     validate_review_rows_page(page)
+
+
+def test_query_review_rows_near_filter_returns_near_groups(tmp_path: Path) -> None:
+    (tmp_path / "alpha.txt").write_text(_near_similar_body("alpha"), encoding="utf-8")
+    (tmp_path / "beta.txt").write_text(_near_similar_body("beta"), encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _wait_deep_analysis_complete(api)
+    page = api.query_review_rows(
+        {"viewMode": "groups", "limit": 50, "filters": {"types": ["near"]}}
+    )
+    validate_review_rows_page(page)
+    assert any(row["type"] == "near" and row["rowKind"] == "group" for row in page["rows"])
 
 
 def test_analyze_quality_empty_file(tmp_path: Path) -> None:
@@ -1808,17 +1878,14 @@ def test_query_review_rows_near_after_similar_scan(tmp_path: Path) -> None:
     session.select_folder(str(tmp_path))
     api = create_bridge_api(session)
     api.start_scan()
-    _scan_until_idle(api)
+    _wait_deep_analysis_complete(api)
     near_page = api.query_review_rows(
         {"viewMode": "all", "limit": 50, "filters": {"types": ["near"]}}
     )
     validate_review_rows_page(near_page)
-    if near_page["rows"]:
-        assert all(row["type"] == "near" for row in near_page["rows"])
-    both_page = api.query_review_rows(
-        {"viewMode": "all", "limit": 50, "filters": {"types": ["exact", "near"]}}
-    )
-    assert any(row["type"] == "exact" for row in both_page["rows"]) or not near_page["rows"]
+    assert near_page["rows"]
+    assert all(row["type"] == "near" for row in near_page["rows"])
+    assert any(row["rowKind"] == "group" for row in near_page["rows"])
 
 
 def test_get_near_duplicate_group_detail(tmp_path: Path) -> None:
@@ -1996,8 +2063,9 @@ def test_include_relation_false_skips_relation_rows(tmp_path: Path) -> None:
     session.select_folder(str(tmp_path))
     api = create_bridge_api(session)
     payload = api.get_app_setting("include_relation")
-    assert payload["value"] is False
+    assert payload["value"] is True
     assert payload["source"] == "default"
+    api.set_app_setting("include_relation", False)  # type: ignore[arg-type]
     api.start_scan()
     _scan_until_idle(api)
     page = api.query_review_rows(

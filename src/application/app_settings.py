@@ -25,7 +25,7 @@ SettingsSource = Literal["default", "persisted"]
 SettingValue = str | bool
 
 _DEFAULTS: dict[str, SettingValue] = {
-    SETTINGS_KEY_INCLUDE_RELATION: False,
+    SETTINGS_KEY_INCLUDE_RELATION: True,
     SETTINGS_KEY_LIBRARY_LAST_FOLDER_PATH: "",
     SETTINGS_KEY_SCAN_EXTENSION_FILTER: ".txt,.md",
     SETTINGS_KEY_SCAN_INCLUDE_SUBDIRS: True,

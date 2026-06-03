@@ -837,7 +837,7 @@ class LibrarySession:
             self._review_rows_cache = rebuild_rows_with_review_state(files, stored)
         else:
             self._review_rows_cache = build_review_rows(groups, self._files_by_id)
-        self._duplicate_group_count = len(groups)
+        self._refresh_duplicate_group_count()
         self._refresh_resolve_counts()
         if sync_projection:
             self._sync_file_review_projection()
@@ -850,6 +850,11 @@ class LibrarySession:
 
         rows = build_file_review_projection(self._review_rows_cache)
         self._index.replace_file_review_projection(folder, rows)
+
+    def _refresh_duplicate_group_count(self) -> None:
+        self._duplicate_group_count = sum(
+            1 for row in self._review_rows_cache if row.get("rowKind") == "group"
+        )
 
     def _refresh_resolve_counts(self) -> None:
         queue, approved, conflict = file_row_status_counts(self._review_rows_cache)
@@ -918,6 +923,7 @@ class LibrarySession:
         )
         valid_file_ids = {file_record.id for file_record in files}
         self._index.prune_review_state(folder, valid_group_ids, valid_file_ids)
+        self._refresh_duplicate_group_count()
         self._refresh_resolve_counts()
         self._sync_file_review_projection()
 
@@ -939,11 +945,13 @@ class LibrarySession:
             scan_completed_at=self._scan_last_run,
         )
         exact_group_by_file_id = build_exact_group_by_file_id(files)
+        large_library = len(files) >= scan_pipeline_constants.SCAN_NEAR_FAST_LIBRARY_THRESHOLD
         result = run_near_duplicate_detection(
             root=root,
             files=files,
             near_batch_id=near_batch_id,
             exact_group_by_file_id=exact_group_by_file_id,
+            large_library=large_library,
         )
         self._index.replace_near_duplicate_results(folder, result)
         self._merge_near_duplicate_result(folder, files, result)
@@ -982,6 +990,7 @@ class LibrarySession:
         )
         valid_file_ids = {file_record.id for file_record in files}
         self._index.prune_review_state(folder, valid_group_ids, valid_file_ids)
+        self._refresh_duplicate_group_count()
         self._refresh_resolve_counts()
         self._sync_file_review_projection()
 
@@ -1015,6 +1024,7 @@ class LibrarySession:
         label: str,
         step: int,
         step_total: int,
+        block_pipeline: bool = True,
     ) -> None:
         with self._lock:
             self._background_active = True
@@ -1026,9 +1036,10 @@ class LibrarySession:
                 self._background_percent = 0
             else:
                 self._background_percent = min(99, int((step / step_total) * 100))
-            self._pipeline_phase = "analyze"
-            self._pipeline_label = label
-            self._pipeline_percent = self._background_percent
+            if block_pipeline:
+                self._pipeline_phase = "analyze"
+                self._pipeline_label = label
+                self._pipeline_percent = self._background_percent
             self._pipeline_cancellable = False
 
     def _clear_background_progress(self) -> None:
@@ -1199,46 +1210,66 @@ class LibrarySession:
 
                 with self._lock:
                     self._review_rows_cache = review_rows
-                    self._duplicate_group_count = len(review_groups)
+                    self._refresh_duplicate_group_count()
                     self._refresh_resolve_counts()
                     self._scan_state = "success"
                     self._scan_last_run = scan_timestamp()
                     self._library_revision += 1
 
+                deep_analysis_non_blocking = (
+                    len(files) >= scan_pipeline_constants.SCAN_DEEP_ANALYSIS_BACKGROUND_THRESHOLD
+                )
+                if deep_analysis_non_blocking:
+                    with self._lock:
+                        self._pipeline_phase = "idle"
+                        self._pipeline_label = "근사·관계 분석 중… (백그라운드)"
+                        self._pipeline_percent = 0
+
+                block_pipeline = not deep_analysis_non_blocking
                 self._set_background_progress(
                     phase="queue",
                     label="중복·관계 분석 준비 중…",
                     step=0,
                     step_total=step_total,
+                    block_pipeline=block_pipeline,
                 )
                 self._set_background_progress(
                     phase="prepare",
                     label="분석 대상 파일 준비 중…",
                     step=0,
                     step_total=step_total,
+                    block_pipeline=block_pipeline,
                 )
-                self._set_background_progress(
-                    phase="near",
-                    label="근사 중복 분석 중…",
-                    step=1,
-                    step_total=step_total,
-                )
-                with self._lock:
-                    self._run_near_duplicate_phase(folder, files)
                 self._set_background_progress(
                     phase="relation",
                     label="파일명 관계 분석 중…",
-                    step=2,
+                    step=1,
                     step_total=step_total,
+                    block_pipeline=block_pipeline,
                 )
                 with self._lock:
                     self._run_relation_phase(folder, files)
+                    self._refresh_duplicate_group_count()
+                    self._library_revision += 1
+                self._set_background_progress(
+                    phase="near",
+                    label="근사 중복 분석 중…",
+                    step=2,
+                    step_total=step_total,
+                    block_pipeline=block_pipeline,
+                )
+                with self._lock:
+                    self._run_near_duplicate_phase(folder, files)
+                    self._refresh_duplicate_group_count()
+                    self._library_revision += 1
+
                 if defer_projection:
                     self._set_background_progress(
                         phase="projection",
                         label="검토 인덱스 동기화 중…",
                         step=3,
                         step_total=step_total,
+                        block_pipeline=block_pipeline,
                     )
                     self._sync_file_review_projection()
             except Exception as exc:

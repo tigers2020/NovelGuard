@@ -9,6 +9,11 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
+from application.scan_pipeline_constants import (
+    SCAN_STEM_HASH_MAX_GROUP_SIZE,
+    SCAN_STEM_HASH_MIN_GROUP_SIZE,
+)
+from domain.filename_relation import normalize_filename_for_relation, title_stem_key
 from domain.models import FileRecord, make_file_id
 from infrastructure.file_content_probe import FileContentProbe, probe_file
 
@@ -31,8 +36,21 @@ class _ScanPathEntry:
     extension: str
 
 
-def _probe_entry(entry: _ScanPathEntry, *, hash_sizes: set[int]) -> FileContentProbe:
-    need_hash = entry.size_bytes in hash_sizes
+def _entry_stem_hash_key(name: str, relative_path: str) -> str | None:
+    parse = normalize_filename_for_relation(name, relative_path=relative_path)
+    return title_stem_key(parse.normalized_stem)
+
+
+def _probe_entry(
+    entry: _ScanPathEntry,
+    *,
+    hash_sizes: set[int],
+    hash_stem_keys: set[str],
+) -> FileContentProbe:
+    stem_key = _entry_stem_hash_key(entry.name, entry.relative_path)
+    need_hash = entry.size_bytes in hash_sizes or (
+        stem_key is not None and stem_key in hash_stem_keys
+    )
     return probe_file(
         entry.path,
         size_bytes=entry.size_bytes,
@@ -56,6 +74,17 @@ def enrich_scan_entries_with_content_probe(
     size_counts = Counter(entry.size_bytes for entry in entries)
     hash_sizes = {size for size, count in size_counts.items() if count >= 2}
 
+    stem_counts: Counter[str] = Counter()
+    for entry in entries:
+        stem_key = _entry_stem_hash_key(entry.name, entry.relative_path)
+        if stem_key is not None:
+            stem_counts[stem_key] += 1
+    hash_stem_keys = {
+        key
+        for key, count in stem_counts.items()
+        if SCAN_STEM_HASH_MIN_GROUP_SIZE <= count <= SCAN_STEM_HASH_MAX_GROUP_SIZE
+    }
+
     total = len(entries)
     completed = 0
     workers = max(1, min(max_workers, total))
@@ -67,7 +96,11 @@ def enrich_scan_entries_with_content_probe(
                 return
             batch = entries[batch_start : batch_start + _PROBE_BATCH_SIZE]
             probes = pool.map(
-                lambda entry: _probe_entry(entry, hash_sizes=hash_sizes),
+                lambda entry: _probe_entry(
+                    entry,
+                    hash_sizes=hash_sizes,
+                    hash_stem_keys=hash_stem_keys,
+                ),
                 batch,
                 chunksize=chunksize,
             )

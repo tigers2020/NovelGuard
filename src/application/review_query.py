@@ -17,9 +17,12 @@ def _types_yield_empty(query: dict[str, Any]) -> bool:
         return False
     if not isinstance(types, list):
         return False
-    if "exact" in types:
+    allowed = {str(value) for value in types if isinstance(value, str)}
+    if not allowed:
         return False
-    return all(t in _NON_EXACT_TYPES for t in types)
+    if "exact" in allowed or "near" in allowed:
+        return False
+    return allowed <= _NON_EXACT_TYPES
 
 
 def query_review_page(

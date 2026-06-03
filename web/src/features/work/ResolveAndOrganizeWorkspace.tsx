@@ -42,7 +42,7 @@ export function ResolveAndOrganizeWorkspace({
   const resolve = snapshot.work.resolve;
 
   const [viewMode, setViewMode] = useState<ReviewViewMode>("action");
-  const [rowTypeFilter, setRowTypeFilter] = useState<"exact" | "near" | "relation" | "all">("exact");
+  const [rowTypeFilter, setRowTypeFilter] = useState<"exact" | "near" | "relation" | "all">("all");
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [filteredCount, setFilteredCount] = useState(0);

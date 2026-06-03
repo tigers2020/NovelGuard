@@ -83,16 +83,18 @@ export function derivePipelineTracks(
     scan.indexReady &&
     !scan.deepAnalysisComplete &&
     scan.state === "success" &&
-    phase === "analyze"
+    (phase === "analyze" || scan.deepAnalysisStatus === "running")
   ) {
     backgroundTrack = {
       id: "background",
       title: "심층 분석",
-      label: pipeline.label,
-      percent: pipeline.percent,
+      label: background?.active ? background.label : pipeline.label,
+      percent: background?.active ? background.percent : pipeline.percent,
       visible: true,
       complete: false,
-      statusText: `${pipeline.percent}%`,
+      statusText: background?.active
+        ? formatStepStatus(background.step, background.stepTotal, background.percent)
+        : `${pipeline.percent}%`,
     };
   }
 

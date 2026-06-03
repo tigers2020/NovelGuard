@@ -6,6 +6,7 @@ import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
+from application.scan_pipeline_constants import SCAN_PROBE_SAMPLE_ENCODING_MIN_BYTES
 from infrastructure.large_file_sampling import (
     NEAR_HEAD_BYTES,
     SAMPLE_BYTES,
@@ -38,6 +39,13 @@ def probe_file(
     if is_large_file(size_bytes):
         return _probe_large(path, size_bytes, need_hash=need_hash, need_near_text=need_near_text)
 
+    if not need_hash and size_bytes >= SCAN_PROBE_SAMPLE_ENCODING_MIN_BYTES:
+        return _probe_sample_encoding(
+            path,
+            size_bytes,
+            need_near_text=need_near_text,
+        )
+
     return _probe_small(path, need_hash=need_hash, need_near_text=need_near_text)
 
 
@@ -66,6 +74,27 @@ def _probe_large(
             near_text = near_text_from_head(path, size)
 
     return FileContentProbe(content_sha256, encoding_status, near_text)
+
+
+def _probe_sample_encoding(
+    path: Path,
+    size: int,
+    *,
+    need_near_text: bool,
+) -> FileContentProbe:
+    try:
+        head, tail = read_head_tail(path, size, SAMPLE_BYTES)
+    except OSError:
+        return FileContentProbe(None, "read_error", None)
+
+    encoding_status = "utf-8" if utf8_valid_head_tail(head, tail) else "invalid_utf8"
+    near_text: str | None = None
+    if need_near_text and encoding_status == "utf-8":
+        try:
+            near_text = head[:NEAR_HEAD_BYTES].decode("utf-8")
+        except UnicodeDecodeError:
+            near_text = None
+    return FileContentProbe(None, encoding_status, near_text)
 
 
 def _probe_small(

@@ -18,6 +18,12 @@ WORD_NGRAM_SIZE = 5
 CHAR_NGRAM_SIZE = 5
 MAX_FINGERPRINTS_PER_FILE = 512
 _FINGERPRINT_BAND_HEX_LEN = 4
+# Large-library caps (keep in sync with scan_pipeline_constants).
+_NEAR_LARGE_MAX_BUCKET_ITEMS = 200
+_NEAR_LARGE_MAX_BAND_FANOUT = 64
+_NEAR_LARGE_MAX_JACCARD_CHECKS = 800_000
+_NEAR_DEFAULT_MAX_BUCKET_ITEMS = 10_000
+_NEAR_DEFAULT_MAX_BAND_FANOUT = 512
 
 _EXTENSION_FAMILIES: dict[str, str] = {
     ".txt": "plain",
@@ -214,12 +220,79 @@ class _UnionFind:
             self._parent[root_right] = root_left
 
 
+def _collect_pairs_in_items(
+    items: Sequence[_PreparedFile],
+    *,
+    exact_group_by_file_id: Mapping[str, str],
+    threshold: float,
+    max_bucket_items: int,
+    max_band_fanout: int,
+    max_jaccard_checks: int | None,
+    checks_so_far: int,
+) -> tuple[list[NearDuplicatePair], int]:
+    if len(items) < 2:
+        return [], checks_so_far
+
+    bucket_items = list(items)
+    if len(bucket_items) > max_bucket_items:
+        bucket_items.sort(key=lambda item: item.input.file_id)
+        bucket_items = bucket_items[:max_bucket_items]
+
+    band_to_items: dict[str, list[_PreparedFile]] = defaultdict(list)
+    for item in bucket_items:
+        for band in item.bands:
+            band_list = band_to_items[band]
+            if len(band_list) < max_band_fanout:
+                band_list.append(item)
+
+    seen: set[tuple[str, str]] = set()
+    accepted: list[NearDuplicatePair] = []
+    for band_items in band_to_items.values():
+        unique_by_id = {item.input.file_id: item for item in band_items}
+        unique = sorted(unique_by_id.values(), key=lambda item: item.input.file_id)
+        if len(unique) < 2:
+            continue
+        for left_index, left in enumerate(unique):
+            for right in unique[left_index + 1 :]:
+                left_id = left.input.file_id
+                right_id = right.input.file_id
+                if left_id >= right_id:
+                    left_id, right_id = right_id, left_id
+                    left, right = right, left
+                pair_key = (left_id, right_id)
+                if pair_key in seen:
+                    continue
+                seen.add(pair_key)
+                if not length_ratio_ok(left.norm_len, right.norm_len):
+                    continue
+                checks_so_far += 1
+                if max_jaccard_checks is not None and checks_so_far > max_jaccard_checks:
+                    return accepted, checks_so_far
+                if _should_skip_pair(left, right, exact_group_by_file_id=exact_group_by_file_id):
+                    continue
+                score = jaccard_similarity(left.fingerprints, right.fingerprints)
+                if score < threshold:
+                    continue
+                accepted.append(
+                    NearDuplicatePair(
+                        left_file_id=left_id,
+                        right_file_id=right_id,
+                        similarity_score=score,
+                        shared_fingerprint_count=len(left.fingerprints & right.fingerprints),
+                        left_fingerprint_count=len(left.fingerprints),
+                        right_fingerprint_count=len(right.fingerprints),
+                    )
+                )
+    return accepted, checks_so_far
+
+
 def find_near_duplicate_groups(
     files: Sequence[NearDuplicateInput],
     *,
     exact_group_by_file_id: Mapping[str, str],
     near_batch_id: str,
     threshold: float = NEAR_DUP_THRESHOLD,
+    large_library: bool = False,
 ) -> NearDuplicateResult:
     prepared: list[_PreparedFile] = []
     skipped = 0
@@ -236,49 +309,51 @@ def find_near_duplicate_groups(
     for prepared_file in prepared:
         by_family_bucket[prepared_file.family][prepared_file.length_bucket].append(prepared_file)
 
+    max_bucket_items = (
+        _NEAR_LARGE_MAX_BUCKET_ITEMS if large_library else _NEAR_DEFAULT_MAX_BUCKET_ITEMS
+    )
+    max_band_fanout = (
+        _NEAR_LARGE_MAX_BAND_FANOUT if large_library else _NEAR_DEFAULT_MAX_BAND_FANOUT
+    )
+    max_jaccard_checks = _NEAR_LARGE_MAX_JACCARD_CHECKS if large_library else None
+    bucket_adjacency = 0 if large_library else 1
+
     candidate_pair_count = 0
     accepted_pairs: list[NearDuplicatePair] = []
+    checks_so_far = 0
 
     for family in sorted(by_family_bucket.keys()):
         buckets = by_family_bucket[family]
         bucket_indices = sorted(buckets.keys())
         for left_bucket in bucket_indices:
             for right_bucket in bucket_indices:
-                if abs(left_bucket - right_bucket) > 1:
+                if abs(left_bucket - right_bucket) > bucket_adjacency:
                     continue
-                left_items = buckets[left_bucket]
-                right_items = buckets[right_bucket]
-                for left in left_items:
-                    for right in right_items:
-                        if left.input.file_id >= right.input.file_id:
-                            continue
-                        if not length_ratio_ok(left.norm_len, right.norm_len):
-                            continue
-                        if not left.bands & right.bands:
-                            continue
-
-                        candidate_pair_count += 1
-                        if _should_skip_pair(
-                            left, right, exact_group_by_file_id=exact_group_by_file_id
-                        ):
-                            continue
-
-                        score = jaccard_similarity(left.fingerprints, right.fingerprints)
-                        if score < threshold:
-                            continue
-
-                        accepted_pairs.append(
-                            NearDuplicatePair(
-                                left_file_id=left.input.file_id,
-                                right_file_id=right.input.file_id,
-                                similarity_score=score,
-                                shared_fingerprint_count=len(
-                                    left.fingerprints & right.fingerprints
-                                ),
-                                left_fingerprint_count=len(left.fingerprints),
-                                right_fingerprint_count=len(right.fingerprints),
-                            )
-                        )
+                if left_bucket == right_bucket:
+                    bucket_items = buckets[left_bucket]
+                else:
+                    left_items = buckets[left_bucket]
+                    right_items = buckets[right_bucket]
+                    bucket_items = list(
+                        {item.input.file_id: item for item in (*left_items, *right_items)}.values()
+                    )
+                pairs, checks_so_far = _collect_pairs_in_items(
+                    bucket_items,
+                    exact_group_by_file_id=exact_group_by_file_id,
+                    threshold=threshold,
+                    max_bucket_items=max_bucket_items,
+                    max_band_fanout=max_band_fanout,
+                    max_jaccard_checks=max_jaccard_checks,
+                    checks_so_far=checks_so_far,
+                )
+                candidate_pair_count += len(pairs)
+                accepted_pairs.extend(pairs)
+                if max_jaccard_checks is not None and checks_so_far >= max_jaccard_checks:
+                    break
+            if max_jaccard_checks is not None and checks_so_far >= max_jaccard_checks:
+                break
+        if max_jaccard_checks is not None and checks_so_far >= max_jaccard_checks:
+            break
 
     bucket_map = {
         (family, bucket): items
