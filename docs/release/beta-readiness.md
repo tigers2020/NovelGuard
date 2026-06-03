@@ -37,7 +37,7 @@ Use `packaging/fixtures/library/` or a disposable copy. **Do not** beta-test des
 
 | Role | Name | Date | Notes |
 |------|------|------|-------|
-| Engineering | (automated) | 2026-06-03 | `verify_phase_completion` **7/7 PASS** (pytest 149, vitest 95); plan 047 + automation on `main` |
-| QA / operator | | | Fixture smoke + optional `package_windows.py` per packaging-smoke-checklist |
+| Engineering | (automated) | 2026-06-03 | Gate 7/7; e2e 29/29; `package_windows.py` + `smoke_packaged_ui --require-build` PASS (`1b41ace`) |
+| QA / operator | | | Manual matrix: launch exe + fixture flows in packaging-smoke-checklist |
 
 Template: [smoke-record-template.md](smoke-record-template.md)

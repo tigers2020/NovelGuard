@@ -9,14 +9,22 @@ parent_roadmap: docs/superpowers/roadmap/003-2026-06-02-platform-release-gate-ro
 
 **Position:** Track [003](./003-2026-06-02-platform-release-gate-roadmap.md) **closed** (PR-33..45). Engineering gate **7/7 PASS** on `main` 2026-06-03.
 
-## Remaining (operator / optional build)
+## Remaining (operator only)
 
-| Step | Owner | Artifact |
-|------|-------|----------|
-| Manual beta flows | Operator | [beta-readiness.md](../../release/beta-readiness.md) |
-| Fresh Windows package | Operator | `python scripts/package_windows.py` + [packaging-smoke-checklist.md](../../release/packaging-smoke-checklist.md) |
-| Push `main` | Engineering | `origin/main` includes plan 047 + automation governance |
-| Hermes worker | Engineering | `automation/` + [agent-automation.md](../../agent-automation.md) |
+| Step | Owner | Status |
+|------|-------|--------|
+| Manual beta flows (fixture library) | Operator | Pending — [beta-readiness.md](../../release/beta-readiness.md) |
+| Launch `dist/NovelGuard/NovelGuard.exe` on real desktop | Operator | Pending — [packaging-smoke-checklist.md](../../release/packaging-smoke-checklist.md) |
+
+## Engineering done (2026-06-03)
+
+| Step | Result |
+|------|--------|
+| `verify_phase_completion.py` | 7/7 PASS |
+| `package_windows.py` | PASS — `dist/NovelGuard/NovelGuard.exe`, manifest `gitCommit` 1b41ace |
+| `smoke_packaged_ui.py --require-build` | PASS |
+| `npm run test:e2e` | 29/29 PASS |
+| `origin/main` push | Done |
 
 ## Done in tree
 
