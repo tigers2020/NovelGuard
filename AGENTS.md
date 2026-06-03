@@ -116,13 +116,89 @@ Details: `.cursor/rules/20-persona-dialogue.mdc`, `persona/README.md`.
 | Purpose                          | Location                                                  |
 | -------------------------------- | --------------------------------------------------------- |
 | Design tokens & UX/UI guidelines | `DESIGN.md` (repo root)                                   |
-| Design specs (new)               | `docs/superpowers/specs/###-YYYY-MM-DD-<topic>-design.md` |
-| Implementation plans (new)       | `docs/superpowers/plans/###-YYYY-MM-DD-<topic>.md`        |
+| Design specs (new)               | `docs/superpowers/specs/` — see **Spec & plan file naming** below |
+| Implementation plans (new)       | `docs/superpowers/plans/` — see **Spec & plan file naming** below |
 | Workflow index                   | `docs/superpowers/README.md`                              |
 | Architecture & entry points      | `docs/current_architecture.md`, `docs/entry_points.md`    |
 | Historical research/plans        | `documents/` (read-only for new work)                     |
 | Session lessons                  | `documents/CURSOR_MEMO.md`                                |
 | Refactoring history              | `docs/archive/`                                           |
+
+### Spec & plan file naming
+
+**Required for all new specs, plans, and roadmaps.** Legacy docs are **grandfathered** — do not rename completed historical specs/plans only for naming conformity.
+
+**Rename is allowed when all of:**
+
+1. the spec/plan is **active** (not yet implemented or still canonical for the next PR),
+2. implementation has not started **or** all inbound links can be updated atomically,
+3. the document will be used as the **canonical source** for upcoming work,
+4. **all inbound links** are updated in the same commit.
+
+Use **directory-local** sequence numbers:
+
+| Directory | `NNN` rule |
+| --------- | ---------- |
+| `specs/` | highest existing spec number + 1 |
+| `plans/` | highest existing plan number + 1 |
+| `roadmap/` | highest existing roadmap number + 1 |
+
+Spec and plan numbers are **independent** — do not share or sync `NNN` across directories.
+
+#### Spec
+
+```text
+NNN-YYYY-MM-DD-<kind>-<layer>-<area>-<topic>-design.md
+```
+
+#### Plan
+
+```text
+NNN-YYYY-MM-DD-<kind>-<layer>-<area>-prNN-<topic>.md
+```
+
+`prNN` is **plan-only** (strongly recommended) — ties the plan to a PR slice without binding the spec.
+
+#### Roadmap
+
+```text
+NNN-YYYY-MM-DD-<area>-<topic>-roadmap.md
+```
+
+#### Taxonomy
+
+| Segment | Values |
+| ------- | ------ |
+| `<kind>` | `bugfix` \| `dev` \| `feature` \| `refactor` \| `docs` \| `infra` |
+| `<layer>` | `ui` \| `backend` \| `bridge` \| `domain` \| `fullstack` \| `infra` \| `docs` |
+| `<area>` | `shell` \| `scan` \| `duplicate` \| `move` \| `finalize` \| `quality` \| `apply` \| `session` \| `file-dock` \| `logs` \| `settings` \| `platform` \| `release` |
+| `<topic>` | kebab-case, specific; no status words |
+
+**Layer vs area:** `<layer>` = primary code layer touched. `<area>` = product/workflow region (matches UI inventory: App Shell, Scan, Duplicate, Move, etc.). Use `bridge` as **layer only** — not as `<area>`. For bridge contract work, pick the contract's product area (e.g. `session`, `file-dock`).
+
+When a slice spans multiple layers or areas, pick the **primary** one; note secondary scope in the spec/plan body, not the filename.
+
+#### Frontmatter (required on new specs/plans)
+
+```yaml
+risk: safe | destructive | breaking
+```
+
+Default `safe`. Use `destructive` for file move/delete or apply paths; `breaking` for bridge/DTO contract breaks.
+
+Only embed `destructive` or `breaking` in the **filename `<topic>`** when review must notice risk from the name alone (e.g. `apply-destructive-preview-guard`, `bridge-contract-breaking-query-file-rows`).
+
+#### Do not put in filenames
+
+`draft`, `approved`, `done`, priority, assignee, parent spec paths, LOCK ids, `TEST_ALLOWED`, or other volatile metadata — use frontmatter and body.
+
+#### Examples
+
+- Spec: `018-2026-06-02-feature-ui-shell-work-mode-tab-transition-design.md`
+- Plan: `024-2026-06-02-feature-ui-shell-pr31-work-mode-tab-transition.md`
+- Spec: `020-2026-06-02-bugfix-backend-session-query-rows-pagination-design.md`
+- Spec (risk visible): `030-2026-06-02-feature-backend-apply-destructive-preview-guard-design.md`
+- Roadmap: `003-2026-06-02-platform-release-roadmap.md`
 
 
 ---
