@@ -27,6 +27,12 @@ python scripts/hermes_enqueue.py automation/examples/hermes-job.json
 python scripts/automation_worker.py --once
 ```
 
+Quick beta (no full pytest):
+
+```powershell
+python scripts/beta_gate.py
+```
+
 Worker refuses dirty working tree — commit/stash WIP on feature branch first.
 
 ## Layout

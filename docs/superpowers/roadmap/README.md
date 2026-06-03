@@ -27,6 +27,7 @@ Roadmap entries are **proposed** until a matching spec is approved. Do not treat
 | [002-2026-06-02-pr26-pr30-platform-polish-roadmap.md](./002-2026-06-02-pr26-pr30-platform-polish-roadmap.md) | **Closed track:** PR-26..32 **Done** |
 | [003-2026-06-02-platform-release-gate-roadmap.md](./003-2026-06-02-platform-release-gate-roadmap.md) | **Closed:** PR-33..45 — verify 7/7 on main (2026-06-03) |
 | [004-2026-06-03-post-release-beta-roadmap.md](./004-2026-06-03-post-release-beta-roadmap.md) | **Closed:** automated beta gate (2026-06-03) |
+| [005-2026-06-03-ops-automation-roadmap.md](./005-2026-06-03-ops-automation-roadmap.md) | **Active:** Hermes worker, `beta_gate.py`, verify 9/9 |
 
 ## Adding a roadmap file
 

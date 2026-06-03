@@ -1,6 +1,6 @@
 # Work Layout Pane Hierarchy (Minimal) — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Spec:** [029 pane hierarchy minimal](../specs/029-2026-06-03-feature-ui-layout-pane-hierarchy-minimal-design.md) (**approved** 2026-06-03)
 
@@ -35,7 +35,7 @@
 - Create: `web/src/components/layout/shellFileDockModePolicy.ts`
 - Modify: `web/src/bridge/bridgeParity.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add to `web/src/bridge/bridgeParity.test.ts`:
 
@@ -54,13 +54,13 @@ describe("shouldCollapseFileDockForWorkMode", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd web && npm run test -- src/bridge/bridgeParity.test.ts -t shouldCollapseFileDockForWorkMode`
 
 Expected: FAIL — module not found
 
-- [ ] **Step 3: Implement policy**
+- [x] **Step 3: Implement policy**
 
 Create `web/src/components/layout/shellFileDockModePolicy.ts`:
 
@@ -73,7 +73,7 @@ export function shouldCollapseFileDockForWorkMode(mode: WorkMode): boolean {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd web && npm run test -- src/bridge/bridgeParity.test.ts -t shouldCollapseFileDockForWorkMode`
 
@@ -86,7 +86,7 @@ Expected: PASS
 **Files:**
 - Modify: `web/src/app/App.tsx`
 
-- [ ] **Step 1: Add effect on activeMode**
+- [x] **Step 1: Add effect on activeMode**
 
 Import `shouldCollapseFileDockForWorkMode` and add after state declarations in `AppContent`:
 
@@ -111,7 +111,7 @@ Notes:
 - Does **not** re-run when user manually re-expands on Resolve (mode unchanged).
 - Persists `expanded: false` — resets Scan expanded preference (LOCK-LAYOUT-2 MVP).
 
-- [ ] **Step 2: Manual smoke**
+- [x] **Step 2: Manual smoke**
 
 Run: `cd web && npm run dev:e2e`
 
@@ -126,7 +126,7 @@ Run: `cd web && npm run dev:e2e`
 - Create: `web/src/features/work/resolve/ResolveGridToolbar.tsx`
 - Modify: `web/src/features/work/ResolveAndOrganizeWorkspace.tsx`
 
-- [ ] **Step 1: Create toolbar component**
+- [x] **Step 1: Create toolbar component**
 
 Extract hero JSX (lines ~302–368) into `ResolveGridToolbar` with props:
 
@@ -153,7 +153,7 @@ Layout classes (compact, 1–2 rows):
 - Row 2: `flex flex-wrap items-center gap-2` — `data-testid="resolve-type-filter"` pills + flex-1 search input
 - Preserve all existing `data-testid`s from hero block
 
-- [ ] **Step 2: Rewire ResolveAndOrganizeWorkspace**
+- [x] **Step 2: Rewire ResolveAndOrganizeWorkspace**
 
 Remove the top `<div className="shrink-0 border-b border-outline p-4">` hero block entirely.
 
@@ -176,7 +176,7 @@ Structure:
 
 Ensure `VirtualizedReviewGrid` parent has `min-h-0 flex-1` so grid receives remaining height.
 
-- [ ] **Step 3: Lint**
+- [x] **Step 3: Lint**
 
 Run: `cd web && npm run lint`
 
@@ -189,7 +189,7 @@ Expected: 0 errors
 **Files:**
 - Modify: `web/e2e/smoke.spec.ts`
 
-- [ ] **Step 1: Add dock collapse assertion on Resolve entry**
+- [x] **Step 1: Add dock collapse assertion on Resolve entry**
 
 In `openResolveWorkspace` or a dedicated test, after clicking `work-mode-tab-resolve`:
 
@@ -198,7 +198,7 @@ await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", 
 await expect(page.getByTestId("resolve-review-grid")).toBeVisible({ timeout: 15_000 });
 ```
 
-- [ ] **Step 2: Add Scan return MVP test**
+- [x] **Step 2: Add Scan return MVP test**
 
 New test (or extend mode tabs test):
 
@@ -217,7 +217,7 @@ test("PR-46 dock collapses on Resolve entry; Scan return stays collapsed (MVP)",
 
 Adjust PR label in test name to match your PR id if different.
 
-- [ ] **Step 3: Run e2e**
+- [x] **Step 3: Run e2e**
 
 Run: `cd web && npm run test:e2e -- --grep "dock collapses"`
 
@@ -227,19 +227,19 @@ Expected: PASS
 
 ### Task 5: Final verification
 
-- [ ] **Step 1: Unit tests**
+- [x] **Step 1: Unit tests**
 
 Run: `cd web && npm run test`
 
 Expected: all pass
 
-- [ ] **Step 2: Lint**
+- [x] **Step 2: Lint**
 
 Run: `cd web && npm run lint`
 
 Expected: 0 errors
 
-- [ ] **Step 3: Spec acceptance checklist**
+- [x] **Step 3: Spec acceptance checklist**
 
 Verify against [029](../specs/029-2026-06-03-feature-ui-layout-pane-hierarchy-minimal-design.md) acceptance criteria — all boxes checked.
 
