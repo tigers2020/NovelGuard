@@ -10,7 +10,9 @@ from app.apply_resolved_actions import ApplyResolvedActionsUseCase
 from app.bridge_api import BridgeApi
 from app.build_preview_plan import BuildPreviewPlanUseCase
 from app.build_quality_repair_plan import BuildQualityRepairPlanUseCase
+from app.move_preview_facade import MovePreviewFacade
 from app.preview_apply_guard import PreviewApplyGuard
+from app.quality_repair_facade import QualityRepairFacade
 from app.quality_repair_guard import QualityRepairGuard
 from app.runtime_paths import (
     LibraryRuntimePaths,
@@ -156,6 +158,10 @@ def create_bridge_api(
         audit,
         repair_fs,
     )
+    move_preview_facade = MovePreviewFacade(resolved_session, move_guard, apply_use_case)
+    quality_repair_facade = QualityRepairFacade(
+        resolved_session, repair_guard, repair_apply_use_case
+    )
     attach_session_log_handler()
     return BridgeApi(
         resolved_session,
@@ -165,4 +171,6 @@ def create_bridge_api(
         apply_use_case=apply_use_case,
         repair_preview_use_case=repair_preview_use_case,
         repair_apply_use_case=repair_apply_use_case,
+        move_preview_facade=move_preview_facade,
+        quality_repair_facade=quality_repair_facade,
     )

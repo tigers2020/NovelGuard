@@ -155,6 +155,7 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
       callBridge(() => call(api, "cancel_finalize").then(() => undefined), {
         method: "cancel_finalize",
       }),
+    subscribeSnapshotInvalidation: () => () => {},
   };
 }
 

@@ -27,6 +27,7 @@ import type { AppInfo } from "../types/appInfo";
 import type { FileRowsPage, FileRowsQuery } from "../types/fileRows";
 import type { LogEntriesPage, LogEntriesQuery, LogsArtifactsResponse } from "../types/logs";
 import type { AppSettingKey, AppSettingResponse, AppSettingValue } from "../types/settings";
+import type { SnapshotInvalidationEvent } from "../types/snapshotInvalidation";
 
 export interface NovelGuardBridge {
   getAppInfo(): Promise<AppInfo>;
@@ -59,4 +60,8 @@ export interface NovelGuardBridge {
   runFinalizeVerification(request: RunFinalizeRequest): Promise<FinalizeResult>;
   getFinalizeReport(reportId: string): Promise<FinalizeReportDocument>;
   cancelFinalize(): Promise<void>;
+  /** Mock emits events; production bridge may no-op until host push exists. */
+  subscribeSnapshotInvalidation(
+    listener: (event: SnapshotInvalidationEvent) => void,
+  ): () => void;
 }

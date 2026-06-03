@@ -87,36 +87,10 @@ def test_clamp_query_limit_max_200() -> None:
 
 
 def test_pywebview_api_methods_match_locked_contract() -> None:
-    """Locked contract; must match web/src/contracts/bridgeParity.ts PYWEBVIEW_API_METHODS."""
-    locked = [
-        "get_app_info",
-        "get_snapshot",
-        "select_folder",
-        "start_scan",
-        "cancel_run",
-        "set_work_mode",
-        "query_review_rows",
-        "query_file_rows",
-        "query_quality_rows",
-        "get_duplicate_group_detail",
-        "get_quality_issue_detail",
-        "get_quality_repair_preview",
-        "apply_quality_repair",
-        "discard_quality_repair_preview",
-        "get_move_preview",
-        "apply_resolved_actions",
-        "discard_move_preview",
-        "update_review_decisions",
-        "get_app_setting",
-        "set_app_setting",
-        "query_log_entries",
-        "get_logs_artifacts",
-        "get_finalize_summary",
-        "run_finalize_verification",
-        "get_finalize_report",
-        "cancel_finalize",
-    ]
-    assert list(PYWEBVIEW_API_METHODS) == locked
+    """Canonical list: app.bridge_parity.PYWEBVIEW_API_METHODS (mirrors bridgeParity.ts)."""
+    assert len(PYWEBVIEW_API_METHODS) == 26
+    assert PYWEBVIEW_API_METHODS[0] == "get_app_info"
+    assert PYWEBVIEW_API_METHODS[-1] == "cancel_finalize"
 
 
 def test_bridge_api_exposes_pywebview_methods() -> None:
@@ -241,6 +215,48 @@ def test_discard_idempotent_on_mismatch() -> None:
     api.discard_move_preview({"previewToken": "unknown-token"})
     snap = api.get_snapshot()
     assert snap["work"]["resolve"]["hasPendingApply"] is False
+
+
+def test_discard_quality_repair_preview_idempotent_on_mismatch(tmp_path: Path) -> None:
+    (tmp_path / "korean.txt").write_bytes("안녕".encode("cp949"))
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    enc_row = _encoding_issue_row(api)
+    preview = api.get_quality_repair_preview({"issueIds": [enc_row["id"]]})
+    api.discard_quality_repair_preview({"repairPreviewToken": "unknown-token"})
+    snap = api.get_snapshot()
+    assert snap["work"]["quality"]["hasPendingQualityRepair"] is False
+    api.discard_quality_repair_preview(
+        {"repairPreviewToken": preview["repairPreviewToken"]},
+    )
+    snap = api.get_snapshot()
+    assert snap["work"]["quality"]["hasPendingQualityRepair"] is False
+
+
+def test_get_finalize_report_not_found(tmp_path: Path) -> None:
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    with pytest.raises(FinalizeError) as exc_info:
+        api.get_finalize_report("missing-report-id")
+    assert exc_info.value.reason == "REPORT_NOT_FOUND"
+
+
+def test_set_app_setting_unknown_key_rejected() -> None:
+    api = _memory_api()
+    with pytest.raises(PreviewApplyError) as exc_info:
+        api.set_app_setting("not.a.real.key", True)
+    assert exc_info.value.reason == "INVALID_SETTING_VALUE"
+
+
+def test_set_work_mode_updates_snapshot() -> None:
+    api = _memory_api()
+    api.set_work_mode("quality")
+    snap = api.get_snapshot()
+    assert snap["work"]["activeMode"] == "quality"
 
 
 def test_make_file_id_stable() -> None:

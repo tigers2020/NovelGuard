@@ -40,7 +40,13 @@ export class BridgeCallError extends Error {
     | RepairApplyErrorCode
     | RepairPreviewErrorCode
     | QualityQueryErrorCode
-    | FileRowQueryErrorCode;
+    | FileRowQueryErrorCode
+    | "NO_LIBRARY"
+    | "LIBRARY_BUSY"
+    | "FINALIZE_NOT_CONFIGURED"
+    | "INVALID_REQUEST"
+    | "REPORT_NOT_FOUND"
+    | "INVALID_SETTING_VALUE";
   readonly details?: ApplyFailedDetails;
 
   constructor(
@@ -53,7 +59,13 @@ export class BridgeCallError extends Error {
         | RepairApplyErrorCode
         | RepairPreviewErrorCode
         | QualityQueryErrorCode
-    | FileRowQueryErrorCode;
+        | FileRowQueryErrorCode
+        | "NO_LIBRARY"
+        | "LIBRARY_BUSY"
+        | "FINALIZE_NOT_CONFIGURED"
+        | "INVALID_REQUEST"
+        | "REPORT_NOT_FOUND"
+        | "INVALID_SETTING_VALUE";
       details?: ApplyFailedDetails;
       cause?: unknown;
     },
