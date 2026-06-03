@@ -42,7 +42,11 @@ def probe_file(
     if is_large_file(size_bytes):
         return _probe_large(path, size_bytes, need_hash=need_hash, need_near_text=need_near_text)
 
-    if not need_hash and not need_near_text and size_bytes >= SCAN_PROBE_ENCODING_ONLY_SAMPLE_MIN_BYTES:
+    if (
+        not need_hash
+        and not need_near_text
+        and size_bytes >= SCAN_PROBE_ENCODING_ONLY_SAMPLE_MIN_BYTES
+    ):
         return _probe_sample_encoding(
             path,
             size_bytes,
