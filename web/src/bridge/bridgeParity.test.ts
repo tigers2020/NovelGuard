@@ -9,9 +9,10 @@ import {
 } from "./bridgeErrors";
 import { resolveBridge, resolveBridgeAsync } from "./bridgeFactory";
 import { PYWEBVIEW_READY_EVENT } from "./waitForPywebviewApi";
-import { mockBridge } from "./mockBridge";
+import { bumpLibraryRevisionForTest, mockBridge } from "./mockBridge";
 import { textSortKey } from "./mockFileRows";
 import { getAllReviewRows, sortQualityRows } from "./mockData";
+import { reviewRowGroupId } from "../types/review";
 import { createPywebviewBridge } from "./pywebviewBridge";
 import {
   NOVEL_GUARD_BRIDGE_METHODS,
@@ -224,6 +225,40 @@ describe("bridge parity", () => {
     expect(preview.selectionFingerprint).toMatch(/^[a-f0-9]{64}$/);
   });
 
+  it("apply after library revision bump rejects STALE_PREVIEW", async () => {
+    const sel = { type: "explicit_rows" as const, rowIds: ["row-1"] };
+    const preview = await mockBridge.getMovePreview(sel);
+    bumpLibraryRevisionForTest({ clearPending: false });
+    await expect(
+      mockBridge.applyResolvedActions({ selection: sel, previewToken: preview.previewToken }),
+    ).rejects.toMatchObject({ reason: "STALE_PREVIEW" });
+    const snap = await mockBridge.getSnapshot();
+    expect(snap.work.resolve.hasPendingApply).toBe(false);
+  });
+
+  it("apply with changed selection rejects SELECTION_CHANGED", async () => {
+    const preview = await mockBridge.getMovePreview({
+      type: "explicit_rows",
+      rowIds: ["row-1"],
+    });
+    await expect(
+      mockBridge.applyResolvedActions({
+        selection: { type: "explicit_rows", rowIds: ["row-2"] },
+        previewToken: preview.previewToken,
+      }),
+    ).rejects.toMatchObject({ reason: "SELECTION_CHANGED" });
+    const snap = await mockBridge.getSnapshot();
+    expect(snap.work.resolve.hasPendingApply).toBe(false);
+  });
+
+  it("setWorkMode rejects finalize mode", async () => {
+    await expect(mockBridge.setWorkMode("finalize")).rejects.toMatchObject({
+      reason: "INVALID_WORK_MODE",
+    });
+    const snap = await mockBridge.getSnapshot();
+    expect(snap.work.activeMode).toBe("resolve");
+  });
+
   it("getMovePreview executable rows are move_duplicate only", async () => {
     const moveIds = getAllReviewRows()
       .filter((row) => row.rowKind === "file" && row.proposedAction === "move_duplicate")
@@ -374,6 +409,66 @@ describe("snapshot invalidation", () => {
     vi.advanceTimersByTime(0);
     expect(refreshes).toHaveLength(1);
     scheduler.dispose();
+  });
+
+  it("mockBridge getDuplicateGroupDetail returns ok for exact review row", async () => {
+    const row = getAllReviewRows().find((candidate) => candidate.id === "row-2");
+    expect(row?.type).toBe("exact");
+    const groupId = reviewRowGroupId(row!);
+    expect(groupId).toBe("group-02");
+    if (!groupId) {
+      throw new Error("expected exact review row to resolve a group id");
+    }
+
+    const detail = await mockBridge.getDuplicateGroupDetail(groupId);
+    expect(detail.status).toBe("ok");
+    if (detail.status === "ok" && detail.type === "exact") {
+      expect(detail.type).toBe("exact");
+      expect(detail.members.length).toBeGreaterThan(0);
+      expect(detail.movePlan.targetFolder).toBeTruthy();
+    }
+  });
+
+  it("mockBridge getDuplicateGroupDetail returns not_found for unknown group", async () => {
+    const detail = await mockBridge.getDuplicateGroupDetail("group-unknown-999");
+    expect(detail.status).toBe("not_found");
+    expect(detail.members).toEqual([]);
+  });
+
+  it("mockBridge getDuplicateGroupDetail near row yields ok detail without move plan when typed near", async () => {
+    const row = getAllReviewRows().find((candidate) => candidate.type === "near");
+    expect(row).toBeDefined();
+    const groupId = reviewRowGroupId(row!);
+    expect(groupId).toBeTruthy();
+
+    const detail = await mockBridge.getDuplicateGroupDetail(groupId!);
+    expect(detail.status).toBe("ok");
+    if (detail.status === "ok" && detail.type === "near") {
+      expect(detail).not.toHaveProperty("movePlan");
+      expect(detail.evidence.matchKind).toBe("near_ngram_v1");
+    }
+  });
+
+  it("mockBridge getFinalizeSummary returns summary shape", async () => {
+    const summary = await mockBridge.getFinalizeSummary();
+    expect(summary).toHaveProperty("blockers");
+    expect(summary).toHaveProperty("warnings");
+    expect(Array.isArray(summary.blockers)).toBe(true);
+    expect(Array.isArray(summary.warnings)).toBe(true);
+  });
+
+  it("mockBridge runFinalizeVerification returns report id and getFinalizeReport round-trips", async () => {
+    const result = await mockBridge.runFinalizeVerification({ includeCleanup: false });
+    expect(result.reportId).toBeTruthy();
+    expect(["complete", "complete_with_warnings", "blocked"]).toContain(result.status);
+
+    const report = await mockBridge.getFinalizeReport(result.reportId);
+    expect(report.reportId).toBe(result.reportId);
+    expect(report.summary).toBeDefined();
+  });
+
+  it("mockBridge getFinalizeReport rejects unknown report id", async () => {
+    await expect(mockBridge.getFinalizeReport("missing-report-id")).rejects.toThrow();
   });
 
   it("mockBridge subscribe emits and unsubscribe stops delivery", async () => {

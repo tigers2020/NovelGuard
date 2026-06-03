@@ -9,9 +9,14 @@ import type {
 const NOT_FOUND_MESSAGE = "Group not found. Refresh the review list.";
 
 function fileIdFromRowId(rowId: string): string | null {
-  if (!rowId.startsWith("file:")) return null;
-  const parts = rowId.split(":");
-  return parts.length >= 3 ? parts[2] : null;
+  if (rowId.startsWith("file:")) {
+    const parts = rowId.split(":");
+    return parts.length >= 3 ? parts[2] : null;
+  }
+  if (rowId.startsWith("row-")) {
+    return rowId;
+  }
+  return null;
 }
 
 function indexQualityByPath(rows: QualityRow[]): Map<string, QualityRow[]> {
@@ -23,6 +28,30 @@ function indexQualityByPath(rows: QualityRow[]): Map<string, QualityRow[]> {
     byPath.set(row.path, list);
   }
   return byPath;
+}
+
+function groupDetailType(
+  fileRows: ReviewRow[],
+  header: ReviewRow | undefined,
+): "exact" | "near" | "relation" {
+  const types = new Set(
+    fileRows
+      .map((row) => row.type)
+      .filter((type): type is "exact" | "near" | "relation" => type !== "move_only"),
+  );
+  if (types.size === 1) {
+    return [...types][0];
+  }
+  if (types.has("exact")) {
+    return "exact";
+  }
+  if (types.has("near")) {
+    return "near";
+  }
+  if (types.has("relation")) {
+    return "relation";
+  }
+  return header?.type === "near" || header?.type === "relation" ? header.type : "exact";
 }
 
 function memberIntegrity(path: string, qualityByPath: Map<string, QualityRow[]>): MemberIntegrity {
@@ -99,15 +128,51 @@ export function buildMockDuplicateGroupDetail(
   });
 
   const keeper = members.find((m) => m.isKeeper) ?? members[0];
+  const rowType = groupDetailType(fileRows, header);
+  const groupStatus = header?.status ?? keeper.status;
 
-  return {
-    status: "ok",
+  const base = {
+    status: "ok" as const,
     groupId: gid,
-    type: "exact",
-    groupStatus: header?.status ?? keeper.status,
+    groupStatus,
     keeperFileId: keeper.fileId,
     keeperLabel: keeper.name,
     members,
+  };
+
+  if (rowType === "near") {
+    return {
+      ...base,
+      type: "near",
+      evidence: {
+        matchKind: "near_ngram_v1",
+        maxSimilarity: 0.91,
+        threshold: 0.85,
+        memberCount: members.length,
+        comparisonMethod: "mock-ngram",
+      },
+    };
+  }
+
+  if (rowType === "relation") {
+    return {
+      ...base,
+      type: "relation",
+      evidence: {
+        matchKind: "relation_filename_v1",
+        relationKind: header?.relationKind ?? "same_title_series",
+        confidenceLabel: header?.confidenceLabel ?? "medium",
+        normalizedNames: [keeper.name],
+        matchedTokens: ["title"],
+        differingTokens: ["chapter"],
+        memberCount: members.length,
+      },
+    };
+  }
+
+  return {
+    ...base,
+    type: "exact",
     evidence: {
       matchKind: "exact_content_hash",
       contentSha256: `mock-${gid}`,
@@ -116,7 +181,7 @@ export function buildMockDuplicateGroupDetail(
     movePlan: {
       keeperAction: "keep",
       duplicateAction: "move_duplicate",
-      targetFolder: "duplicate/",
+      targetFolder: keeper.targetFolder ?? "duplicate/",
     },
   };
 }

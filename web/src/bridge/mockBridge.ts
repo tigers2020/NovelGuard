@@ -187,9 +187,11 @@ function clearPendingPreview(): void {
   state.hasPendingApply = false;
 }
 
-export function bumpLibraryRevisionForTest(): void {
+export function bumpLibraryRevisionForTest(options?: { clearPending?: boolean }): void {
   libraryRevision += 1;
-  clearPendingPreview();
+  if (options?.clearPending !== false) {
+    clearPendingPreview();
+  }
   emitSnapshotInvalidation("libraryRevision", { libraryRevision });
 }
 
@@ -469,7 +471,15 @@ export const mockBridge: NovelGuardBridge = {
   },
 
   async setWorkMode(mode) {
-    state.activeMode = mode;
+    const normalizedMode = String(mode);
+    if (!["scan", "resolve", "quality"].includes(normalizedMode)) {
+      throw new BridgeCallError("Bridge call rejected: INVALID_WORK_MODE", {
+        code: "rejected",
+        method: "set_work_mode",
+        reason: "INVALID_WORK_MODE",
+      });
+    }
+    state.activeMode = normalizedMode as WorkMode;
   },
 
   async queryReviewRows(query) {

@@ -32,6 +32,7 @@ async function selectExecutableMoveRow(page: import("@playwright/test").Page) {
   await expect(row).toBeVisible({ timeout: 15_000 });
   await row.scrollIntoViewIfNeeded();
   await row.click();
+  await page.getByTestId("resolve-row-check-row-2").check();
 }
 
 async function runApplyPreview(page: import("@playwright/test").Page) {
@@ -67,12 +68,11 @@ test.describe("NovelGuard smoke", () => {
 
   test("PR-31 rapid work mode tabs keep highlight and panel in sync", async ({ page }) => {
     await page.goto("/");
-    const modes = ["scan", "resolve", "quality", "finalize"] as const;
+    const modes = ["scan", "resolve", "quality"] as const;
     const panelByMode = {
       scan: page.getByRole("heading", { name: "라이브러리 인덱싱" }),
       resolve: page.getByTestId("resolve-workspace"),
       quality: page.getByTestId("quality-workspace"),
-      finalize: page.getByTestId("finalize-workspace"),
     };
 
     for (let i = 0; i < 10; i += 1) {
