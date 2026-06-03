@@ -24,6 +24,11 @@ _NEAR_LARGE_MAX_BAND_FANOUT = 64
 _NEAR_LARGE_MAX_JACCARD_CHECKS = 800_000
 _NEAR_DEFAULT_MAX_BUCKET_ITEMS = 10_000
 _NEAR_DEFAULT_MAX_BAND_FANOUT = 512
+_NEAR_MEDIUM_LIBRARY_MIN_ELIGIBLE = 500
+_NEAR_LARGE_LIBRARY_MIN_ELIGIBLE = 3_000
+_NEAR_MEDIUM_MAX_BUCKET_ITEMS = 500
+_NEAR_MEDIUM_MAX_BAND_FANOUT = 96
+_NEAR_MEDIUM_MAX_JACCARD_CHECKS = 250_000
 
 _EXTENSION_FAMILIES: dict[str, str] = {
     ".txt": "plain",
@@ -130,10 +135,10 @@ def fingerprint_set(normalized: str) -> frozenset[str]:
     else:
         return frozenset()
 
-    unique = sorted({_fingerprint_token(gram) for gram in grams})
-    if len(unique) > MAX_FINGERPRINTS_PER_FILE:
-        unique = unique[:MAX_FINGERPRINTS_PER_FILE]
-    return frozenset(unique)
+    if len(grams) > MAX_FINGERPRINTS_PER_FILE:
+        step = len(grams) // MAX_FINGERPRINTS_PER_FILE + 1
+        grams = grams[::step][:MAX_FINGERPRINTS_PER_FILE]
+    return frozenset(_fingerprint_token(gram) for gram in grams)
 
 
 def jaccard_similarity(left: frozenset[str], right: frozenset[str]) -> float:
@@ -203,6 +208,34 @@ def _prepare_file(item: NearDuplicateInput) -> _PreparedFile | None:
     )
 
 
+def _near_dup_limits(
+    eligible_count: int,
+    *,
+    large_library: bool,
+) -> tuple[int, int, int | None, int]:
+    """Scale bucket/fanout/check caps with library size (O(n²) guard)."""
+    if large_library or eligible_count >= _NEAR_LARGE_LIBRARY_MIN_ELIGIBLE:
+        return (
+            _NEAR_LARGE_MAX_BUCKET_ITEMS,
+            _NEAR_LARGE_MAX_BAND_FANOUT,
+            _NEAR_LARGE_MAX_JACCARD_CHECKS,
+            0,
+        )
+    if eligible_count >= _NEAR_MEDIUM_LIBRARY_MIN_ELIGIBLE:
+        return (
+            _NEAR_MEDIUM_MAX_BUCKET_ITEMS,
+            _NEAR_MEDIUM_MAX_BAND_FANOUT,
+            _NEAR_MEDIUM_MAX_JACCARD_CHECKS,
+            0,
+        )
+    return (
+        _NEAR_DEFAULT_MAX_BUCKET_ITEMS,
+        _NEAR_DEFAULT_MAX_BAND_FANOUT,
+        None,
+        1,
+    )
+
+
 class _UnionFind:
     def __init__(self, items: Sequence[str]) -> None:
         self._parent = {item: item for item in items}
@@ -238,51 +271,58 @@ def _collect_pairs_in_items(
         bucket_items.sort(key=lambda item: item.input.file_id)
         bucket_items = bucket_items[:max_bucket_items]
 
-    band_to_items: dict[str, list[_PreparedFile]] = defaultdict(list)
+    # Inverted index on fingerprints: O(n * fanout) candidates, not O(|band|²) per band.
+    fp_to_items: dict[str, list[_PreparedFile]] = defaultdict(list)
     for item in bucket_items:
-        for band in item.bands:
-            band_list = band_to_items[band]
-            if len(band_list) < max_band_fanout:
-                band_list.append(item)
+        for fp in item.fingerprints:
+            fp_list = fp_to_items[fp]
+            if len(fp_list) < max_band_fanout:
+                fp_list.append(item)
 
+    max_candidates_per_file = max(max_band_fanout * 3, 64)
     seen: set[tuple[str, str]] = set()
     accepted: list[NearDuplicatePair] = []
-    for band_items in band_to_items.values():
-        unique_by_id = {item.input.file_id: item for item in band_items}
-        unique = sorted(unique_by_id.values(), key=lambda item: item.input.file_id)
-        if len(unique) < 2:
-            continue
-        for left_index, left in enumerate(unique):
-            for right in unique[left_index + 1 :]:
-                left_id = left.input.file_id
-                right_id = right.input.file_id
-                if left_id >= right_id:
-                    left_id, right_id = right_id, left_id
-                    left, right = right, left
-                pair_key = (left_id, right_id)
-                if pair_key in seen:
+    for left in sorted(bucket_items, key=lambda item: item.input.file_id):
+        left_id = left.input.file_id
+        candidates: dict[str, _PreparedFile] = {}
+        for fp in left.fingerprints:
+            for other in fp_to_items.get(fp, ()):
+                right_id = other.input.file_id
+                if right_id <= left_id:
                     continue
-                seen.add(pair_key)
-                if not length_ratio_ok(left.norm_len, right.norm_len):
-                    continue
-                checks_so_far += 1
-                if max_jaccard_checks is not None and checks_so_far > max_jaccard_checks:
-                    return accepted, checks_so_far
-                if _should_skip_pair(left, right, exact_group_by_file_id=exact_group_by_file_id):
-                    continue
-                score = jaccard_similarity(left.fingerprints, right.fingerprints)
-                if score < threshold:
-                    continue
-                accepted.append(
-                    NearDuplicatePair(
-                        left_file_id=left_id,
-                        right_file_id=right_id,
-                        similarity_score=score,
-                        shared_fingerprint_count=len(left.fingerprints & right.fingerprints),
-                        left_fingerprint_count=len(left.fingerprints),
-                        right_fingerprint_count=len(right.fingerprints),
-                    )
+                if right_id not in candidates:
+                    if len(candidates) >= max_candidates_per_file:
+                        break
+                    candidates[right_id] = other
+            if len(candidates) >= max_candidates_per_file:
+                break
+
+        for right in candidates.values():
+            right_id = right.input.file_id
+            pair_key = (left_id, right_id)
+            if pair_key in seen:
+                continue
+            seen.add(pair_key)
+            if not length_ratio_ok(left.norm_len, right.norm_len):
+                continue
+            checks_so_far += 1
+            if max_jaccard_checks is not None and checks_so_far > max_jaccard_checks:
+                return accepted, checks_so_far
+            if _should_skip_pair(left, right, exact_group_by_file_id=exact_group_by_file_id):
+                continue
+            score = jaccard_similarity(left.fingerprints, right.fingerprints)
+            if score < threshold:
+                continue
+            accepted.append(
+                NearDuplicatePair(
+                    left_file_id=left_id,
+                    right_file_id=right_id,
+                    similarity_score=score,
+                    shared_fingerprint_count=len(left.fingerprints & right.fingerprints),
+                    left_fingerprint_count=len(left.fingerprints),
+                    right_fingerprint_count=len(right.fingerprints),
                 )
+            )
     return accepted, checks_so_far
 
 
@@ -309,14 +349,10 @@ def find_near_duplicate_groups(
     for prepared_file in prepared:
         by_family_bucket[prepared_file.family][prepared_file.length_bucket].append(prepared_file)
 
-    max_bucket_items = (
-        _NEAR_LARGE_MAX_BUCKET_ITEMS if large_library else _NEAR_DEFAULT_MAX_BUCKET_ITEMS
+    max_bucket_items, max_band_fanout, max_jaccard_checks, bucket_adjacency = _near_dup_limits(
+        len(prepared),
+        large_library=large_library,
     )
-    max_band_fanout = (
-        _NEAR_LARGE_MAX_BAND_FANOUT if large_library else _NEAR_DEFAULT_MAX_BAND_FANOUT
-    )
-    max_jaccard_checks = _NEAR_LARGE_MAX_JACCARD_CHECKS if large_library else None
-    bucket_adjacency = 0 if large_library else 1
 
     candidate_pair_count = 0
     accepted_pairs: list[NearDuplicatePair] = []
@@ -374,15 +410,14 @@ def find_near_duplicate_groups(
     component_lists = [sorted(members) for members in components.values() if len(members) >= 2]
     component_lists.sort(key=lambda members: members[0])
 
+    pairs_by_root: dict[str, list[NearDuplicatePair]] = defaultdict(list)
+    for pair in accepted_pairs:
+        pairs_by_root[union.find(pair.left_file_id)].append(pair)
+
     groups: list[NearDuplicateGroup] = []
     for cluster_index, member_ids in enumerate(component_lists):
-        member_set = set(member_ids)
-        cluster_pairs: list[NearDuplicatePair] = []
-        max_similarity = 0.0
-        for pair in accepted_pairs:
-            if pair.left_file_id in member_set and pair.right_file_id in member_set:
-                cluster_pairs.append(pair)
-                max_similarity = max(max_similarity, pair.similarity_score)
+        cluster_pairs = pairs_by_root.get(union.find(member_ids[0]), [])
+        max_similarity = max((pair.similarity_score for pair in cluster_pairs), default=0.0)
 
         group_id = f"near:{near_batch_id}:{cluster_index}"
         groups.append(

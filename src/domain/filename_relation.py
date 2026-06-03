@@ -322,15 +322,13 @@ def _same_parent_directory(items: Sequence[_PreparedFile]) -> bool:
 
 
 def _shared_non_generic_token(items: Sequence[_PreparedFile]) -> bool:
-    long_tokens: set[str] = set()
+    counts: dict[str, int] = {}
     for item in items:
         for token in item.parse.non_generic_tokens:
             if len(token) >= MIN_NON_GENERIC_TOKEN_LEN:
-                long_tokens.add(token)
-    for token in long_tokens:
-        count = sum(1 for item in items if token in item.parse.non_generic_tokens)
-        if count >= MIN_GROUP_MEMBERS:
-            return True
+                counts[token] = counts.get(token, 0) + 1
+                if counts[token] >= MIN_GROUP_MEMBERS:
+                    return True
     return False
 
 
