@@ -92,6 +92,7 @@ export function VirtualizedDataGrid<T>({
     return columnVisibility;
   }, [columnVisibility, containerWidth, mergeColumnVisibility]);
 
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Table useReactTable is intentional; React Compiler may skip this component.
   const table = useReactTable({
     data,
     columns,
