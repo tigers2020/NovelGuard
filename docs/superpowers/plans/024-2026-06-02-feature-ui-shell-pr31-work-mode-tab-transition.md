@@ -50,7 +50,16 @@ Included: `NovelGuardBridge.subscribeSnapshotInvalidation` interface + pywebview
 
 - [x] `cd web && npm run lint` — 0 errors
 - [x] `cd web && npm run test` — 71/71
-- [x] `cd web && npm run test:e2e` — 18/18
+- [x] `cd web && npm run test:e2e` — 21/21 (includes PR-31 rapid tabs, scroll persistence, failure rollback)
+
+### Manual smoke (gate review 2026-06-02)
+
+| Check | Result |
+|-------|--------|
+| mock dev — rapid 10× tab cycle | **PASS** via e2e `PR-31 rapid work mode tabs` |
+| mock dev — scroll → quality → resolve | **PASS** via e2e `PR-31 resolve grid scroll survives quality detour` |
+| mock dev — setWorkMode failure rollback | **PASS** via e2e + `testBridge.setWorkMode` hook |
+| pywebview GUI | **Not run in agent env** — same `WorkRoute`; recommend 30s local check before merge |
 
 ---
 
