@@ -9,15 +9,14 @@ from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-ALGORITHM_VERSION = "near-ngram-v1"
+ALGORITHM_VERSION = "near-ngram-v2"
 NEAR_DUP_THRESHOLD = 0.82
 MIN_NORMALIZED_CHARS = 200
 MAX_NORMALIZED_CHARS = 512 * 1024
 LENGTH_RATIO_THRESHOLD = 0.60
 WORD_NGRAM_SIZE = 5
 CHAR_NGRAM_SIZE = 5
-MAX_FINGERPRINTS_PER_FILE = 512
-_FINGERPRINT_BAND_HEX_LEN = 4
+MAX_FINGERPRINTS_PER_FILE = 256
 # Large-library caps (keep in sync with scan_pipeline_constants).
 _NEAR_LARGE_MAX_BUCKET_ITEMS = 200
 _NEAR_LARGE_MAX_BAND_FANOUT = 64
@@ -49,6 +48,7 @@ _LENGTH_BUCKET_BOUNDS = (
     256 * 1024,
     MAX_NORMALIZED_CHARS + 1,
 )
+_WHITESPACE_RE = re.compile(r"\s+")
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,10 +102,9 @@ class NearDuplicateResult:
 @dataclass(frozen=True, slots=True)
 class _PreparedFile:
     input: NearDuplicateInput
-    normalized: str
     norm_len: int
     fingerprints: frozenset[str]
-    bands: frozenset[str]
+    fingerprint_count: int
     family: str
     length_bucket: int
 
@@ -114,40 +113,61 @@ def normalize_text_for_near_dup(text: str) -> str:
     normalized = unicodedata.normalize("NFKC", text)
     normalized = normalized.replace("\r\n", "\n").replace("\r", "\n")
     normalized = normalized.lower()
-    normalized = re.sub(r"\s+", " ", normalized)
+    normalized = _WHITESPACE_RE.sub(" ", normalized)
     return normalized.strip()
 
 
 def _fingerprint_token(gram: str) -> str:
-    digest = hashlib.sha256(gram.encode("utf-8")).hexdigest()
-    return digest[:16]
+    return hashlib.blake2b(gram.encode("utf-8"), digest_size=8).hexdigest()
+
+
+def _sample_indices(gram_count: int, *, max_items: int) -> range:
+    if gram_count <= max_items:
+        return range(gram_count)
+    step = gram_count // max_items + 1
+    return range(0, gram_count, step)[:max_items]
 
 
 def fingerprint_set(normalized: str) -> frozenset[str]:
     tokens = normalized.split()
-    grams: list[str] = []
     if len(tokens) >= WORD_NGRAM_SIZE:
-        for index in range(len(tokens) - WORD_NGRAM_SIZE + 1):
-            grams.append(" ".join(tokens[index : index + WORD_NGRAM_SIZE]))
-    elif len(normalized) >= CHAR_NGRAM_SIZE:
-        for index in range(len(normalized) - CHAR_NGRAM_SIZE + 1):
-            grams.append(normalized[index : index + CHAR_NGRAM_SIZE])
-    else:
-        return frozenset()
-
-    if len(grams) > MAX_FINGERPRINTS_PER_FILE:
-        step = len(grams) // MAX_FINGERPRINTS_PER_FILE + 1
-        grams = grams[::step][:MAX_FINGERPRINTS_PER_FILE]
-    return frozenset(_fingerprint_token(gram) for gram in grams)
+        gram_count = len(tokens) - WORD_NGRAM_SIZE + 1
+        picked = _sample_indices(gram_count, max_items=MAX_FINGERPRINTS_PER_FILE)
+        return frozenset(
+            _fingerprint_token(" ".join(tokens[index : index + WORD_NGRAM_SIZE]))
+            for index in picked
+        )
+    if len(normalized) >= CHAR_NGRAM_SIZE:
+        gram_count = len(normalized) - CHAR_NGRAM_SIZE + 1
+        picked = _sample_indices(gram_count, max_items=MAX_FINGERPRINTS_PER_FILE)
+        return frozenset(
+            _fingerprint_token(normalized[index : index + CHAR_NGRAM_SIZE]) for index in picked
+        )
+    return frozenset()
 
 
 def jaccard_similarity(left: frozenset[str], right: frozenset[str]) -> float:
-    if not left and not right:
+    if not left or not right:
         return 0.0
-    union = left | right
-    if not union:
+    shared = len(left & right)
+    return _jaccard_from_sizes(shared, len(left), len(right))
+
+
+def _jaccard_from_sizes(shared: int, size_left: int, size_right: int) -> float:
+    if shared <= 0 or size_left <= 0 or size_right <= 0:
         return 0.0
-    return len(left & right) / len(union)
+    union = size_left + size_right - shared
+    if union <= 0:
+        return 0.0
+    return shared / union
+
+
+def _shared_fingerprint_count(left: frozenset[str], right: frozenset[str]) -> int:
+    if len(left) <= len(right):
+        smaller, larger = left, right
+    else:
+        smaller, larger = right, left
+    return sum(1 for token in smaller if token in larger)
 
 
 def extension_family(extension: str) -> str | None:
@@ -165,10 +185,6 @@ def length_ratio_ok(len_a: int, len_b: int) -> bool:
     if len_a <= 0 or len_b <= 0:
         return False
     return min(len_a, len_b) / max(len_a, len_b) >= LENGTH_RATIO_THRESHOLD
-
-
-def _fingerprint_bands(fingerprints: frozenset[str]) -> frozenset[str]:
-    return frozenset(fp[:_FINGERPRINT_BAND_HEX_LEN] for fp in fingerprints)
 
 
 def _should_skip_pair(
@@ -199,10 +215,9 @@ def _prepare_file(item: NearDuplicateInput) -> _PreparedFile | None:
         return None
     return _PreparedFile(
         input=item,
-        normalized=normalized,
         norm_len=norm_len,
         fingerprints=fingerprints,
-        bands=_fingerprint_bands(fingerprints),
+        fingerprint_count=len(fingerprints),
         family=family,
         length_bucket=length_bucket(norm_len),
     )
@@ -284,8 +299,10 @@ def _collect_pairs_in_items(
     accepted: list[NearDuplicatePair] = []
     for left in sorted(bucket_items, key=lambda item: item.input.file_id):
         left_id = left.input.file_id
+        left_fps = left.fingerprints
+        left_size = left.fingerprint_count
         candidates: dict[str, _PreparedFile] = {}
-        for fp in left.fingerprints:
+        for fp in left_fps:
             for other in fp_to_items.get(fp, ()):
                 right_id = other.input.file_id
                 if right_id <= left_id:
@@ -310,7 +327,14 @@ def _collect_pairs_in_items(
                 return accepted, checks_so_far
             if _should_skip_pair(left, right, exact_group_by_file_id=exact_group_by_file_id):
                 continue
-            score = jaccard_similarity(left.fingerprints, right.fingerprints)
+            right_fps = right.fingerprints
+            right_size = right.fingerprint_count
+            smaller = min(left_size, right_size)
+            larger = max(left_size, right_size)
+            if smaller / larger < threshold:
+                continue
+            shared = _shared_fingerprint_count(left_fps, right_fps)
+            score = _jaccard_from_sizes(shared, left_size, right_size)
             if score < threshold:
                 continue
             accepted.append(
@@ -318,9 +342,9 @@ def _collect_pairs_in_items(
                     left_file_id=left_id,
                     right_file_id=right_id,
                     similarity_score=score,
-                    shared_fingerprint_count=len(left.fingerprints & right.fingerprints),
-                    left_fingerprint_count=len(left.fingerprints),
-                    right_fingerprint_count=len(right.fingerprints),
+                    shared_fingerprint_count=shared,
+                    left_fingerprint_count=left_size,
+                    right_fingerprint_count=right_size,
                 )
             )
     return accepted, checks_so_far
