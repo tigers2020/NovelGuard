@@ -234,6 +234,8 @@ automation/locks/*.lock
 
 # Runtime output directories
 logs/
+!web/src/features/logs/
+!web/src/features/logs/**
 SAVE/
 *.zip
 
