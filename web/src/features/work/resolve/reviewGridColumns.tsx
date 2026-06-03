@@ -8,6 +8,7 @@ export const REVIEW_GRID_SIZING_KEY = "novelguard.reviewGrid.sizing.v1";
 
 /** TanStack table state: all columns enabled; render uses width-based merge. */
 export const reviewGridAllColumnsVisible: Record<string, boolean> = {
+  batchSelect: true,
   status: true,
   type: true,
   name: true,
@@ -22,8 +23,36 @@ export const reviewGridAllColumnsVisible: Record<string, boolean> = {
 
 import type { ColumnDef } from "@tanstack/react-table";
 
-export function buildReviewGridColumns(): ColumnDef<ReviewRow>[] {
+export function buildReviewGridColumns(options?: {
+  explicitRowIds: ReadonlySet<string>;
+  onToggleExplicit: (row: ReviewRow) => void;
+}): ColumnDef<ReviewRow>[] {
+  const batchColumn: ColumnDef<ReviewRow>[] = options
+    ? [
+        helper.display({
+          id: "batchSelect",
+          header: "",
+          enableSorting: false,
+          meta: { gridWidth: "2.5rem", minWidthPx: 40, resizable: false },
+          cell: ({ row }) => (
+            <input
+              type="checkbox"
+              aria-label={`Select ${row.original.name} for batch actions`}
+              data-testid={`resolve-row-check-${row.original.id}`}
+              checked={options.explicitRowIds.has(row.original.id)}
+              onChange={(event) => {
+                event.stopPropagation();
+                options.onToggleExplicit(row.original);
+              }}
+              onClick={(event) => event.stopPropagation()}
+            />
+          ),
+        }),
+      ]
+    : [];
+
   return [
+    ...batchColumn,
     helper.accessor("status", {
       header: "Status",
       enableSorting: true,

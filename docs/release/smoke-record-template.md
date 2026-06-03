@@ -1,4 +1,4 @@
-# PR-24 Package Smoke Record
+# Package smoke record (PR-24 + PR-44 UI gate)
 
 Date:
 Operator:
@@ -17,6 +17,11 @@ Package command: `python scripts/package_windows.py`
 - [ ] No Vite dev server running on port 5173
 - [ ] Smoke uses **fixture library only** — `packaging/fixtures/library/` (never a personal library)
 
+## Automated preflight (PR-44)
+
+- [ ] `python scripts/verify_packaging.py` PASS
+- [ ] `python scripts/smoke_packaged_ui.py --require-build` PASS (after package build)
+
 ## Smoke Checklist
 
 - [ ] Launch `dist/NovelGuard/NovelGuard.exe`
@@ -24,12 +29,17 @@ Package command: `python scripts/package_windows.py`
 - [ ] Settings → app info shows `buildType=packaged` (and commit/time if stamped)
 - [ ] Production bridge active — not mock; no `PRODUCTION_BRIDGE_UNAVAILABLE`
 - [ ] Select fixture library folder: `packaging/fixtures/library/`
-- [ ] Run scan (completes or shows expected empty/partial state)
-- [ ] Open resolve/review workspace
-- [ ] Non-destructive navigation works (tabs, back, list scroll)
+- [ ] **Scan section (PR-35):** scan completes; summary visible
+- [ ] **3-mode tabs (PR-34):** Scan / Resolve / Quality switch without layout break
+- [ ] **FileDock (PR-38):** expand dock; cross-link to scan or resolve
+- [ ] **Resolve grid (PR-36):** rows load; scroll OK
+- [ ] **Finalize dialog (PR-37/41):** open from apply flow or resolve CTA; summary loads
+- [ ] **Logs / Settings (PR-40):** routes open; log search returns hits on fixture run
 - [ ] Close app cleanly
 - [ ] Logs written under `%LOCALAPPDATA%/NovelGuard/logs/`
 - [ ] No writes inside `dist/NovelGuard/_internal/` (read-only bundle)
+
+Full matrix: [packaging-smoke-checklist.md](packaging-smoke-checklist.md)
 
 ## Destructive ops (optional; fixture only)
 

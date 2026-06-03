@@ -55,6 +55,10 @@ class RepairApplyError(ValueError):
 
 QUALITY_SORT_FIELDS = frozenset({"name", "path", "issueType", "severity", "encoding", "integrity"})
 
+_PIPELINE_PHASES = frozenset(
+    {"idle", "probe", "persist", "scan_persist", "exact_index", "analyze", "finalize"}
+)
+
 FILE_ROW_SORT_FIELDS = frozenset(
     {
         "name",
@@ -124,6 +128,36 @@ def validate_app_snapshot(snapshot: Any) -> None:
     work = snapshot.get("work")
     if not isinstance(work, dict):
         raise SnapshotContractError("AppSnapshot.work must be a dict")
+    scan = work.get("scan")
+    if not isinstance(scan, dict):
+        raise SnapshotContractError("AppSnapshot.work.scan must be a dict")
+    for key in (
+        "state",
+        "lastRun",
+        "indexReady",
+        "deepAnalysisComplete",
+        "deepAnalysisStatus",
+        "deepAnalysisError",
+    ):
+        if key not in scan:
+            raise SnapshotContractError(f"AppSnapshot.work.scan missing {key}")
+    status = scan.get("deepAnalysisStatus")
+    if status not in ("idle", "running", "complete", "error"):
+        raise SnapshotContractError(f"invalid work.scan.deepAnalysisStatus: {status!r}")
+    pipeline = snapshot.get("pipeline")
+    if not isinstance(pipeline, dict):
+        raise SnapshotContractError("AppSnapshot.pipeline must be a dict")
+    phase = pipeline.get("phase")
+    if not isinstance(phase, str) or phase not in _PIPELINE_PHASES:
+        raise SnapshotContractError(f"invalid pipeline.phase: {phase!r}")
+    background = pipeline.get("background")
+    if background is not None:
+        if not isinstance(background, dict):
+            raise SnapshotContractError("AppSnapshot.pipeline.background must be a dict or null")
+        if background.get("active"):
+            for key in ("phase", "label", "step", "stepTotal", "percent"):
+                if key not in background:
+                    raise SnapshotContractError(f"AppSnapshot.pipeline.background missing {key}")
     resolve = work.get("resolve")
     if not isinstance(resolve, dict) or not isinstance(resolve.get("libraryRevision"), int):
         raise SnapshotContractError("ResolveSnapshot.libraryRevision must be a number")
@@ -502,6 +536,14 @@ def validate_finalize_summary(payload: Any) -> None:
         payload.get("warnings"), list
     ):
         raise PageContractError("FinalizeSummary blockers/warnings must be lists")
+
+
+def validate_finalize_cleanup_preview(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise PageContractError("FinalizeCleanupPreview must be a dict")
+    previewed = payload.get("previewedEmptyDirs")
+    if not isinstance(previewed, list) or not all(isinstance(item, str) for item in previewed):
+        raise PageContractError("previewedEmptyDirs must be a list of strings")
 
 
 def validate_finalize_result(payload: Any) -> None:

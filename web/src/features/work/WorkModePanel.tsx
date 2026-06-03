@@ -1,6 +1,27 @@
 import type { ReactNode } from "react";
 
-export function WorkModePanel({ active, children }: { active: boolean; children: ReactNode }) {
+export function WorkModePanel({
+  active,
+  children,
+  layout = "overlay",
+}: {
+  active: boolean;
+  children: ReactNode;
+  /** stacked = in-flow height (Scan compact chrome); overlay = absolute stack for mode tabs */
+  layout?: "overlay" | "stacked";
+}) {
+  if (layout === "stacked") {
+    return (
+      <section
+        aria-hidden={!active}
+        {...(!active ? { inert: true } : {})}
+        className={active ? "flex flex-col shrink-0 overflow-hidden" : "hidden"}
+      >
+        {children}
+      </section>
+    );
+  }
+
   return (
     <section
       aria-hidden={!active}

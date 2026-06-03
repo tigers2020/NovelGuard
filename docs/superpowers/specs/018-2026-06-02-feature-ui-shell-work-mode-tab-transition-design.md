@@ -40,7 +40,7 @@ LOCK-18-3  On setWorkMode failure for the latest request only: rollback optimist
            show error toast/banner (reuse existing degraded/error patterns if present),
            and await refreshSnapshot() once.
 
-LOCK-18-4  Work workspaces use CSS keep-alive panels: always mounted (4 panels).
+LOCK-18-4  Work workspaces use CSS keep-alive panels: always mounted (**3 panels** after PR-34 per [Spec 021](./021-2026-06-02-feature-fullstack-shell-ia-reconciliation-design.md) LOCK-33-13; was 4 panels including finalize).
            Inactive panels use absolute inset-0 + invisible + pointer-events-none + aria-hidden;
            active panel uses visible + pointer-events-auto.
            Do NOT use HTML hidden attribute (display:none) for inactive panels.

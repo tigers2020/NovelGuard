@@ -5,9 +5,14 @@ const groupState = new Map<string, { keeperFileId?: string; groupStatus?: string
 const memberState = new Map<string, string>();
 
 function fileIdFromRowId(rowId: string): string | null {
-  if (!rowId.startsWith("file:")) return null;
-  const parts = rowId.split(":");
-  return parts.length === 3 ? parts[2] : null;
+  if (rowId.startsWith("file:")) {
+    const parts = rowId.split(":");
+    return parts.length === 3 ? parts[2] : null;
+  }
+  if (rowId.startsWith("row-")) {
+    return rowId;
+  }
+  return null;
 }
 
 export function resetMockReviewState(): void {

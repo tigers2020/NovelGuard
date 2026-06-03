@@ -39,3 +39,7 @@ dist/NovelGuard/_internal/web/build/index.html   # via _MEIPASS at runtime
 Canonical automated build: `python scripts/package_windows.py` (Task 7).
 
 Bundled frontend path must match `runtime_paths.frontend_asset_root()` when frozen (`bundle_root() / "web" / "build"`).
+
+## Post-build smoke (PR-44)
+
+`package_windows.py` runs `smoke_packaged_ui` (strict bundle markers). Manual checklist: `docs/release/packaging-smoke-checklist.md`.

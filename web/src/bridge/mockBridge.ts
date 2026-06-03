@@ -2,7 +2,7 @@ import type { NovelGuardBridge } from "./NovelGuardBridge";
 import type { FileRowsQuery } from "../types/fileRows";
 import { validateFileRowsPage, clampFileRowsLimit } from "../contracts/fileRowsPageContract";
 import { queryMockFileRows } from "./mockFileRows";
-import type { AppSnapshot, WorkMode } from "../types/snapshot";
+import type { AppSnapshot, FinalizeLastStatus, WorkMode } from "../types/snapshot";
 import type { ReviewRowsQuery } from "../types/review";
 import type { SelectionScope } from "../types/selection";
 import type {
@@ -195,13 +195,43 @@ export function bumpLibraryRevisionForTest(options?: { clearPending?: boolean })
   emitSnapshotInvalidation("libraryRevision", { libraryRevision });
 }
 
+/** E2E only: approve remaining resolve queue so finalize is not blocked by duplicates. */
+export function prepareMockE2eFinalizeReady(): void {
+  const rows = mergedReviewRows();
+  const pending = rows.filter(
+    (row) =>
+      row.rowKind === "file" &&
+      (row.status === "unreviewed" || row.status === "conflict"),
+  );
+  if (pending.length > 0) {
+    applyMockReviewCommand(pending, "approve");
+    libraryRevision += 1;
+    clearPendingPreview();
+    emitSnapshotInvalidation("libraryRevision", { libraryRevision });
+  }
+}
+
 if (typeof window !== "undefined") {
-  (window as unknown as { __NOVELGUARD_TEST_BUMP_REVISION__?: () => void }).__NOVELGUARD_TEST_BUMP_REVISION__ =
-    bumpLibraryRevisionForTest;
+  const testWindow = window as unknown as {
+    __NOVELGUARD_TEST_BUMP_REVISION__?: () => void;
+    __NOVELGUARD_TEST_PREPARE_FINALIZE_READY__?: () => void;
+  };
+  testWindow.__NOVELGUARD_TEST_BUMP_REVISION__ = bumpLibraryRevisionForTest;
+  testWindow.__NOVELGUARD_TEST_PREPARE_FINALIZE_READY__ = prepareMockE2eFinalizeReady;
 }
 
 function mergedReviewRows(): ReviewRow[] {
   return applyMockReviewState(getAllReviewRows());
+}
+
+function finalizeLastStatusFromReport(doc: FinalizeReportDocument | null): FinalizeLastStatus {
+  if (!doc) {
+    return "idle";
+  }
+  if (doc.status === "cancelled") {
+    return "idle";
+  }
+  return doc.status;
 }
 
 function buildSnapshot(): AppSnapshot {
@@ -224,16 +254,21 @@ function buildSnapshot(): AppSnapshot {
       scanOptions: mockScanOptionsLabels(),
     },
     pipeline: {
-      phase: state.pipelineRunning ? "scan" : "idle",
+      phase: state.pipelineRunning ? "probe" : "idle",
       percent: state.pipelineRunning ? 42 : 0,
-      label: state.pipelineRunning ? "스캔 중" : "대기 중",
+      label: state.pipelineRunning ? "파일 확인 중… (540/1284)" : "대기 중",
       cancellable: state.pipelineRunning,
+      background: null,
     },
     work: {
       activeMode: state.activeMode,
       scan: {
         state: state.pipelineRunning ? "running" : "success",
         lastRun: "2026-06-01 10:42",
+        indexReady: !state.pipelineRunning,
+        deepAnalysisComplete: !state.pipelineRunning,
+        deepAnalysisStatus: state.pipelineRunning ? "running" : "complete",
+        deepAnalysisError: null,
       },
       resolve: {
         queueCount: counts.queueCount,
@@ -250,11 +285,11 @@ function buildSnapshot(): AppSnapshot {
         hasPendingQualityRepair: pendingRepair !== null,
       },
       finalize: {
-        lastReportId: null,
-        lastStatus: "idle",
-        lastRunAt: null,
-        blockerCount: 0,
-        warningCount: 0,
+        lastReportId: lastFinalizeReport?.reportId ?? null,
+        lastStatus: finalizeLastStatusFromReport(lastFinalizeReport),
+        lastRunAt: lastFinalizeReport?.createdAt ?? null,
+        blockerCount: lastFinalizeReport?.blockers.length ?? 0,
+        warningCount: lastFinalizeReport?.warnings.length ?? 0,
       },
     },
     fileListSummary: {
@@ -377,7 +412,13 @@ function buildMockFinalizeSummary(): FinalizeSummary {
   }
   const encodingCount = qualityRows.filter((r) => r.issueType === "encoding").length;
   const integrityCount = qualityRows.filter((r) => r.issueType === "integrity").length;
-  if (encodingCount + integrityCount > 0) {
+  const relaxQualityBlockers =
+    typeof window !== "undefined" &&
+    Boolean(
+      (window as unknown as { __NOVELGUARD_TEST_RELAX_FINALIZE_BLOCKERS__?: boolean })
+        .__NOVELGUARD_TEST_RELAX_FINALIZE_BLOCKERS__,
+    );
+  if (!relaxQualityBlockers && encodingCount + integrityCount > 0) {
     blockers.push({
       code: "QUALITY_ERROR_ISSUES",
       message: "인코딩 또는 무결성 품질 오류가 남아 있습니다.",
@@ -443,11 +484,11 @@ export const mockBridge: NovelGuardBridge = {
     stopScanSimulation();
     appendMockLog("INFO", "Mock scan started");
     state.pipelineRunning = true;
-    emitSnapshotInvalidation("pipelinePhase", { pipelinePhase: "scan" });
+    emitSnapshotInvalidation("pipelinePhase", { pipelinePhase: "probe" });
     let pct = 0;
     scanSimulationTimer = setInterval(() => {
       pct = Math.min(100, pct + 10);
-      emitSnapshotInvalidation("scanProgress", { pipelinePhase: "scan" });
+      emitSnapshotInvalidation("scanProgress", { pipelinePhase: "probe" });
       if (pct >= 100) {
         stopScanSimulation();
         state.pipelineRunning = false;
@@ -582,7 +623,9 @@ export const mockBridge: NovelGuardBridge = {
     if (normalized.length !== ids.length) {
       rejectRepair(method, "MIXED_OR_INELIGIBLE_SELECTION");
     }
-    const rows = buildQualityRows().filter((r) => normalized.includes(r.id));
+    const rows = buildQualityRows().filter((r) =>
+      normalized.includes(normalizeRepairIssueIds([r.id])[0] ?? ""),
+    );
     if (rows.length !== normalized.length) {
       rejectRepair(method, "MIXED_OR_INELIGIBLE_SELECTION");
     }
@@ -816,6 +859,15 @@ export const mockBridge: NovelGuardBridge = {
     return buildMockFinalizeSummary();
   },
 
+  async previewFinalizeCleanup() {
+    if (!state.folderPath) {
+      throw new BridgeCallError("NO_LIBRARY", { code: "rejected", method: "preview_finalize_cleanup" });
+    }
+    return {
+      previewedEmptyDirs: ["duplicate/empty-slot", "organized/empty-slot"],
+    };
+  },
+
   async runFinalizeVerification(request: RunFinalizeRequest) {
     const summary = buildMockFinalizeSummary();
     const status =
@@ -830,7 +882,8 @@ export const mockBridge: NovelGuardBridge = {
       removedEmptyDirs: [],
     };
     if (request.includeCleanup && summary.blockers.length === 0) {
-      cleanup.previewedEmptyDirs = ["duplicate/empty-slot"];
+      cleanup.previewedEmptyDirs = ["duplicate/empty-slot", "organized/empty-slot"];
+      cleanup.removedEmptyDirs = [...cleanup.previewedEmptyDirs];
     }
     const doc: FinalizeReportDocument = {
       reportId,
@@ -845,6 +898,8 @@ export const mockBridge: NovelGuardBridge = {
       cleanup,
     };
     lastFinalizeReport = doc;
+    libraryRevision += 1;
+    emitSnapshotInvalidation("libraryRevision", { libraryRevision });
     return {
       status,
       reportId,

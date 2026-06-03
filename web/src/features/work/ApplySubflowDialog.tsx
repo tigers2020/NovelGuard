@@ -46,6 +46,7 @@ function applyErrorMessage(err: unknown): {
       INVALID_REVIEW_COMMAND: "지원하지 않는 검토 명령입니다.",
       NEAR_DUPLICATE_APPLY_UNSUPPORTED: "유사 중복 항목은 적용할 수 없습니다.",
       RELATION_APPLY_UNSUPPORTED: "관계 항목은 적용할 수 없습니다.",
+      INVALID_SETTING_VALUE: "설정 값이 유효하지 않습니다.",
     };
     if (reason && reason in byReason) {
       const previewReason = reason as PreviewApplyErrorCode;
@@ -53,7 +54,7 @@ function applyErrorMessage(err: unknown): {
     }
     return { message: err.message };
   }
-  return { message: err instanceof Error ? err.message : "Apply failed" };
+  return { message: err instanceof Error ? err.message : "적용에 실패했습니다." };
 }
 
 function formatApplyFailedMessage(details?: ApplyFailedDetails): string {
@@ -137,16 +138,17 @@ function PreviewRowsTable({ rows }: { rows: MovePreviewResult["rows"] }) {
     </div>
   );
 }
-
 export function ApplySubflowDialog({
   open,
   selection,
   snapshotLibraryRevision,
+  onOpenFinalize,
   onClose,
 }: {
   open: boolean;
   selection: SelectionScope | null;
   snapshotLibraryRevision: number;
+  onOpenFinalize: () => void;
   onClose: () => void;
 }) {
   const bridge = useBridge();
@@ -272,16 +274,16 @@ export function ApplySubflowDialog({
       >
         <h2 className="text-lg font-bold text-on-surface">이동 계획 적용</h2>
         <p className="mt-1 text-sm text-on-surface-variant">
-          dry-run → confirm → apply. Progress는 GlobalCommandBar만 표시합니다.
+          미리보기로 이동 대상을 확인한 뒤 적용합니다. 되돌리려면 백업·감사 로그를 확인하세요.
         </p>
 
         <ol className="mt-4 grid gap-2 md:grid-cols-4">
           {(
             [
-              ["preview", "1. Preview", "이동·충돌·대상 검토"],
-              ["confirm", "2. Confirm", "파괴적 작업 전 확인"],
-              ["apply", "3. Apply", "파일 이동 실행"],
-              ["done", "4. Done", "결과 확인"],
+              ["preview", "1. 미리보기", "이동·충돌·대상 검토"],
+              ["confirm", "2. 확인", "실제 파일 이동 전 최종 확인"],
+              ["apply", "3. 적용", "선택한 이동 실행"],
+              ["done", "4. 완료", "결과 확인"],
             ] as const
           ).map(([id, title, text]) => (
             <li
@@ -334,6 +336,7 @@ export function ApplySubflowDialog({
             <p className="mt-1 text-on-surface-variant">
               라이브러리 revision이 갱신되었습니다. 검토 그리드는 스냅샷 갱신 후 반영됩니다.
             </p>
+
           </div>
         )}
 
@@ -345,6 +348,18 @@ export function ApplySubflowDialog({
           >
             {step === "done" ? "닫기" : "취소"}
           </button>
+          {step === "done" && (
+            <button
+              type="button"
+              data-testid="apply-open-finalize"
+              onClick={() => {
+                void handleClose().then(onOpenFinalize);
+              }}
+              className="rounded-md bg-secondary px-3 py-2 text-sm font-semibold text-background"
+            >
+              최종 검증 열기
+            </button>
+          )}
           {step === "preview" && (
             <button
               type="button"

@@ -27,14 +27,19 @@ export function AppHeader({
     health === "ok" ? "bg-success" : health === "degraded" ? "bg-secondary" : "bg-error";
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-outline bg-surface-elevated/95 px-5 backdrop-blur">
+    <header
+      className="flex h-16 shrink-0 items-center justify-between border-b border-outline bg-surface-elevated/95 px-5 backdrop-blur"
+      data-testid="app-header"
+    >
       <div className="flex items-center gap-3">
         <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary font-bold text-background shadow">
           NG
         </div>
         <div>
           <div className="text-sm font-bold tracking-wide text-on-surface">NovelGuard</div>
-          <div className="text-xs text-muted">{routeLabels[route]}</div>
+          <div className="text-xs text-muted" data-testid="app-header-route">
+            {routeLabels[route]}
+          </div>
         </div>
       </div>
       <div

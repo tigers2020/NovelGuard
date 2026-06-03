@@ -12,36 +12,38 @@ Full detail: [docs/current_architecture.md](mdc:docs/current_architecture.md).
 
 ## Layers
 
-| Layer | Path | Owner persona | Principle |
-|-------|------|---------------|-----------|
-| domain | `src/domain/` | 도미닉 | Pure rules, value objects, policies |
-| application | `src/application/` | 유리 | Use cases, DTOs, ports |
-| infrastructure | `src/infrastructure/` | 아다 | DB, FS, hashing; map to DTOs |
-| ui (gui) | `web/` | 지나 | React + Tailwind UI; calls application via API/ports only |
-| app | `src/app/` | 시몬 | Composition / wiring |
-| tests | `tests/` | 테스 | unit / integration / golden |
+| Layer | Path | Principle |
+|-------|------|-----------|
+| domain | `src/domain/` | Pure rules, value objects, policies |
+| application | `src/application/` | Use cases, DTOs, ports |
+| infrastructure | `src/infrastructure/` | DB, FS, hashing; map to DTOs |
+| ui | `web/` | React + Tailwind UI; calls application via API/ports only |
+| app | `src/app/` | Composition and wiring |
+| tests | `tests/` | Unit, integration, golden |
 
-## Dependency direction
+## Dependency Direction
 
 - `domain` imports no other project layers.
 - `application` depends on `domain` and `application.ports` only.
-- `infrastructure` implements ports; hides external libraries.
-- `web/` (UI) depends on application DTOs/API contracts, not concrete infrastructure.
+- `infrastructure` implements ports and hides external libraries.
+- `web/` depends on application DTOs/API contracts, not concrete infrastructure.
 - `app` wires infrastructure, GUI, and use cases.
 
 ## Ports
 
 - Ports live in `src/application/ports/`.
 - Use cases depend on port protocols, not concrete classes.
-- Port change → 유리; infra implementation → 아다; domain rules → 도미닉.
+- Port changes belong in application.
+- Infrastructure implementations stay in infrastructure.
+- Domain rules stay in domain.
 
-## Domain terms
+## Domain Terms
 
-- **FileEntry:** scanned file immutable facts (path, size, mtime, extension).
-- **FilenameParseResult:** parsed title, range, tags from filename.
-- **DuplicateGroupResult:** group verdict (file_ids, keeper, confidence, evidence).
+- **FileEntry:** scanned file immutable facts: path, size, mtime, extension.
+- **FilenameParseResult:** parsed title, range, and tags from filename.
+- **DuplicateGroupResult:** group verdict: file IDs, keeper, confidence, evidence.
 
-## DON'T
+## Do Not
 
 - No I/O, UI, DB, or external API in `domain`.
 - No concrete infrastructure imports in `application`.

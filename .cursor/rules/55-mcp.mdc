@@ -1,5 +1,5 @@
 ---
-description: MCP server usage when CLI and local docs are insufficient
+description: MCP server config when editing .cursor/mcp.json. Implementation rules: 00-core index (57–59).
 globs:
   - ".cursor/mcp.json"
 alwaysApply: false
@@ -7,20 +7,23 @@ alwaysApply: false
 
 # MCP Usage
 
-Judge MCP need before calling. If CLI, local files, or official docs suffice, skip MCP and say so.
+Which implementation rule to attach: see **Rules index** in `00-core.mdc`.
 
-**Config:** workspace `.cursor/mcp.json`; user-global Cursor `mcp.json`. **Never** embed API keys in JSON — use `${env:VAR_NAME}`.
+Config: workspace `.cursor/mcp.json`; user-global Cursor `mcp.json`.
+Never embed API keys in JSON; use `${env:VAR_NAME}`.
 
-Before `call_mcp_tool` / `fetch_mcp_resource`: read tool schema under `mcps/<server>/tools/`. On failure, record reason and use a local alternative.
+Before `call_mcp_tool` / `fetch_mcp_resource`: read tool schema under `mcps/<server>/tools/`.
+On failure, record the reason and use a local alternative.
 
-| Task | Consider MCP | Alternative |
-|------|----------------|-------------|
-| Library / API docs | Context7, Google Developer Knowledge | Official URL + note in `docs/superpowers/specs/` or research doc |
+| Task | MCP / skill | Fallback |
+|------|-------------|----------|
+| Library / API docs (pre-code) | **context7-mcp** / Context7 | Official URL + local `package.json` / `pyproject.toml` |
+| DB / schema / SQL | **Supabase MCP** | Local schema files, `pytest` |
+| UI / web verification (post-code) | **playwright** skill / Playwright MCP | `npm run test:e2e`, cursor-ide-browser |
 | Git history / PR | GitHub MCP, GitLens | `git log`, `gh`, web UI |
-| UI / web check | Playwright MCP, cursor-ide-browser | Manual check, screenshot |
-| Large design split | (optional) | `brainstorming` + spec/plan under `docs/superpowers/` |
+| Large design split | Optional | Spec/plan under `docs/superpowers/` |
 
-## Project rules
+## Project Rules
 
 - Do not copy external API examples into domain; use application ports and infrastructure adapters.
 - Git history inference must be cross-checked against current file contents.

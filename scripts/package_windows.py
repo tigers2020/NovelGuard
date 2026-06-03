@@ -40,7 +40,7 @@ def require_npm() -> str:
     npm = shutil.which("npm")
     if npm is None:
         raise SystemExit(
-            "Missing required command: npm\n" "Install Node.js and ensure npm is on PATH."
+            "Missing required command: npm\nInstall Node.js and ensure npm is on PATH."
         )
     return npm
 
@@ -185,6 +185,14 @@ def main() -> int:
     pyinstaller_build()
     bundled_indexes = verify_package()
     write_manifest(bundled_indexes, built_at=built_at, commit=commit)
+
+    scripts_dir = ROOT / "scripts"
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    from smoke_packaged_ui import run_checks
+
+    if run_checks(require_build=True) != 0:
+        raise SystemExit(1)
 
     print(f"Package ready: {EXE_PATH}")
     print(f"Manifest: {MANIFEST_PATH}")

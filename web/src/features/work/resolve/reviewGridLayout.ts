@@ -17,7 +17,7 @@ const LAYOUT_NOT_READY_WIDTH = 200;
 
 /** Width-only column visibility for the resolve review grid. */
 export function mergeReviewColumnVisibility(containerWidth: number): VisibilityState {
-  const merged: VisibilityState = { name: true };
+  const merged: VisibilityState = { batchSelect: true, name: true };
   for (const key of Object.keys(RESPONSIVE_THRESHOLDS)) {
     merged[key] =
       containerWidth >= LAYOUT_NOT_READY_WIDTH &&

@@ -88,7 +88,7 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
         const page = await call<FileRowsPage>(api, "query_file_rows", query);
         validateFileRowsPage(page);
         return page;
-      }, { method: "query_file_rows" }),
+      }, { method: "query_file_rows", timeoutMs: 20_000 }),
     queryQualityRows: (query: QualityRowsQuery) =>
       callBridge(async () => {
         const page = await call<QualityRowsPage>(api, "query_quality_rows", query);
@@ -142,6 +142,10 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
     getFinalizeSummary: () =>
       callBridge(() => call<FinalizeSummary>(api, "get_finalize_summary"), {
         method: "get_finalize_summary",
+      }),
+    previewFinalizeCleanup: () =>
+      callBridge(() => call(api, "preview_finalize_cleanup"), {
+        method: "preview_finalize_cleanup",
       }),
     runFinalizeVerification: (request: RunFinalizeRequest) =>
       callBridge(() => call<FinalizeResult>(api, "run_finalize_verification", request), {

@@ -1,9 +1,8 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useBridge, useRefreshSnapshot, useSnapshot } from "../../app/providers/snapshotHooks";
 import { BridgeCallError } from "../../bridge/bridgeErrors";
 import type { WorkMode } from "../../types/snapshot";
 import type { SelectionScope } from "../../types/selection";
-import { FinalizeWorkspace } from "./FinalizeWorkspace";
 import { QualityWorkspace } from "./QualityWorkspace";
 import { ResolveAndOrganizeWorkspace } from "./ResolveAndOrganizeWorkspace";
 import { ScanWorkspace } from "./ScanWorkspace";
@@ -20,7 +19,25 @@ function workModeErrorMessage(err: unknown): string {
   return "Work mode change failed";
 }
 
-export function WorkRoute({ onOpenPreview }: { onOpenPreview: (selection: SelectionScope) => void }) {
+export function WorkRoute({
+  onOpenPreview,
+  onOpenFinalize,
+  onOpenSettings,
+  onRevealFileDock,
+  onWorkModeApplied,
+  onRequestWorkModeReady,
+  compactWorkChrome = false,
+}: {
+  onOpenPreview: (selection: SelectionScope) => void;
+  onOpenFinalize: () => void;
+  onOpenSettings: () => void;
+  onRevealFileDock: () => void;
+  onWorkModeApplied?: (mode: WorkMode) => void;
+  /** Shell / dialog shortcuts must use the same sequenced mode handler as tabs. */
+  onRequestWorkModeReady?: (request: (mode: WorkMode) => Promise<void>) => void;
+  /** Scan + expanded FileDock: keep scan toolbar in document flow (not clipped). */
+  compactWorkChrome?: boolean;
+}) {
   const bridge = useBridge();
   const refreshSnapshot = useRefreshSnapshot();
   const snapshot = useSnapshot();
@@ -32,28 +49,42 @@ export function WorkRoute({ onOpenPreview }: { onOpenPreview: (selection: Select
     optimisticMode != null && snapshotMode !== optimisticMode ? optimisticMode : null;
   const displayMode = pendingOptimistic ?? snapshotMode;
 
-  const requestWorkMode = async (next: WorkMode) => {
-    const seq = ++requestSeqRef.current;
-    setModeError(null);
-    setOptimisticMode(next);
-    try {
-      await bridge.setWorkMode(next);
-      if (seq !== requestSeqRef.current) {
-        return;
+  const requestWorkMode = useCallback(
+    async (next: WorkMode) => {
+      const seq = ++requestSeqRef.current;
+      setModeError(null);
+      setOptimisticMode(next);
+      try {
+        await bridge.setWorkMode(next);
+        if (seq !== requestSeqRef.current) {
+          return;
+        }
+        await refreshSnapshot();
+        onWorkModeApplied?.(next);
+      } catch (err) {
+        if (seq !== requestSeqRef.current) {
+          return;
+        }
+        setOptimisticMode(null);
+        setModeError(workModeErrorMessage(err));
+        await refreshSnapshot();
       }
-      await refreshSnapshot();
-    } catch (err) {
-      if (seq !== requestSeqRef.current) {
-        return;
-      }
-      setOptimisticMode(null);
-      setModeError(workModeErrorMessage(err));
-      await refreshSnapshot();
-    }
-  };
+    },
+    [bridge, onWorkModeApplied, refreshSnapshot],
+  );
+
+  useEffect(() => {
+    onRequestWorkModeReady?.(requestWorkMode);
+  }, [onRequestWorkModeReady, requestWorkMode]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+    <div
+      className={
+        compactWorkChrome
+          ? "flex flex-col overflow-hidden"
+          : "flex h-full min-h-0 flex-col overflow-hidden"
+      }
+    >
       <WorkModeTabs mode={displayMode} onModeChange={(mode) => void requestWorkMode(mode)} />
       {modeError && (
         <p
@@ -64,23 +95,39 @@ export function WorkRoute({ onOpenPreview }: { onOpenPreview: (selection: Select
           {modeError}
         </p>
       )}
-      <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden">
-        <WorkModePanel active={displayMode === "scan"}>
+      <div
+        className={
+          compactWorkChrome
+            ? "shrink-0 overflow-hidden"
+            : "relative min-h-0 min-w-0 flex-1 overflow-hidden"
+        }
+      >
+        <WorkModePanel active={displayMode === "scan"} layout={compactWorkChrome ? "stacked" : "overlay"}>
           <ScanWorkspace
             library={snapshot.library}
             scan={snapshot.work.scan}
+            quality={snapshot.work.quality}
+            pipeline={snapshot.pipeline}
             onStartScan={() => void bridge.startScan()}
-            onGoResolve={() => void requestWorkMode("resolve")}
+            onCancelScan={() => void bridge.cancelRun()}
+            onOpenSettings={onOpenSettings}
+            onRevealFileDock={onRevealFileDock}
           />
         </WorkModePanel>
-        <WorkModePanel active={displayMode === "resolve"}>
-          <ResolveAndOrganizeWorkspace onOpenPreview={onOpenPreview} />
+        <WorkModePanel
+          active={displayMode === "resolve"}
+          layout={compactWorkChrome ? "stacked" : "overlay"}
+        >
+          <ResolveAndOrganizeWorkspace
+            onOpenPreview={onOpenPreview}
+            onOpenFinalize={onOpenFinalize}
+          />
         </WorkModePanel>
-        <WorkModePanel active={displayMode === "quality"}>
-          <QualityWorkspace />
-        </WorkModePanel>
-        <WorkModePanel active={displayMode === "finalize"}>
-          <FinalizeWorkspace />
+        <WorkModePanel
+          active={displayMode === "quality"}
+          layout={compactWorkChrome ? "stacked" : "overlay"}
+        >
+          <QualityWorkspace onOpenFinalize={onOpenFinalize} />
         </WorkModePanel>
       </div>
     </div>

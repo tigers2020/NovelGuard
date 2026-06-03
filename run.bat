@@ -41,15 +41,10 @@ if not exist "web\build\index.html" (
   exit /b 1
 )
 
-pip show pywebview >nul 2>&1
+echo [3/3] Reinstalling Python package (editable)...
+pip install -e ".[gui]"
 if errorlevel 1 (
-  echo [3/3] pip install -e ".[gui]" ...
-  pip install -e ".[gui]"
-  if errorlevel 1 (
-    exit /b 1
-  )
-) else (
-  echo [3/3] pywebview installed - skip pip
+  exit /b 1
 )
 
 echo.

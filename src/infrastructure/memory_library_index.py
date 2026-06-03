@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from application.file_row_page_memory import query_file_rows_page_memory
@@ -29,9 +30,33 @@ class MemoryLibraryIndex:
         self._near_results = {}
         self._file_review_projection = {}
 
-    def replace_files(self, folder_path: str, files: list[FileRecord]) -> None:
+    def replace_files(
+        self,
+        folder_path: str,
+        files: list[FileRecord],
+        *,
+        on_save_progress: Callable[[int, int], None] | None = None,
+    ) -> None:
         self._current_folder = folder_path
         self._files = list(files)
+        if on_save_progress is not None:
+            on_save_progress(len(files), len(files))
+
+    def append_files_batch(
+        self,
+        folder_path: str,
+        files: list[FileRecord],
+        *,
+        reset: bool = False,
+    ) -> None:
+        self._current_folder = folder_path
+        if reset:
+            self._files = list(files)
+        else:
+            self._files.extend(files)
+
+    def activate_library_folder(self, folder_path: str) -> None:
+        self._current_folder = folder_path
 
     @property
     def folder_path(self) -> str | None:

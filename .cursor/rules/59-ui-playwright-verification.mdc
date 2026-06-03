@@ -1,0 +1,23 @@
+---
+description: Post-change browser verification for UI, routing, and bridge contracts visible in the browser.
+globs:
+  - "web/**/*.tsx"
+  - "web/**/*.ts"
+  - "web/**/*.css"
+alwaysApply: false
+---
+
+# UI / Playwright verification
+
+When the task changes UI, routing, or browser-visible bridge contracts:
+
+1. **playwright** skill (CLI-first) or Playwright MCP.
+2. Dev server if needed: `cd web && npm run dev:e2e` (port 5173).
+3. Verify: open → snapshot → interact → re-snapshot after DOM changes.
+4. Prefer existing specs: `cd web && npm run test:e2e`. Artifacts: `output/playwright/`.
+
+Do not claim browser verification without running Playwright.
+
+If the change is types-only or non-visual with no flow impact, use the smallest gate instead: `npm run lint`, `npm run test:contracts`, or targeted unit tests.
+
+Report in final summary: exact commands and pass/fail.

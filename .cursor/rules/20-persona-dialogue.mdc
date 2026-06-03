@@ -1,5 +1,5 @@
 ---
-description: Persona Dialogue 3-step flow and role–layer ownership
+description: Optional persona lens for non-trivial src/tests work; not for small tasks
 globs:
   - "src/**"
   - "tests/**"
@@ -9,32 +9,32 @@ alwaysApply: false
 
 # Persona Dialogue
 
-**Canonical gates:** [AGENTS.md](mdc:AGENTS.md). This rule covers communication and layer ownership when editing source or tests.
+Inactive for small tasks: typo, one-file fix, lint, read-only Q&A, docs-only. No persona prefix, no owner briefing, no roleplay.
 
-## 3 steps
+Scope challenge before code uses grill-me rule from `00-core` index — not persona roleplay.
 
-1. **Leader briefing:** `[시몬]` summarizes and assigns (`[시몬]` prefix).
-2. **Owner briefing:** assigned persona states approach in 1–2 sentences — **required before code**.
-3. **Code:** implement only after step 2.
+Canonical gates: [AGENTS.md](mdc:AGENTS.md). Large-task workflow: [agent-workflow.md](mdc:docs/superpowers/agent-workflow.md).
 
-After implementation: `[테스]` tests → `[렉스]` runs `pytest` → `ruff check .` → `mypy src` → `black .`.
+When persona helps on non-trivial `src/` / `tests/` work:
 
-## Role–layer
+1. Coordinator summarizes and assigns once.
+2. Owner persona gives a 1-2 sentence approach once before the first code edit in a plan run.
+3. Implement.
+
+Do not repeat persona steps per file or per plan task unless the plan marks a breakpoint.
+
+After implementation: run the smallest meaningful verification. Use full verification persona flow only when tests or full gate are in scope.
+
+## Role Layer
 
 | Role | Card | Primary path |
-|------|------|----------------|
-| 시몬 | [simon.md](mdc:persona/simon.md) | Coordination, `app/` |
-| 도미닉 | [dominic.md](mdc:persona/dominic.md) | `src/domain/` |
-| 유리 | [yuri.md](mdc:persona/yuri.md) | `src/application/` |
-| 아다 | [ada.md](mdc:persona/ada.md) | `src/infrastructure/` |
-| 지나 | [gina-gui.md](mdc:persona/gina-gui.md) | `web/` |
-| 테스 | [tess.md](mdc:persona/tess.md) | `tests/` |
-| 렉스 | [rex.md](mdc:persona/rex.md) | Verification pipeline |
+|------|------|--------------|
+| Coordinator | [simon.md](mdc:persona/simon.md) | Coordination, `app/` |
+| Domain | [dominic.md](mdc:persona/dominic.md) | `src/domain/` |
+| Application | [yuri.md](mdc:persona/yuri.md) | `src/application/` |
+| Infrastructure | [ada.md](mdc:persona/ada.md) | `src/infrastructure/` |
+| GUI | [gina-gui.md](mdc:persona/gina-gui.md) | `web/` |
+| Tests | [tess.md](mdc:persona/tess.md) | `tests/` |
+| Verification | [rex.md](mdc:persona/rex.md) | Verification |
 
 Index: [persona/README.md](mdc:persona/README.md).
-
-## Gates
-
-- Do not enter step 3 without an approved plan for non-trivial work (`docs/superpowers/plans/`).
-- Simon blocks step 3 until spec/plan approval when required.
-- During an approved plan run (`executing-plans` / `subagent-driven-development`): brief once before first code edit; do not repeat step 2 between every plan task unless the plan marks a breakpoint ([AGENTS.md](mdc:AGENTS.md) — Plan execution continuity).

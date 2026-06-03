@@ -22,10 +22,18 @@ export const validAppSnapshot: AppSnapshot = {
     percent: 0,
     label: "idle",
     cancellable: false,
+    background: null,
   },
   work: {
     activeMode: "resolve",
-    scan: { state: "empty", lastRun: null },
+    scan: {
+      state: "empty",
+      lastRun: null,
+      indexReady: false,
+      deepAnalysisComplete: false,
+      deepAnalysisStatus: "idle",
+      deepAnalysisError: null,
+    },
     resolve: {
       queueCount: 0,
       groupCount: 0,

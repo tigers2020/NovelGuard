@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
+import threading
 import time
 from pathlib import Path
 
@@ -36,14 +37,17 @@ from app.selection_fingerprint import selection_fingerprint
 from app.session_factory import create_bridge_api, create_library_session
 from application.app_settings import AppSettings
 from application.file_row_query import normalize_file_rows_query, text_sort_key
+from application.library_folder_persistence import normalize_library_folder_path
 from application.ports.filesystem_apply import ApplyRowResult
 from application.quality_analyzer import analyze_quality
 from application.scan_settings import SettingsValidationError, parse_extension_filter
+from application.settings_store import SettingsStore
 from domain.apply_models import PreviewOperation
 from domain.apply_path_policy import build_move_duplicate_dest_relative, validate_move_operation
 from domain.duplicate_exact import find_exact_duplicate_groups
 from domain.models import FileRecord, make_file_id
 from domain.quality import make_issue_id
+from domain.settings_keys import SETTINGS_KEY_LIBRARY_LAST_FOLDER_PATH
 from infrastructure import filesystem_scanner
 from infrastructure.content_hasher import hash_file
 from infrastructure.local_filesystem_apply import LocalFilesystemApplyAdapter
@@ -88,7 +92,7 @@ def test_clamp_query_limit_max_200() -> None:
 
 def test_pywebview_api_methods_match_locked_contract() -> None:
     """Canonical list: app.bridge_parity.PYWEBVIEW_API_METHODS (mirrors bridgeParity.ts)."""
-    assert len(PYWEBVIEW_API_METHODS) == 26
+    assert len(PYWEBVIEW_API_METHODS) == 27
     assert PYWEBVIEW_API_METHODS[0] == "get_app_info"
     assert PYWEBVIEW_API_METHODS[-1] == "cancel_finalize"
 
@@ -342,6 +346,88 @@ def test_get_logs_artifacts_audit_tail_metadata(tmp_path: Path) -> None:
     assert "audit_tail" in kinds
 
 
+def test_restore_last_library_folder_after_restart(tmp_path: Path) -> None:
+    lib = tmp_path / "library"
+    lib.mkdir()
+    (lib / "chapter.txt").write_text("body", encoding="utf-8")
+    settings = AppSettings(SettingsStore(tmp_path / "settings.json"))
+    settings.set_value(
+        SETTINGS_KEY_LIBRARY_LAST_FOLDER_PATH, normalize_library_folder_path(str(lib.resolve()))
+    )
+
+    session = create_library_session(settings=settings)
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    assert api.get_snapshot()["library"]["fileCount"] == 1
+
+    session2 = create_library_session(settings=settings)
+    assert session2.index.folder_path == normalize_library_folder_path(str(lib.resolve()))
+    assert len(session2.index.files()) == 1
+    assert session2.scan_state() == "success"
+
+    saved, source = settings.get_value(SETTINGS_KEY_LIBRARY_LAST_FOLDER_PATH)
+    assert source == "persisted"
+    assert saved == normalize_library_folder_path(str(lib.resolve()))
+
+
+def test_select_folder_via_dialog_persists_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    lib = tmp_path / "novels"
+    lib.mkdir()
+    settings = AppSettings(SettingsStore(tmp_path / "settings.json"))
+    session = create_library_session(MemoryLibraryIndex(), settings=settings)
+
+    class _FakeTk:
+        def withdraw(self) -> None:
+            return None
+
+        def destroy(self) -> None:
+            return None
+
+        def attributes(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+    monkeypatch.setattr("tkinter.Tk", _FakeTk)
+    monkeypatch.setattr(
+        "tkinter.filedialog.askdirectory",
+        lambda **_kwargs: str(lib),
+    )
+    session.select_folder()
+
+    saved, source = settings.get_value(SETTINGS_KEY_LIBRARY_LAST_FOLDER_PATH)
+    assert source == "persisted"
+    assert saved == normalize_library_folder_path(str(lib.resolve()))
+
+
+def test_select_folder_explicit_path_does_not_overwrite_persisted(tmp_path: Path) -> None:
+    lib = tmp_path / "saved"
+    lib.mkdir()
+    other = tmp_path / "other"
+    other.mkdir()
+    settings = AppSettings(SettingsStore(tmp_path / "settings.json"))
+    settings.set_value(
+        SETTINGS_KEY_LIBRARY_LAST_FOLDER_PATH, normalize_library_folder_path(str(lib.resolve()))
+    )
+    session = create_library_session(MemoryLibraryIndex(), settings=settings)
+    session.select_folder(str(other))
+    saved, _ = settings.get_value(SETTINGS_KEY_LIBRARY_LAST_FOLDER_PATH)
+    assert saved == normalize_library_folder_path(str(lib.resolve()))
+
+
+def test_restore_skips_ephemeral_persisted_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("NOVELGUARD_ALLOW_EPHEMERAL_LIBRARY", raising=False)
+    ephemeral = tmp_path / "pytest-of-user" / "test_run0"
+    ephemeral.mkdir(parents=True)
+    settings = AppSettings(SettingsStore(tmp_path / "settings.json"))
+    settings.set_value(SETTINGS_KEY_LIBRARY_LAST_FOLDER_PATH, str(ephemeral.resolve()))
+    session = create_library_session(MemoryLibraryIndex(), settings=settings)
+    assert session.index.folder_path is None
+
+
 def test_scan_include_hidden_setting(tmp_path: Path) -> None:
     (tmp_path / ".secret.txt").write_text("x", encoding="utf-8")
     session = create_library_session(MemoryLibraryIndex(), settings=AppSettings())
@@ -378,10 +464,13 @@ def test_bridge_api_scan_populates_file_count(tmp_path: Path) -> None:
     assert snap["work"]["scan"]["state"] == "success"
     assert snap["library"]["fileCount"] == 2
     assert snap["work"]["resolve"]["groupCount"] == 0
-    assert snap["work"]["resolve"]["libraryRevision"] == rev_before + 1
+    rev_after = snap["work"]["resolve"]["libraryRevision"]
+    assert rev_after > rev_before
 
 
 def test_cancel_scan_discards_partial(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from infrastructure.filesystem_scanner import ScanStreamResult
+
     (tmp_path / "a.txt").write_text("x", encoding="utf-8")
     session = create_library_session(MemoryLibraryIndex(), settings=AppSettings())
     session.select_folder(str(tmp_path))
@@ -405,15 +494,21 @@ def test_cancel_scan_discards_partial(monkeypatch: pytest.MonkeyPatch, tmp_path:
         *,
         on_progress,
         cancel_check,
-        out,
+        on_record,
         extensions=None,
         include_hidden=False,
-    ) -> None:
+        on_paths_collected=None,
+        out=None,
+    ) -> ScanStreamResult:
+        _ = on_paths_collected
+        sink = on_record if on_record is not None else out
+        if sink is None:
+            raise TypeError("on_record or out required")
         _ = include_hidden
         for i in range(50):
             if cancel_check():
                 cancel_flag["hit"] = True
-                return
+                return ScanStreamResult(completed=False, cancelled=True, scanned_count=i)
             rel = f"f{i}.txt"
             record = FileRecord(
                 id=make_file_id(rel, 1, i),
@@ -423,19 +518,39 @@ def test_cancel_scan_discards_partial(monkeypatch: pytest.MonkeyPatch, tmp_path:
                 modified_at_ns=i,
                 extension=".txt",
             )
-            out(record)
+            sink(record)
             on_progress(i * 2, "slow")
             time.sleep(0.02)
+        return ScanStreamResult(completed=True, cancelled=False, scanned_count=50)
 
-    monkeypatch.setattr(filesystem_scanner, "scan_folder", slow_scan)
-    session._scan_folder = slow_scan  # noqa: SLF001 — test binds patched scanner
+    def slow_scan_adapter(
+        folder_path: str,
+        *,
+        on_progress,
+        cancel_check,
+        out,
+        extensions=None,
+        include_hidden=False,
+        on_paths_collected=None,
+    ) -> ScanStreamResult:
+        return slow_scan(
+            folder_path,
+            on_progress=on_progress,
+            cancel_check=cancel_check,
+            on_record=out,
+            extensions=extensions,
+            include_hidden=include_hidden,
+            on_paths_collected=on_paths_collected,
+        )
+
+    session._scan_folder = slow_scan_adapter  # noqa: SLF001
     api.start_scan()
-    time.sleep(0.05)
+    time.sleep(0.15)
     rev_before_cancel = api.get_snapshot()["work"]["resolve"]["libraryRevision"]
     api.cancel_run()
     deadline = time.monotonic() + 5.0
     snap = api.get_snapshot()
-    while snap["pipeline"]["phase"] == "scan" and time.monotonic() < deadline:
+    while snap["work"]["scan"]["state"] == "running" and time.monotonic() < deadline:
         time.sleep(0.05)
         snap = api.get_snapshot()
     assert cancel_flag["hit"] is True
@@ -477,7 +592,7 @@ def test_find_exact_duplicate_groups_keeper_by_size() -> None:
 def test_sqlite_library_index_round_trip(tmp_path: Path) -> None:
     db = tmp_path / "library.db"
     index = SqliteLibraryIndex(db)
-    folder = str(tmp_path / "lib")
+    folder = normalize_library_folder_path(str(tmp_path / "lib"))
     record = FileRecord(
         id=make_file_id("a.txt", 5, 1),
         relative_path="a.txt",
@@ -497,7 +612,7 @@ def test_sqlite_library_index_round_trip(tmp_path: Path) -> None:
 def test_sqlite_library_index_file_sort_keys_populated(tmp_path: Path) -> None:
     db = tmp_path / "library.db"
     index = SqliteLibraryIndex(db)
-    folder = str(tmp_path / "lib")
+    folder = normalize_library_folder_path(str(tmp_path / "lib"))
     record = FileRecord(
         id=make_file_id("Café.txt", 5, 1),
         relative_path="sub/Café.txt",
@@ -666,12 +781,205 @@ def test_sqlite_library_index_legacy_db_backfills_file_keys(tmp_path: Path) -> N
 
 
 def _scan_until_idle(api: BridgeApi) -> dict:
-    deadline = time.monotonic() + 5.0
+    deadline = time.monotonic() + 30.0
     snap = api.get_snapshot()
-    while snap["work"]["scan"]["state"] == "running" and time.monotonic() < deadline:
-        time.sleep(0.05)
-        snap = api.get_snapshot()
+    while time.monotonic() < deadline:
+        if snap["work"]["scan"]["state"] == "running":
+            time.sleep(0.05)
+            snap = api.get_snapshot()
+            continue
+        if snap["pipeline"]["phase"] != "idle":
+            time.sleep(0.05)
+            snap = api.get_snapshot()
+            continue
+        break
     return snap
+
+
+def test_scan_does_not_persist_near_text_preview(tmp_path: Path) -> None:
+    (tmp_path / "a.txt").write_text("hello world\n" * 100, encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    for record in session.index.files():
+        assert record.near_text_preview is None
+
+
+def test_append_files_batch_increments_count_without_full_replace(tmp_path: Path) -> None:
+    index = SqliteLibraryIndex(tmp_path / "lib.db")
+    folder = str(tmp_path)
+    index.activate_library_folder(folder)
+
+    def _row(name: str) -> FileRecord:
+        return FileRecord(
+            id=make_file_id(name, 1, 1),
+            relative_path=name,
+            name=name,
+            size_bytes=1,
+            modified_at_ns=1,
+            extension=".txt",
+        )
+
+    index.append_files_batch(folder, [_row("a.txt")], reset=True)
+    assert index.file_count() == 1
+    index.append_files_batch(folder, [_row("b.txt")], reset=False)
+    assert index.file_count() == 2
+    names = {f.name for f in index.files()}
+    assert names == {"a.txt", "b.txt"}
+
+
+def test_append_files_batch_reset_empty_clears_folder(tmp_path: Path) -> None:
+    index = SqliteLibraryIndex(tmp_path / "lib.db")
+    folder = str(tmp_path)
+    index.activate_library_folder(folder)
+
+    def _row(name: str) -> FileRecord:
+        return FileRecord(
+            id=make_file_id(name, 1, 1),
+            relative_path=name,
+            name=name,
+            size_bytes=1,
+            modified_at_ns=1,
+            extension=".txt",
+        )
+
+    index.append_files_batch(folder, [_row("old.txt")], reset=True)
+    assert index.file_count() == 1
+    index.append_files_batch(folder, [], reset=True)
+    assert index.file_count() == 0
+
+
+def test_snapshot_includes_index_ready_and_deep_analysis_flags(tmp_path: Path) -> None:
+    (tmp_path / "one.txt").write_text("x", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    snap = api.get_snapshot()
+    assert snap["work"]["scan"]["indexReady"] is False
+    assert snap["work"]["scan"]["deepAnalysisComplete"] is False
+    api.start_scan()
+    _scan_until_idle(api)
+    snap = api.get_snapshot()
+    assert snap["work"]["scan"]["indexReady"] is True
+    assert snap["work"]["scan"]["deepAnalysisComplete"] is True
+
+
+def test_snapshot_rejects_legacy_scan_phase(tmp_path: Path) -> None:
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    snap = api.get_snapshot()
+    snap["pipeline"]["phase"] = "scan"
+    with pytest.raises(SnapshotContractError):
+        validate_app_snapshot(snap)
+
+
+def test_snapshot_rejects_unknown_pipeline_phase(tmp_path: Path) -> None:
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    snap = api.get_snapshot()
+    snap["pipeline"]["phase"] = "bogus"
+    with pytest.raises(SnapshotContractError):
+        validate_app_snapshot(snap)
+
+
+def test_scan_increments_file_count_after_first_persist_batch(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import application.scan_pipeline_constants as scan_constants
+
+    monkeypatch.setattr(scan_constants, "SCAN_PERSIST_BATCH_SIZE", 2)
+    for i in range(5):
+        (tmp_path / f"f{i}.txt").write_text("x\n", encoding="utf-8")
+
+    session = create_library_session(SqliteLibraryIndex(tmp_path / "idx.db"))
+    session.select_folder(str(tmp_path))
+    index = session.index
+    original_append = index.append_files_batch
+    first_batch_done = threading.Event()
+    release_after_first = threading.Event()
+
+    def wrapping_append(folder_path: str, files: list, *, reset: bool = False) -> None:
+        original_append(folder_path, files, reset=reset)
+        if not first_batch_done.is_set():
+            first_batch_done.set()
+            release_after_first.wait(timeout=5.0)  # hold after first commit, before probe continues
+
+    monkeypatch.setattr(index, "append_files_batch", wrapping_append)
+    api = create_bridge_api(session)
+    api.start_scan()
+
+    assert first_batch_done.wait(timeout=5.0), "first persist batch never committed"
+    snap = api.get_snapshot()
+    assert 0 < snap["library"]["fileCount"] < 5
+    release_after_first.set()
+    _scan_until_idle(api)
+    assert api.get_snapshot()["library"]["fileCount"] == 5
+
+
+def test_index_ready_before_scan_success(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import application.library_session as library_session_module
+    import application.scan_pipeline_constants as scan_constants
+    from domain.duplicate_exact import find_exact_duplicate_groups as real_find_groups
+
+    monkeypatch.setattr(scan_constants, "SCAN_PERSIST_BATCH_SIZE", 1)
+    (tmp_path / "a.txt").write_text("a\n", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("b\n", encoding="utf-8")
+
+    exact_index_reached = threading.Event()
+    release_exact_index = threading.Event()
+
+    def gated_exact_groups(files: list[FileRecord]) -> list:
+        exact_index_reached.set()
+        release_exact_index.wait(timeout=5.0)
+        return real_find_groups(files)
+
+    monkeypatch.setattr(
+        library_session_module,
+        "find_exact_duplicate_groups",
+        gated_exact_groups,
+    )
+
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+
+    assert exact_index_reached.wait(timeout=5.0), "exact_index phase not reached"
+    snap = api.get_snapshot()
+    assert snap["work"]["scan"]["indexReady"] is True
+    assert snap["work"]["scan"]["state"] == "running"
+
+    release_exact_index.set()
+    _scan_until_idle(api)
+    snap = api.get_snapshot()
+    assert snap["work"]["scan"]["state"] == "success"
+
+
+def test_scan_emits_probe_not_legacy_scan_phase(tmp_path: Path) -> None:
+    (tmp_path / "a.txt").write_text("x", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    deadline = time.monotonic() + 10.0
+    phases: set[str] = set()
+    while time.monotonic() < deadline:
+        snap = api.get_snapshot()
+        phases.add(snap["pipeline"]["phase"])
+        if snap["work"]["scan"]["state"] == "success":
+            break
+        time.sleep(0.02)
+    _scan_until_idle(api)
+    assert "scan" not in phases
+    assert "probe" in phases or "persist" in phases
 
 
 def test_update_review_decisions_approve_persists(tmp_path: Path) -> None:
@@ -799,6 +1107,25 @@ def test_analyze_quality_invalid_utf8(tmp_path: Path) -> None:
         extension=".txt",
     )
     issues = analyze_quality(str(folder), [record])
+    assert len(issues) == 1
+    assert issues[0].kind == "invalid_utf8"
+
+
+def test_analyze_quality_uses_scan_cache_for_invalid_utf8_without_disk_read() -> None:
+    record = FileRecord(
+        id=make_file_id("bad.txt", 2, 1),
+        relative_path="bad.txt",
+        name="bad.txt",
+        size_bytes=2,
+        modified_at_ns=1,
+        extension=".txt",
+        encoding_status="invalid_utf8",
+    )
+
+    def fail_read(_path: Path) -> bytes:
+        raise AssertionError("disk read should not run when scan cache has invalid_utf8")
+
+    issues = analyze_quality("/missing/lib", [record], read_bytes=fail_read)
     assert len(issues) == 1
     assert issues[0].kind == "invalid_utf8"
 
@@ -1040,8 +1367,8 @@ def test_snapshot_quality_counts(tmp_path: Path) -> None:
 def test_sqlite_quality_issues_folder_scoped(tmp_path: Path) -> None:
     db = tmp_path / "library.db"
     index = SqliteLibraryIndex(db)
-    folder_a = str(tmp_path / "a")
-    folder_b = str(tmp_path / "b")
+    folder_a = normalize_library_folder_path(str(tmp_path / "a"))
+    folder_b = normalize_library_folder_path(str(tmp_path / "b"))
     record = FileRecord(
         id=make_file_id("only.txt", 0, 1),
         relative_path="only.txt",
@@ -1857,6 +2184,21 @@ def test_quality_repair_stale_file_drift(tmp_path: Path) -> None:
     assert "changed-by-user" in path.read_bytes().decode("latin-1")
 
 
+def test_preview_finalize_cleanup_lists_empty_dirs(tmp_path: Path) -> None:
+    (tmp_path / "duplicate" / "empty-slot").mkdir(parents=True)
+    (tmp_path / "organized" / "empty-slot").mkdir(parents=True)
+    (tmp_path / "solo.txt").write_text("hello", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    preview = api.preview_finalize_cleanup()
+    assert "previewedEmptyDirs" in preview
+    assert "duplicate/empty-slot" in preview["previewedEmptyDirs"]
+    assert "organized/empty-slot" in preview["previewedEmptyDirs"]
+
+
 def test_get_finalize_summary_requires_library() -> None:
     api = _memory_api()
     with pytest.raises(FinalizeError) as exc_info:
@@ -1909,6 +2251,174 @@ def test_finalize_blocked_exact_duplicate_queue(tmp_path: Path) -> None:
     assert result["reportId"]
     report = api.get_finalize_report(result["reportId"])
     assert report["status"] == "blocked"
+
+
+def test_cancel_finalize_idempotent_when_idle() -> None:
+    api = _memory_api()
+    api.cancel_finalize()
+    api.cancel_finalize()
+
+
+def test_append_files_batch_reset_preserves_other_folder_rows(tmp_path: Path) -> None:
+    index = SqliteLibraryIndex(tmp_path / "multi.db")
+    folder_a = normalize_library_folder_path(str(tmp_path / "a"))
+    folder_b = normalize_library_folder_path(str(tmp_path / "b"))
+
+    def _row(folder: str, name: str) -> FileRecord:
+        rel = name
+        return FileRecord(
+            id=make_file_id(rel, 1, 1),
+            relative_path=rel,
+            name=name,
+            size_bytes=1,
+            modified_at_ns=1,
+            extension=".txt",
+        )
+
+    index.append_files_batch(folder_a, [_row(folder_a, "a.txt")], reset=True)
+    index.append_files_batch(folder_b, [_row(folder_b, "b.txt")], reset=True)
+    index.activate_library_folder(folder_b)
+    assert index.file_count() == 1
+    index.append_files_batch(folder_a, [_row(folder_a, "a2.txt")], reset=True)
+    index.activate_library_folder(folder_b)
+    assert index.file_count() == 1
+    assert {f.name for f in index.files()} == {"b.txt"}
+
+
+def test_run_scan_keeps_busy_until_tail_flush_and_indexes_complete(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from infrastructure.filesystem_scanner import ScanStreamResult
+
+    (tmp_path / "one.txt").write_text("x", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    flush_started = threading.Event()
+    release_flush = threading.Event()
+
+    def fast_scan(
+        folder_path: str,
+        *,
+        on_progress,
+        cancel_check,
+        out,
+        extensions=None,
+        include_hidden=False,
+        on_paths_collected=None,
+    ) -> ScanStreamResult:
+        _ = (
+            folder_path,
+            on_progress,
+            cancel_check,
+            extensions,
+            include_hidden,
+            on_paths_collected,
+        )
+        record = FileRecord(
+            id=make_file_id("one.txt", 1, 1),
+            relative_path="one.txt",
+            name="one.txt",
+            size_bytes=1,
+            modified_at_ns=1,
+            extension=".txt",
+        )
+        out(record)
+        return ScanStreamResult(completed=True, cancelled=False, scanned_count=1)
+
+    index = session.index
+    original_append = index.append_files_batch
+
+    def tracking_append(folder_path: str, files: list, *, reset: bool = False) -> None:
+        original_append(folder_path, files, reset=reset)
+        if not flush_started.is_set():
+            flush_started.set()
+            assert session.is_apply_or_scan_busy()
+            release_flush.wait(timeout=5.0)
+
+    monkeypatch.setattr(index, "append_files_batch", tracking_append)
+    session._scan_folder = fast_scan  # noqa: SLF001
+    api = create_bridge_api(session)
+    api.start_scan()
+    assert flush_started.wait(timeout=5.0), "tail flush never started"
+    assert session.is_apply_or_scan_busy()
+    release_flush.set()
+    _scan_until_idle(api)
+
+
+def test_scan_normal_completion_flushes_tail_buffer_even_if_cancel_requested_after_scanner_returns(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from infrastructure.filesystem_scanner import ScanStreamResult
+
+    (tmp_path / "a.txt").write_text("a", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("b", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    scan_finished = threading.Event()
+
+    def scan_two(
+        folder_path: str,
+        *,
+        on_progress,
+        cancel_check,
+        out,
+        extensions=None,
+        include_hidden=False,
+        on_paths_collected=None,
+    ) -> ScanStreamResult:
+        _ = (
+            folder_path,
+            on_progress,
+            cancel_check,
+            extensions,
+            include_hidden,
+            on_paths_collected,
+        )
+        for name in ("a.txt", "b.txt"):
+            out(
+                FileRecord(
+                    id=make_file_id(name, 1, 1),
+                    relative_path=name,
+                    name=name,
+                    size_bytes=1,
+                    modified_at_ns=1,
+                    extension=".txt",
+                )
+            )
+        scan_finished.set()
+        return ScanStreamResult(completed=True, cancelled=False, scanned_count=2)
+
+    session._scan_folder = scan_two  # noqa: SLF001
+    api = create_bridge_api(session)
+    api.start_scan()
+    assert scan_finished.wait(timeout=5.0)
+    api.cancel_run()
+    _scan_until_idle(api)
+    assert api.get_snapshot()["library"]["fileCount"] == 2
+
+
+def test_post_scan_exception_is_exposed_in_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import application.library_session as library_session_module
+
+    (tmp_path / "one.txt").write_text("x", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+
+    def boom(files: list[FileRecord]) -> list:
+        raise RuntimeError("post-scan boom")
+
+    monkeypatch.setattr(library_session_module, "find_exact_duplicate_groups", boom)
+    api.start_scan()
+    snap = _scan_until_idle(api)
+    assert snap["work"]["scan"]["deepAnalysisStatus"] == "error"
+    assert snap["work"]["scan"]["deepAnalysisComplete"] is False
+    assert "post-scan boom" in (snap["work"]["scan"]["deepAnalysisError"] or "")
 
 
 def test_finalize_while_scan_raises_library_busy(tmp_path: Path) -> None:

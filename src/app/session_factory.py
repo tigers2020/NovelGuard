@@ -29,8 +29,7 @@ from application.ports.filesystem_apply import FilesystemApplyPort
 from application.ports.filesystem_repair import FilesystemRepairPort
 from application.ports.library_index import LibraryIndexPort
 from application.settings_store import SettingsStore
-from infrastructure.content_hasher import hash_file
-from infrastructure.filesystem_scanner import scan_folder
+from infrastructure.filesystem_scanner import ScanStreamResult, scan_folder_stream
 from infrastructure.local_filesystem_apply import LocalFilesystemApplyAdapter
 from infrastructure.local_filesystem_repair import LocalFilesystemRepairAdapter
 from infrastructure.memory_library_index import MemoryLibraryIndex
@@ -49,7 +48,7 @@ class SessionAuditLog(AuditLog):
         super().append(event, **fields)
 
 
-def _scan_with_content_hash(
+def _scan_with_content_probe(
     folder_path: str,
     *,
     on_progress: Callable[..., None],
@@ -58,16 +57,17 @@ def _scan_with_content_hash(
     extensions: set[str] | None = None,
     include_hidden: bool = False,
     content_hash_fn: Callable[..., str] | None = None,
-) -> None:
+    on_paths_collected: Callable[[int], None] | None = None,
+) -> ScanStreamResult:
     _ = content_hash_fn
-    scan_folder(
+    return scan_folder_stream(
         folder_path,
         on_progress=on_progress,
         cancel_check=cancel_check,
-        out=out,
+        on_record=out,
         extensions=extensions,
         include_hidden=include_hidden,
-        content_hash_fn=hash_file,
+        on_paths_collected=on_paths_collected,
     )
 
 
@@ -104,7 +104,7 @@ def create_library_session(
 
     session = LibrarySession(
         index,
-        scan_folder=_scan_with_content_hash,
+        scan_folder=_scan_with_content_probe,
         on_library_selected=bind_library_runtime,
         settings=settings or _create_app_settings(),
     )
@@ -119,6 +119,7 @@ def create_library_session(
             repair_backup_root=pending.repair_backup_root,
         )
     session.apply_library_runtime(paths, rebind_sqlite=False)
+    session.restore_last_library_folder()
     return session
 
 

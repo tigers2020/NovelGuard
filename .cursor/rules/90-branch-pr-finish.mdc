@@ -1,20 +1,17 @@
 ---
-description: Branch completion and PR workflow
+description: Optional branch completion and PR workflow
 globs: []
 alwaysApply: false
 ---
 
 # Branch Finish Rules
 
-When implementation is complete, use Superpowers `finishing-a-development-branch`.
+Use this rule only when the user asks to finish a branch, open a PR, merge, or commit.
 
-1. Verify working tree (`git status`).
-2. Run the agreed verification gate (`python scripts/verify_phase_completion.py` or equivalent).
-3. On **PR closed** (per [AGENTS.md](mdc:AGENTS.md) Security & commits), create the slice commit before presenting finish options.
-4. Report branch name, base, commits ahead/behind, and test results.
-5. Present **exactly** these options:
-   - Merge locally
-   - Push and create PR
-   - Keep branch as-is
-   - Discard work
-6. Never force-delete branches or discard work without explicit user confirmation.
+1. Verify working tree with `git status`.
+2. Run the agreed verification gate, or report that it was not run.
+3. Commit only when the user explicitly asks or the approved plan says to commit.
+4. Stage only files in the finished slice; exclude caches and secrets.
+5. Report branch name, base, commits ahead/behind, and verification results.
+6. Present available finish options: keep branch, commit, push/create PR, merge locally.
+7. Never force-delete branches or discard work without explicit user confirmation.

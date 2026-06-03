@@ -1,0 +1,17 @@
+---
+description: Use when correctness depends on current library, framework, API, or version-specific external behavior (React, Vite, Tailwind, Playwright, pyproject/package deps).
+alwaysApply: false
+---
+
+# Context7 lookup
+
+Use **context7-mcp** or Context7 MCP (`resolve-library-id` → `query-docs`) only when the task depends on external API or version behavior.
+
+Skip after reading existing project code and tests for local-only refactors.
+
+1. Confirm APIs, config, and migration notes against current docs — not training data.
+2. Record library IDs only when the choice affects implementation.
+
+Typical: React, Vite, Tailwind v4, Playwright, packages in `pyproject.toml` / `web/package.json`.
+
+Report in final summary: library IDs checked, or skipped + reason.

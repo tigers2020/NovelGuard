@@ -1,4 +1,4 @@
-const BATCH_DISABLED_TOOLTIP = "행을 선택한 뒤 사용하세요 (v1: explicit selection only)";
+const BATCH_DISABLED_TOOLTIP = "행을 선택한 뒤 사용하세요.";
 
 export function BatchActionBar({
   selectionLabel,

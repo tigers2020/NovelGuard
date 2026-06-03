@@ -1,0 +1,21 @@
+---
+description: Use for schema, SQL, migrations, indexes, DB debugging, or persistence adapter work.
+alwaysApply: false
+---
+
+# Supabase / DB workflow
+
+Use **Supabase MCP** when the task touches remote schema, migrations, SQL, indexes, or persistence adapters.
+
+1. Read tool schemas under `mcps/user-supabase/tools/` before calling.
+2. Start with `list_tables` or `search_docs` as appropriate.
+3. Before schema changes: `get_logs` / `get_advisors` when debugging; prefer local CLI when a dev stack exists.
+
+**NovelGuard local SQLite:** repo files are authoritative:
+
+- `src/infrastructure/sqlite_library_index.py`
+- related ports and tests
+
+Supabase supplements SQL/migration guidance only.
+
+Report in final summary: Supabase MCP used, or N/A + local files read.

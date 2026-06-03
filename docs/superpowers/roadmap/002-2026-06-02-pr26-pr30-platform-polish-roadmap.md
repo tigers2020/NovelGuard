@@ -1,6 +1,6 @@
 ---
 title: PR-26..30 Platform Polish Roadmap
-status: active
+status: closed
 date: 2026-06-02
 parent_roadmap: docs/superpowers/roadmap/000-2026-06-01-novelguard-master-roadmap.md
 parent_spec: docs/superpowers/specs/000-2026-06-01-novelguard-ui-overhaul-design.md
@@ -12,7 +12,7 @@ reviewer_audit: 2026-06-02 — approved 8.5/10; scope locks below incorporated
 
 **Parent:** [000 master roadmap](./000-2026-06-01-novelguard-master-roadmap.md) · **Prior track:** [001 PR-20..25](./001-2026-06-02-pr20-pr25-development-roadmap.md) (closed)
 
-**Position (2026-06-02):** PR-26..31 **Done**. PR-30 bridge hygiene **Done** (2026-06-02). **Next:** spec 019 scan folder picker (PR-32) or program wave after platform polish. **Then:** PR-32 scan folder picker UI ([spec 019](../specs/019-2026-06-02-feature-ui-shell-scan-folder-picker-ui-design.md)) — UX affordance only; not PR-30.
+**Position (2026-06-02):** PR-26..32 **Done**. Track **closed**. **Next program:** [003 release gate roadmap](./003-2026-06-02-platform-release-gate-roadmap.md) — PR-33 IA reconciliation onward.
 
 **Sequencing (locked):** `snapshot invalidation transport → quality grid parity → Settings/Logs v1 (minimal) → queryFileRows advanced → bridge hygiene refactor`. PR-30 is **not** a mandatory “last feature PR” — see [PR-30 early-pull rules](#pr-30--bridge--app-hygiene-refactor).
 
@@ -74,7 +74,7 @@ flowchart TD
 | **PR-29** | `queryFileRows` advanced / SQL page query | F | No | `specs/017-2026-06-02-query-file-rows-advanced-design.md` | `plans/023-2026-06-02-pr29-query-file-rows-advanced.md` | **Done** (2026-06-02) |
 | **PR-31** | Work mode tab transition (optimistic + keep-alive) | F | No | [018 work mode tab](../specs/018-2026-06-02-feature-ui-shell-work-mode-tab-transition-design.md) | [024 pr31 plan](../plans/024-2026-06-02-feature-ui-shell-pr31-work-mode-tab-transition.md) | **Done** (2026-06-02) |
 | **PR-30** | Bridge / app hygiene refactor | G | No | [020 bridge hygiene](../specs/020-2026-06-02-refactor-bridge-bridge-hygiene-design.md) | [026 pr30 plan](../plans/026-2026-06-02-refactor-bridge-pr30-bridge-hygiene.md) | **Done** (2026-06-02) |
-| **PR-32** | Scan folder picker UI (React CTA) | F | No | [019 scan folder picker](../specs/019-2026-06-02-feature-ui-shell-scan-folder-picker-ui-design.md) | [025 pr32 plan](../plans/025-2026-06-02-feature-ui-shell-pr32-scan-folder-picker-ui.md) | **Proposed** — after PR-30 unless hotfix |
+| **PR-32** | Scan folder picker UI (React CTA) | F | No | [019 scan folder picker](../specs/019-2026-06-02-feature-ui-shell-scan-folder-picker-ui-design.md) | [025 pr32 plan](../plans/025-2026-06-02-feature-ui-shell-pr32-scan-folder-picker-ui.md) | **Done** (2026-06-03; manual pywebview smoke optional) |
 
 ---
 
@@ -453,3 +453,4 @@ python scripts/verify_phase_completion.py
 | 2026-06-02 | PR-29 spec 017 draft: ShellFileDock-only consumer; SQL page path; offset cursor; strengthened PR-30 parallel gate |
 | 2026-06-02 | PR-29 spec 017 **approved**: NormalizedFileRowsQuery, *_key columns, file_review_projection, LOCK-29-13..16 |
 | 2026-06-02 | PR-29 plan 023 draft (Tasks 0–14, commit slices) |
+| 2026-06-03 | PR-32 **Done**; track closed; handoff to [003 release gate roadmap](./003-2026-06-02-platform-release-gate-roadmap.md) |

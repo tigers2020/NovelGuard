@@ -18,6 +18,7 @@ from app.bridge_contract import (
     validate_app_snapshot,
     validate_duplicate_group_detail,
     validate_file_rows_page,
+    validate_finalize_cleanup_preview,
     validate_finalize_result,
     validate_finalize_summary,
     validate_log_entries_page,
@@ -282,6 +283,22 @@ class BridgeApi:
         payload = self._session.get_finalize_summary()
 
         validate_finalize_summary(payload)
+
+        return payload
+
+    def preview_finalize_cleanup(self) -> dict[str, Any]:
+        if not self._session.library_root_path():
+            raise FinalizeError("NO_LIBRARY")
+
+        try:
+            payload = self._session.preview_finalize_cleanup()
+        except RuntimeError as exc:
+            reason = str(exc)
+            if reason in ("NO_LIBRARY", "LIBRARY_BUSY"):
+                raise FinalizeError(reason) from exc
+            raise
+
+        validate_finalize_cleanup_preview(payload)
 
         return payload
 

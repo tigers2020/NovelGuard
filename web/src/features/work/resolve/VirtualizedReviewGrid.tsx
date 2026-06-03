@@ -9,6 +9,8 @@ export function VirtualizedReviewGrid({
   rows,
   selectedRowId,
   onSelectRow,
+  explicitRowIds,
+  onToggleExplicit,
   onNearEnd,
   loadingMore,
   sorting,
@@ -21,6 +23,8 @@ export function VirtualizedReviewGrid({
   rows: ReviewRow[];
   selectedRowId: string | null;
   onSelectRow: (row: ReviewRow) => void;
+  explicitRowIds?: ReadonlySet<string>;
+  onToggleExplicit?: (row: ReviewRow) => void;
   onNearEnd?: () => void;
   loadingMore?: boolean;
   sorting: SortingState;
@@ -30,7 +34,15 @@ export function VirtualizedReviewGrid({
   mergeColumnVisibility?: (containerWidth: number) => VisibilityState;
   enableColumnResize?: boolean;
 }) {
-  const columns = useMemo(() => buildReviewGridColumns(), []);
+  const columns = useMemo(
+    () =>
+      buildReviewGridColumns(
+        explicitRowIds && onToggleExplicit
+          ? { explicitRowIds, onToggleExplicit }
+          : undefined,
+      ),
+    [explicitRowIds, onToggleExplicit],
+  );
 
   return (
     <VirtualizedDataGrid

@@ -14,8 +14,8 @@ export function AppSidebar({
   onRouteChange: (route: AppSnapshot["route"]) => void;
 }) {
   return (
-    <aside className="shrink-0 border-r border-outline bg-surface p-3">
-      <div className="mb-3 px-2 text-xs font-semibold uppercase tracking-wider text-muted">Navigation</div>
+    <aside className="shrink-0 border-r border-outline bg-surface p-3" data-testid="app-sidebar">
+      <div className="mb-3 px-2 text-xs font-semibold uppercase tracking-wider text-muted">메뉴</div>
       <nav className="space-y-1">
         {nav.map((item) => (
           <button
