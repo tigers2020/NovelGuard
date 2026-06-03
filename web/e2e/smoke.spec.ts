@@ -57,6 +57,14 @@ test.describe("NovelGuard smoke", () => {
     await expect(page.getByTestId("work-mode-tab-quality")).toHaveClass(/bg-primary/);
   });
 
+  test("PR-32 scan folder picker updates mock selected path", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("work-mode-tab-scan").click();
+    await page.getByTestId("scan-select-folder").click();
+    await expect(page.getByTestId("scan-folder-error")).toHaveCount(0);
+    await expect(page.getByTitle("D:/Novels/Library/selected")).toBeVisible();
+  });
+
   test("PR-31 rapid work mode tabs keep highlight and panel in sync", async ({ page }) => {
     await page.goto("/");
     const modes = ["scan", "resolve", "quality", "finalize"] as const;
