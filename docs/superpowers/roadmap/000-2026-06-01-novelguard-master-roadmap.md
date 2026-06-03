@@ -1,6 +1,6 @@
 ---
 title: NovelGuard Master Roadmap
-status: active
+status: maintenance
 date: 2026-06-01
 last_reviewed: 2026-06-03
 parent_spec: docs/superpowers/specs/000-2026-06-01-novelguard-ui-overhaul-design.md

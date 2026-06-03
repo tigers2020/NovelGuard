@@ -1,6 +1,6 @@
 ---
 title: PR-33..45 Release Gate Roadmap
-status: active
+status: closed
 date: 2026-06-02
 parent_roadmap: docs/superpowers/roadmap/000-2026-06-01-novelguard-master-roadmap.md
 parent_spec: docs/superpowers/specs/000-2026-06-01-novelguard-ui-overhaul-design.md

@@ -28,6 +28,7 @@ Roadmap entries are **proposed** until a matching spec is approved. Do not treat
 | [003-2026-06-02-platform-release-gate-roadmap.md](./003-2026-06-02-platform-release-gate-roadmap.md) | **Closed:** PR-33..45 — verify 7/7 on main (2026-06-03) |
 | [004-2026-06-03-post-release-beta-roadmap.md](./004-2026-06-03-post-release-beta-roadmap.md) | **Closed:** automated beta gate (2026-06-03) |
 | [005-2026-06-03-ops-automation-roadmap.md](./005-2026-06-03-ops-automation-roadmap.md) | **Closed:** Hermes + worker + beta smokes + CI (2026-06-03) |
+| [006-2026-06-03-product-backlog-roadmap.md](./006-2026-06-03-product-backlog-roadmap.md) | **Draft:** backlog placeholder |
 
 ## Adding a roadmap file
 

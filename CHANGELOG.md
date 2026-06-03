@@ -9,9 +9,12 @@ Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - Scan session busy boundary through tail persist (`scan_persist` phase); `ScanStreamResult` cancel policy; folder-scoped SQLite batch reset; `deepAnalysisStatus` / `deepAnalysisError` in snapshot + ScanWorkspace error banner; Python `ruff`/`mypy` gates; e2e settings diagnostics navigation (PR #23, `main`).
+- Large-library near/relation scan performance and duplicate group visibility (plan 047 perf).
 
 ### Added
 
+- **Automation-first agent governance:** `AGENTS.md` + `.cursor/rules/*` reset; Hermes job queue (`automation/`), `automation_worker`, `hermes_enqueue` / `hermes_job_stdin`, `beta_gate`, `fixture_library_smoke`, `launch_packaged_smoke`; `verify_phase_completion` extended to 9 steps.
+- **Resolve layout (plan 047):** FileDock auto-collapse on resolve/quality; `ResolveGridToolbar` in center pane.
 - **Platform release gate (PR-33..45):** 3-mode Work shell, unified scan section, resolve master-detail, FileDock global, app shell polish, Logs/Settings v2, finalize cleanup preview, bridge regression tests, E2E full pipeline smoke, packaging UI marker gate (`scripts/smoke_packaged_ui.py`), beta readiness doc.
 - Windows-first PyInstaller **onedir** packaging for NovelGuard (`scripts/package_windows.py`, `packaging/NovelGuard.spec`).
 - Bundled `web/build` frontend assets for the packaged desktop runtime.
