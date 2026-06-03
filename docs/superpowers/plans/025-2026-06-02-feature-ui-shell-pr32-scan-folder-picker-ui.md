@@ -18,38 +18,33 @@
 
 **File:** `web/src/features/work/ScanWorkspace.tsx`
 
-- [ ] Import `useBridge`, `useRefreshSnapshot` from `snapshotHooks`
-- [ ] Import `BridgeCallError`; local `folderPickerErrorMessage(err)` (mirror `WorkRoute.workModeErrorMessage`)
-- [ ] State: `isSelecting`, `folderError`
-- [ ] Replace static **대상 폴더** block with:
+- [x] Import `useBridge`, `useRefreshSnapshot` from `snapshotHooks`
+- [x] Import `BridgeCallError`; local `folderPickerErrorMessage(err)` (mirror `WorkRoute.workModeErrorMessage`)
+- [x] State: `isSelecting`, `folderError`
+- [x] Replace static **대상 폴더** block with:
   - truncated path: `library.folderPath ?? "폴더 미선택"`
   - button **폴더 선택** → `handleSelectFolder` (LOCK-FOLDER-2)
-- [ ] Error strip when `folderError` set (`role="alert"`, `data-testid="scan-folder-error"` optional)
-- [ ] Keep **스캔 시작** and scan options chips unchanged (LOCK-FOLDER-5, AC-5)
+- [x] Error strip when `folderError` set (`role="alert"`, `data-testid="scan-folder-error"`)
+- [x] Keep **스캔 시작** and scan options chips unchanged (LOCK-FOLDER-5, AC-5)
 
 ### Task 2: Wire-only check (no WorkRoute prop drilling)
 
-- [ ] Confirm `ScanWorkspace` works inside PR-31 `WorkModePanel` without remount issues (local state OK)
+- [x] Confirm `ScanWorkspace` works inside PR-31 `WorkModePanel` without remount issues (local state OK)
 
 ### Task 3: Tests (gated)
 
 **Requires user `TEST_ALLOWED` or equivalent.**
 
-- [ ] Prefer extend existing `web/src/**/*.test.tsx` (e.g. new `ScanWorkspace.test.tsx` only if approved)
-- [ ] Cases:
-  - click **폴더 선택** → mock `selectFolder` spy
-  - `refreshSnapshot` called after success
-  - `LIBRARY_BUSY` → error strip text
-- [ ] Optional e2e in `web/e2e/smoke.spec.ts`: path updates to mock `selected` segment
-
-**Without TEST_ALLOWED:** manual smoke only; document in PR body.
+- [ ] Prefer extend existing `web/src/**/*.test.tsx` (skipped — no TEST_ALLOWED)
+- [ ] Manual smoke documented in PR body
 
 ### Task 4: Verification
 
-- [ ] `cd web && npm run lint`
-- [ ] `cd web && npm run test`
-- [ ] `cd web && npm run test:e2e` (if Task 3 e2e added)
+- [x] `cd web && npm run lint` — 0 errors
+- [x] `cd web && npm run test` — 73/73
 - [ ] Manual pywebview: dialog, cancel, select, scan
+
+**Plan status:** Complete (2026-06-03) pending manual pywebview smoke
 
 ---
 
