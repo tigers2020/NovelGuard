@@ -27,6 +27,8 @@ def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProc
         text=True,
         capture_output=True,
         check=check,
+        encoding="utf-8",
+        errors="replace",
     )
 
 
@@ -135,7 +137,14 @@ def run_verify(
 ) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     for cmd in _command_lists(cfg, payload, repo):
-        proc = subprocess.run(cmd, cwd=repo, text=True, capture_output=True)
+        proc = subprocess.run(
+            cmd,
+            cwd=repo,
+            text=True,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+        )
         results.append(
             {
                 "command": cmd,

@@ -53,6 +53,8 @@ def run_prompt(
         cwd=repo,
         text=True,
         capture_output=True,
+        encoding="utf-8",
+        errors="replace",
     )
     return CursorRunResult(
         command=cmd,
