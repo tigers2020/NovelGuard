@@ -23,7 +23,8 @@ Policy: [docs/agent-testing-policy.md](mdc:docs/agent-testing-policy.md). Guard:
 | Python types | `mypy src` |
 | Python format check | `black --check .` |
 | Python tests | `pytest` or `pytest path::test` |
-| Full gate | `python scripts/verify_phase_completion.py` |
+| Full gate | `python scripts/verify_phase_completion.py` (9 steps; exe smoke if `dist/` built) |
+| Beta smokes only | `python scripts/beta_gate.py` |
 | Web lint | `cd web && npm run lint` |
 
 Report in job output: each command, exit status, and brief failure excerpt.

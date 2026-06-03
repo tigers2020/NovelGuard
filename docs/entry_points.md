@@ -53,9 +53,14 @@ React loads `createPywebviewBridge()` when `window.pywebview.api` is present; me
 pip install -e ".[dev]"
 cd web && npm install
 python scripts/verify_phase_completion.py
+python scripts/beta_gate.py
 ```
 
-Runs `pytest` → `ruff` → `mypy` → `black --check` → `npm run lint` (fail-fast). For web-only checks without the Python gate:
+Full gate (9 steps when `dist/NovelGuard/NovelGuard.exe` exists): `pytest` → `ruff` → `mypy` → `black --check` → `npm run lint` → vitest → packaging static → fixture library smoke → optional exe launch.
+
+Beta smokes only: `beta_gate.py`. Automation: [automation/README.md](../automation/README.md).
+
+For web-only checks without the Python gate:
 
 ```bash
 npm run lint
