@@ -12,7 +12,7 @@ reviewer_audit: 2026-06-02 — approved 8.5/10; scope locks below incorporated
 
 **Parent:** [000 master roadmap](./000-2026-06-01-novelguard-master-roadmap.md) · **Prior track:** [001 PR-20..25](./001-2026-06-02-pr20-pr25-development-roadmap.md) (closed)
 
-**Position (2026-06-02):** PR-26..29 **Done**. PR-31 (spec 018 work mode tab) **Done** on branch. **Next:** PR-30 bridge hygiene (spec TBD — roadmap 002 row still references `018-bridge-hygiene`; separate from spec 018 work-mode).
+**Position (2026-06-02):** PR-26..31 **Done**. PR-30 bridge hygiene **Done** (2026-06-02). **Next:** spec 019 scan folder picker (PR-32) or program wave after platform polish. **Then:** PR-32 scan folder picker UI ([spec 019](../specs/019-2026-06-02-feature-ui-shell-scan-folder-picker-ui-design.md)) — UX affordance only; not PR-30.
 
 **Sequencing (locked):** `snapshot invalidation transport → quality grid parity → Settings/Logs v1 (minimal) → queryFileRows advanced → bridge hygiene refactor`. PR-30 is **not** a mandatory “last feature PR” — see [PR-30 early-pull rules](#pr-30--bridge--app-hygiene-refactor).
 
@@ -73,7 +73,8 @@ flowchart TD
 | **PR-28** | Settings/Logs v1 (minimal subset) | F | Limited | `specs/016-2026-06-02-settings-logs-design.md` | `plans/022-2026-06-02-pr28-settings-logs.md` | **Done** (2026-06-02); **merge to `main` before PR-29 implement** |
 | **PR-29** | `queryFileRows` advanced / SQL page query | F | No | `specs/017-2026-06-02-query-file-rows-advanced-design.md` | `plans/023-2026-06-02-pr29-query-file-rows-advanced.md` | **Done** (2026-06-02) |
 | **PR-31** | Work mode tab transition (optimistic + keep-alive) | F | No | [018 work mode tab](../specs/018-2026-06-02-feature-ui-shell-work-mode-tab-transition-design.md) | [024 pr31 plan](../plans/024-2026-06-02-feature-ui-shell-pr31-work-mode-tab-transition.md) | **Done** (2026-06-02) |
-| **PR-30** | Bridge / app hygiene refactor | G | No | `specs/018-2026-06-02-bridge-hygiene-design.md` | `plans/024-2026-06-02-pr30-bridge-hygiene.md` | **Proposed** |
+| **PR-30** | Bridge / app hygiene refactor | G | No | [020 bridge hygiene](../specs/020-2026-06-02-refactor-bridge-bridge-hygiene-design.md) | [026 pr30 plan](../plans/026-2026-06-02-refactor-bridge-pr30-bridge-hygiene.md) | **Done** (2026-06-02) |
+| **PR-32** | Scan folder picker UI (React CTA) | F | No | [019 scan folder picker](../specs/019-2026-06-02-feature-ui-shell-scan-folder-picker-ui-design.md) | [025 pr32 plan](../plans/025-2026-06-02-feature-ui-shell-pr32-scan-folder-picker-ui.md) | **Proposed** — after PR-30 unless hotfix |
 
 ---
 
@@ -387,7 +388,7 @@ python scripts/verify_phase_completion.py
 | P1 | PR-27 | `specs/015-2026-06-02-quality-grid-parity-design.md` | Sort fields, perf thresholds, chooser columns |
 | P2 | PR-28 | `specs/016-2026-06-02-settings-logs-design.md` | **Grill required:** LOCK-28 subset; log tail vs `queryLogEntries` |
 | P3 | PR-29 | `specs/017-2026-06-02-query-file-rows-advanced-design.md` | Full rescan index rebuild; dock ownership |
-| P4 | PR-30 | `specs/018-2026-06-02-bridge-hygiene-design.md` | Characterization tests first; early-pull rules |
+| P4 | PR-30 | [020 bridge hygiene](../specs/020-2026-06-02-refactor-bridge-bridge-hygiene-design.md) | Characterization tests first; early-pull rules |
 
 ---
 

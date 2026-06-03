@@ -24,7 +24,7 @@ Roadmap entries are **proposed** until a matching spec is approved. Do not treat
 |------|--------|
 | [000-2026-06-01-novelguard-master-roadmap.md](./000-2026-06-01-novelguard-master-roadmap.md) | PR-0..19 (done); program waves A–G |
 | [001-2026-06-02-pr20-pr25-development-roadmap.md](./001-2026-06-02-pr20-pr25-development-roadmap.md) | Closed track: PR-20..25 **Done** |
-| [002-2026-06-02-pr26-pr30-platform-polish-roadmap.md](./002-2026-06-02-pr26-pr30-platform-polish-roadmap.md) | **Active track:** PR-26..31 **Done** on branch — **next:** PR-30 bridge hygiene |
+| [002-2026-06-02-pr26-pr30-platform-polish-roadmap.md](./002-2026-06-02-pr26-pr30-platform-polish-roadmap.md) | **Closed track:** PR-26..30 **Done** — next: spec 019 scan folder picker |
 
 ## Adding a roadmap file
 

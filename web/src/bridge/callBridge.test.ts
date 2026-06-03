@@ -38,6 +38,25 @@ describe("callBridge", () => {
     });
   });
 
+  it("maps RepairApplyError reason from pywebview message", async () => {
+    await expect(
+      callBridge(() => Promise.reject(new Error("STALE_REPAIR_PREVIEW")), {
+        method: "apply_quality_repair",
+        timeoutMs: 50,
+      }),
+    ).rejects.toMatchObject({ reason: "STALE_REPAIR_PREVIEW", code: "rejected" });
+  });
+
+  it("maps FinalizeError JSON payload", async () => {
+    const payload = JSON.stringify({ reason: "REPORT_NOT_FOUND", details: "" });
+    await expect(
+      callBridge(() => Promise.reject(new Error(payload)), {
+        method: "get_finalize_report",
+        timeoutMs: 50,
+      }),
+    ).rejects.toMatchObject({ reason: "REPORT_NOT_FOUND", code: "rejected" });
+  });
+
   it("times out slow calls", async () => {
     await expect(
       callBridge(
