@@ -1,12 +1,13 @@
 # protocols
 
-Protocol notes are supporting context only.
+Supporting protocol notes. **Canonical policy:** [AGENTS.md](../AGENTS.md).
 
-Canonical policy: [AGENTS.md](../AGENTS.md).
-Deep workflow: [docs/superpowers/agent-workflow.md](../docs/superpowers/agent-workflow.md).
-Cursor activation: `.cursor/rules/`.
+**Automation (Hermes, CLI runner, cloud):** [docs/agent-automation.md](../docs/agent-automation.md).
 
-Use this folder for stable protocol summaries that are too detailed for AGENTS.md.
-Do not place new specs, plans, or active implementation gates here.
+**Cursor activation:** `.cursor/rules/` — start with `00-automation-core.mdc`.
 
-If a protocol note conflicts with AGENTS.md or current code, stop and report the conflict.
+Legacy Superpowers workflow (optional): [docs/superpowers/agent-workflow.md](../docs/superpowers/agent-workflow.md).
+
+Do not place new specs or active gates here; use `docs/` per project convention.
+
+If a protocol note conflicts with AGENTS.md or current code, stop and report.

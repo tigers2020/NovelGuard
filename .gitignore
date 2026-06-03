@@ -222,6 +222,14 @@ Thumbs.db
 *~
 
 # NovelGuard specific
+# Automation runtime (see automation/config.example.yaml)
+automation/config.yaml
+automation/jobs/*.sqlite
+automation/logs/*
+!automation/logs/.gitkeep
+automation/locks/*.lock
+!automation/locks/.gitkeep
+
 # Runtime output directories
 logs/
 SAVE/

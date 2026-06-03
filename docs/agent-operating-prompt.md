@@ -1,116 +1,106 @@
-# Agent operating prompt (NovelGuard)
+# Agent operating prompts (NovelGuard)
 
-Phases: **0 Intake → 1 Grill-me → 2 Lock → 3 Autonomous loop → 4 Final gate → 5 PR/merge**.
+Copy-paste for **IDE**, **Telegram/Hermes jobs**, or **Cursor CLI** runners.
 
-Always-on behavior and which `@.cursor/rules/*.mdc` to attach: **`00-core.mdc`** rules index (only place that lists rule paths).
+Rules index: **`@.cursor/rules/00-automation-core.mdc`** (only place that lists rule paths).
+
+Deep automation layout: [agent-automation.md](agent-automation.md).
 
 ---
 
-## Canonical — full mission (Phase 1 + instructions for Phase 2)
+## Queued / headless job (default)
 
 ```text
-@AGENTS.md @.cursor/rules/00-core.mdc @.cursor/rules/11-grill-me-hardening.mdc
+@AGENTS.md @.cursor/rules/00-automation-core.mdc @.cursor/rules/10-runner-safety.mdc
 
-Full development mission. Grill-me once — do not code yet.
+Repository only. Task:
+{{TASK}}
 
-Challenge scope, risks, affected modules, verification gates, stop conditions, numbered task sequence, merge target (commit / PR / merge).
-
-After I approve with "Approved. Scope is locked.", attach @.cursor/rules/21-autonomous-mission-execution.mdc:
-- complete all tasks in order
-- do not ask "continue?" between tasks
-- repair failures from current work; rerun smallest verification
-- continue through implementation, verification, commits (if in plan), merge/PR prep
-
-Stop only for true blockers in 00-core (destructive op, secrets, spec contradiction, missing credential, merge conflict, same failure 3x).
-
-MCP if needed: @57-mcp-context7 / @58-mcp-supabase-db / @59-ui-playwright-verification (see 00-core index).
+Rules:
+- Work on branch ai/job-{{ID}} (create if missing). Do not touch main.
+- Do not commit unless this message says commit: true.
+- Smallest verification first; report every command and exit code.
+- Return: changed files, summary, tests run, risks, next step.
 ```
 
 ---
 
-## Phase 1 — Development mission start (grill-me)
+## Implementation (interactive)
 
 ```text
-@AGENTS.md @.cursor/rules/11-grill-me-hardening.mdc
+@AGENTS.md @.cursor/rules/00-automation-core.mdc
 
-Full development mission. Grill-me once — do not code yet.
+Task: <one clear scope>
 
-Challenge:
-- scope / out of scope
-- affected modules and layer
-- risks and destructive operations
-- verification gates
-- stop conditions
-- numbered implementation sequence
-- merge target (commit / PR / merge)
-
-After your proposal I will lock scope in a follow-up message.
+- Minimal diff; no unrelated files
+- Run: <pytest path::test | ruff | etc.>
+- Do not commit unless I ask
 ```
 
 ---
 
-## Phase 2 — Scope lock (after you approve)
+## Review only (no edits)
 
 ```text
-Approved. Scope is locked.
+@AGENTS.md @.cursor/rules/10-runner-safety.mdc
 
-@.cursor/rules/21-autonomous-mission-execution.mdc
+Review current git diff. Do not modify files.
 
-Proceed autonomously until all tasks, verification, commits (if in scope), and PR/merge preparation are complete.
-
-Do not ask between tasks.
-Stop only for true blockers in 00-core.
-
-MCP if needed: @.cursor/rules/57-mcp-context7.mdc / @58-mcp-supabase-db.mdc / @59-ui-playwright-verification.mdc
-```
-
-Do **not** reply with only "continue" — that can be read as permission for a single task.
-
----
-
-## Small task (skip grill-me)
-
-```text
-@AGENTS.md
-
-Small task: <one sentence scope>.
-Skip grill-me, specs, plans, Superpowers, persona.
-After edit: <single verification command>.
+Blocking issues first, then suggestions.
+Focus: correctness, layers, tests, unsafe file ops, scope creep.
 ```
 
 ---
 
-## Batch without formal grill-me (scope locked in same message)
+## PR finish
 
 ```text
-@AGENTS.md @.cursor/rules/21-autonomous-mission-execution.mdc
+@AGENTS.md @.cursor/rules/90-pr-finish.mdc @.cursor/rules/30-verify-gates.mdc
 
-Scope locked in this message: <paste scope>.
+Prepare PR for current branch. Run full gate if not yet run.
+List exact verification commands in test plan.
+```
+
+---
+
+## Web / UI
+
+```text
+@AGENTS.md @.cursor/rules/40-web-tailwind.mdc
+
+<scope>
+```
+
+Optional browser check: `@.cursor/rules/53-mcp-playwright.mdc`
+
+---
+
+## Library docs uncertain
+
+```text
+@AGENTS.md @.cursor/rules/51-mcp-context7.mdc
+
+<scope>
+```
+
+---
+
+## Multi-step batch (no phase ceremony)
+
+```text
+@AGENTS.md @.cursor/rules/00-automation-core.mdc
+
+Scope: <paste>
 
 Tasks 1–N: <list>
 
-Do not ask between tasks. One line per completed task. Final summary at end.
-
-MCP if needed: @57-mcp-context7 / @58-mcp-supabase-db / @59-ui-playwright-verification
+Execute in order without asking between steps.
+Stop only on true blockers (10-runner-safety).
+One line per completed task; final summary at end.
 ```
 
 ---
 
-## UI-only
+## Legacy Superpowers / grill-me
 
-```text
-@AGENTS.md @.cursor/rules/59-ui-playwright-verification.mdc
-
-<scope>
-```
-
----
-
-## Backend / DB
-
-```text
-@AGENTS.md @.cursor/rules/58-mcp-supabase-db.mdc
-
-<scope>
-Local SQLite: src/infrastructure/sqlite_library_index.py is authoritative.
-```
+Optional for large design work only — not default. See [superpowers/agent-workflow.md](superpowers/agent-workflow.md).

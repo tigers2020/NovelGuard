@@ -1,0 +1,41 @@
+---
+description: Automation-first repo rules and the only rules index — attach other .mdc via @ from this table.
+alwaysApply: true
+---
+
+# Automation core
+
+- [AGENTS.md](mdc:AGENTS.md) is canonical. Runner design: [docs/agent-automation.md](mdc:docs/agent-automation.md).
+- You may be invoked by **IDE chat**, **Cursor CLI runner**, or **Cloud Automation**. Behave the same on safety; adapt output to the channel (structured job result vs conversational).
+- Keep diffs small and local. Do not invent facts — read code, `docs/`, tests, git state.
+- **No default ceremony:** grill-me phases, `Approved. Scope is locked.`, Superpowers routing, persona roleplay — only when the user or job payload asks.
+- Python 3.12, `src/` layout, line length 100. Secrets in `.env` only.
+
+## Autonomous job behavior
+
+- Execute the full job without asking "continue?" between steps unless blocked.
+- **Stop and report** on: missing credentials; protected-branch push/merge without approval; unapproved destructive ops; secrets/production risk; ambiguity not fixable from repo; same failure after 3 repair attempts; merge conflict / branch protection.
+- **On failure:** inspect → minimal fix → re-verify → continue or report blocker.
+- End with: status, files touched, commands run (pass/fail), risks, next action.
+
+## Before editing
+
+1. Job scale: small fix vs multi-file / contract change?
+2. Layer: domain, application, infrastructure, web, or app?
+3. Trigger: headless job (branch + no commit unless allowed) vs interactive user?
+
+## Rules index (attach with `@`)
+
+| Attach when | Rule file |
+| ----------- | --------- |
+| Git branch, commit, merge, runner safety | `.cursor/rules/10-runner-safety.mdc` |
+| Layer boundaries, NovelGuard domain | `.cursor/rules/20-novelguard-project.mdc` |
+| Tests, lint, verification commands | `.cursor/rules/30-verify-gates.mdc` |
+| `web/**` UI, Tailwind tokens | `.cursor/rules/40-web-tailwind.mdc` |
+| MCP servers and when to use them | `.cursor/rules/50-mcp-index.mdc` |
+| Library/framework docs (Context7) | `.cursor/rules/51-mcp-context7.mdc` |
+| Schema / SQL / Supabase persistence | `.cursor/rules/52-mcp-supabase.mdc` |
+| Browser / UI verification (Playwright) | `.cursor/rules/53-mcp-playwright.mdc` |
+| Commit / PR / merge finish | `.cursor/rules/90-pr-finish.mdc` |
+
+Always-on (no attach needed): this file, `10-runner-safety`, `20-novelguard-project`, `30-verify-gates`.

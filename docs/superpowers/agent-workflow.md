@@ -4,7 +4,8 @@ Deep context for non-trivial NovelGuard work. This file is not default context.
 Read it only when the task needs spec/plan gates, Superpowers skills, or naming rules.
 
 Canonical short guide: [AGENTS.md](../../AGENTS.md).
-Activation: `.cursor/rules/00-core.mdc`.
+Automation / runners: [docs/agent-automation.md](../agent-automation.md).
+Activation: `.cursor/rules/00-automation-core.mdc`.
 
 ---
 

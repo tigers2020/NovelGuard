@@ -1,0 +1,37 @@
+# Copy to automation/config.yaml and adjust paths.
+
+repos:
+  novelguard:
+    path: "."  # repo root (absolute path recommended for Hermes)
+    default_branch: main
+    lock_name: NovelGuard.lock
+
+cursor:
+  # First existing command wins: cursor-agent, agent, cursor
+  commands:
+    - cursor-agent
+    - agent
+  args: ["-p"]
+  dry_run: false  # true = skip CLI, still runs git + verify (for queue testing)
+
+queue:
+  path: automation/jobs/queue.sqlite
+
+logs:
+  dir: automation/logs
+
+locks:
+  dir: automation/locks
+
+prompts:
+  dir: automation/prompts
+
+verify:
+  minimal:
+    - [python, -m, ruff, check, .]
+    - [python, -m, mypy, src]
+  web_extra:
+    - [npm, run, lint]
+  web_dir: web
+  full:
+    - [python, scripts/verify_phase_completion.py]

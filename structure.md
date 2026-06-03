@@ -14,7 +14,8 @@ NovelGuard/
 ├── src/                    # Python: domain → application → infrastructure → app
 ├── web/                    # React + TypeScript + Tailwind v4 UI
 ├── tests/                  # Python contract / scaffold tests
-├── scripts/                # verify gate, packaging, hooks
+├── scripts/                # verify gate, packaging, hooks, automation CLI
+├── automation/             # Hermes queue + Cursor CLI worker (in-repo)
 ├── docs/                   # Current docs + superpowers specs/plans/roadmaps
 ├── persona/                # Role cards (opt-in for large tasks)
 ├── protocols/              # Development protocol
@@ -273,6 +274,19 @@ Web contract tests: `cd web && npm run test:contracts`
 | `package_windows.py` / `verify_packaging.py` | Windows packaging |
 | `perf_file_rows_query.py` | File-rows query perf probe |
 | `install_git_hooks.py` / `hooks/pre-commit` | Git hooks |
+| `automation_worker.py` / `automation_enqueue.py` | Job worker and enqueue (see `automation/`) |
+
+---
+
+## Automation — `automation/`
+
+| Path | Purpose |
+|------|---------|
+| `README.md` | Queue + worker quick start |
+| `config.example.yaml` | Repo path, Cursor CLI, verify commands |
+| `runners/job_worker.py` | Branch → Cursor → verify → result |
+| `schemas/job-payload.schema.json` | Hermes / dispatcher JSON contract |
+| `prompts/*.md` | implement / review / test_fix templates |
 
 ---
 
@@ -288,7 +302,8 @@ Web contract tests: `cd web && npm run test:contracts`
 | `superpowers/specs/` | Design specs (`NNN-YYYY-MM-DD-...-design.md`) |
 | `superpowers/plans/` | Implementation plans (`...-prNN-...md`) |
 | `superpowers/roadmap/` | Program roadmaps (000–003) |
-| `superpowers/agent-workflow.md` | Superpowers routing (large tasks) |
+| `superpowers/agent-workflow.md` | Superpowers routing (large tasks, optional) |
+| `agent-automation.md` | Hermes + runner topology |
 
 Historical read-only docs may live under `documents/` (empty or archived in this checkout).
 
@@ -298,7 +313,8 @@ Historical read-only docs may live under `documents/` (empty or archived in this
 
 | Path | Purpose |
 |------|---------|
-| `.cursor/rules/` | `00-core`, architecture, testing, Tailwind, docs, MCP workflow, PR finish |
+| `.cursor/rules/` | `00-automation-core`, runner safety, project layers, verify gates, web Tailwind, MCP index, PR finish |
+| `automation/` | SQLite job queue, Cursor CLI runner, prompt templates |
 | `persona/` | simon (coord), dominic (domain), yuri (app), ada (infra), gina-gui (web), tess (tests), rex (verify) |
 | `protocols/` | `development_protocol.md` |
 

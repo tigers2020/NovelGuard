@@ -1,6 +1,6 @@
 # Agent testing policy (NovelGuard)
 
-Full test-creation and coverage rules. **Always-on summary:** `.cursor/rules/test-governance.mdc`. **Canonical router:** [AGENTS.md](../AGENTS.md).
+Full test-creation and coverage rules. **Always-on summary:** `.cursor/rules/30-verify-gates.mdc`. **Canonical router:** [AGENTS.md](../AGENTS.md).
 
 ---
 

@@ -1,0 +1,12 @@
+---
+description: Context7 MCP for current library and framework documentation
+alwaysApply: false
+---
+
+# Context7
+
+Use when correctness depends on **current** API behavior (React, Vite, Tailwind, Playwright, pyproject deps, etc.).
+
+Do not use for: general refactors, business-logic debugging, or code review without doc uncertainty.
+
+Attach from project Context7 MCP skill or server per `.cursor/mcp.json`.

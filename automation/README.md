@@ -1,0 +1,50 @@
+# NovelGuard automation (in-repo)
+
+Hermes / Telegram dispatcher writes jobs to the queue; **one worker** runs Cursor CLI on an isolated branch.
+
+## Quick start
+
+```powershell
+# 1) Copy config; enable dry_run until Cursor CLI is on PATH
+Copy-Item automation\config.example.yaml automation\config.yaml
+pip install pyyaml   # or: pip install -e ".[automation]"
+
+# 2) Enqueue
+python scripts/automation_enqueue.py --kind implement --task "Fix typo in README"
+
+# 3) Process one job
+python scripts/automation_worker.py --once
+# or: .\automation\run-worker.ps1
+
+# 4) Loop (Task Scheduler / systemd)
+python scripts/automation_worker.py
+```
+
+Hermes:
+
+```powershell
+python scripts/hermes_enqueue.py automation/examples/hermes-job.json
+python scripts/automation_worker.py --once
+```
+
+Worker refuses dirty working tree — commit/stash WIP on feature branch first.
+
+## Layout
+
+```text
+automation/
+  config.example.yaml
+  config.yaml          # local, gitignored
+  prompts/             # templates
+  schemas/job-payload.schema.json
+  jobs/queue.sqlite    # gitignored
+  logs/                # gitignored
+  locks/               # per-repo lock files
+  runners/
+    queue.py
+    cursor_runner.py
+    job_worker.py
+    enqueue_job.py
+```
+
+Policy: [AGENTS.md](../AGENTS.md), [docs/agent-automation.md](../docs/agent-automation.md).

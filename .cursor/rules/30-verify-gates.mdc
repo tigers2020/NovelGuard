@@ -1,0 +1,36 @@
+---
+description: Test honesty and verification commands for IDE and runners
+alwaysApply: true
+---
+
+# Verify gates
+
+## Honesty (mandatory)
+
+- Never claim tests passed unless you ran them.
+- If not run, say so explicitly.
+- Prefer the **smallest relevant** check (`pytest path::test`) before full gate.
+- Do not expand test scope unless the task requires it.
+- Do not create **new test files** without explicit user/job approval.
+
+Policy: [docs/agent-testing-policy.md](mdc:docs/agent-testing-policy.md). Guard: `scripts/guard_new_tests.py`.
+
+## Commands
+
+| Scope | Command |
+| ----- | ------- |
+| Python lint | `ruff check .` |
+| Python types | `mypy src` |
+| Python format check | `black --check .` |
+| Python tests | `pytest` or `pytest path::test` |
+| Full gate | `python scripts/verify_phase_completion.py` |
+| Web lint | `cd web && npm run lint` |
+
+Report in job output: each command, exit status, and brief failure excerpt.
+
+## When to run what
+
+- Docs-only: usually skip code gates; state skipped.
+- `src/` / `tests/`: ruff + mypy + targeted pytest minimum.
+- `web/**`: add `npm run lint`; add tests only if job or user requires.
+- Pre-PR / release jobs: full gate script.

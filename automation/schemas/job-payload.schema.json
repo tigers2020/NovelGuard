@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://novelguard.local/schemas/job-payload.json",
+  "title": "NovelGuard automation job",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "repo", "kind", "task"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique job id (used in branch name ai/job-<id>)"
+    },
+    "repo": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Key under config repos (e.g. novelguard)"
+    },
+    "kind": {
+      "type": "string",
+      "enum": ["implement", "review", "test_fix"]
+    },
+    "task": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Natural-language task or failure description"
+    },
+    "commit": {
+      "type": "boolean",
+      "default": false,
+      "description": "Allow agent to commit; default false"
+    },
+    "merge_approved": {
+      "type": "boolean",
+      "default": false,
+      "description": "Must stay false unless human explicitly approves merge"
+    },
+    "safety_level": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4,
+      "default": 2,
+      "description": "1=safe scan, 2=semi-auto, 3=auto PR, 4=auto merge (discouraged)"
+    },
+    "verify": {
+      "type": "string",
+      "enum": ["none", "minimal", "full", "custom"],
+      "default": "minimal"
+    },
+    "verify_commands": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": { "type": "string" },
+        "minItems": 1
+      },
+      "description": "Used when verify is custom"
+    },
+    "base_branch": {
+      "type": "string",
+      "default": "main"
+    },
+    "branch_prefix": {
+      "type": "string",
+      "default": "ai/job-"
+    },
+    "source": {
+      "type": "string",
+      "description": "e.g. telegram:cursor-dev, github:issue-42"
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

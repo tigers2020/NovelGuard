@@ -1,0 +1,12 @@
+{
+  "id": "20260603-abc12",
+  "repo": "novelguard",
+  "kind": "implement",
+  "task": "Explain what automation/runners/job_worker.py does in README",
+  "commit": false,
+  "merge_approved": false,
+  "safety_level": 2,
+  "verify": "minimal",
+  "base_branch": "main",
+  "source": "telegram:cursor-dev"
+}

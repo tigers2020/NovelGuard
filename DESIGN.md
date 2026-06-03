@@ -20,7 +20,7 @@ last_reviewed: 2026-06-01
 
 Tokens are defined **once** in this file, implemented in `web/src/styles/globals.css` via `@theme`, and consumed in React as Tailwind utilities (`bg-surface`, `text-primary`, …). Do not hardcode hex in components.
 
-**Cursor bridge:** [.cursor/rules/45-tailwindcss.mdc](.cursor/rules/45-tailwindcss.mdc)
+**Cursor bridge:** [.cursor/rules/40-web-tailwind.mdc](.cursor/rules/40-web-tailwind.mdc)
 
 ---
 
