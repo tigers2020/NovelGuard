@@ -21,6 +21,8 @@ pr_label: PR-31
 
 **Scope sentence:** Fix Work mode tab transitions (스캔 / 검토 · 정리 / 품질 / 적용 · 검증) so users no longer see **wrong-tab flash (D)** or **grid/layout jump (B)** when switching modes in **mock dev** and **pywebview**. Changes are **web-only** (`WorkRoute` and a small panel wrapper); **no** bridge/Python contract changes.
 
+**Bridge boundary (review 2026-06-02):** Bridge behavior is unchanged. Type-only/interface parity repairs are allowed only where required by WorkRoute compilation or test parity (see plan 024).
+
 ---
 
 ## Locked decisions (brainstorming + review — 2026-06-02)
@@ -228,7 +230,7 @@ No changes to `WorkModeTabs.tsx` beyond using `displayMode` from parent (already
 
 ## 9. Plan pointer
 
-Implementation plan: `docs/superpowers/plans/024-2026-06-02-feature-ui-shell-pr31-work-mode-tab-transition.md` (to be created via `writing-plans` after spec review).
+Implementation plan: [024 PR-31 work mode tab transition](../plans/024-2026-06-02-feature-ui-shell-pr31-work-mode-tab-transition.md) (**complete** 2026-06-02).
 
 ---
 

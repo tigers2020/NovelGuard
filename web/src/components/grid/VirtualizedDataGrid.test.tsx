@@ -3,6 +3,7 @@ import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
 import { describe, expect, it } from "vitest";
 import { mergeReviewColumnVisibility } from "../../features/work/resolve/reviewGridLayout";
 import { buildReviewGridColumns } from "../../features/work/resolve/reviewGridColumns";
+import type { QualityRow } from "../../types/quality";
 import type { ReviewRow } from "../../types/review";
 import { VirtualizedDataGrid } from "./VirtualizedDataGrid";
 import { parseRemWidthToPx } from "./gridColumnWidths";
@@ -102,14 +103,14 @@ describe("VirtualizedDataGrid quality columns perf", () => {
     const { buildQualityGridColumns } = await import(
       "../../features/work/quality/qualityGridColumns"
     );
-    const data = Array.from({ length: 2000 }, (_, i) => ({
+    const data: QualityRow[] = Array.from({ length: 2000 }, (_, i) => ({
       id: `quality:q${i}`,
-      issueType: "encoding" as const,
+      issueType: "encoding",
       name: `file-${i}.txt`,
       path: `/lib/file-${i}.txt`,
       encoding: "UTF-8",
       integrity: "Decode error",
-      severity: (i % 2 === 0 ? "error" : "warning") as const,
+      severity: i % 2 === 0 ? "error" : "warning",
     }));
     const { container } = render(
       <div style={{ height: 400, width: 900, display: "flex" }}>

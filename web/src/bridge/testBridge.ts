@@ -7,7 +7,8 @@ export type TestBridgeFailMode =
   | "snapshot"
   | "queryReviewRows"
   | "queryQualityRows"
-  | "getMovePreview";
+  | "getMovePreview"
+  | "setWorkMode";
 
 export function createTestBridge(fail: TestBridgeFailMode): NovelGuardBridge {
   const base = mockBridge;
@@ -41,6 +42,12 @@ export function createTestBridge(fail: TestBridgeFailMode): NovelGuardBridge {
       }
       return base.getMovePreview(selection);
     },
+    async setWorkMode(mode) {
+      if (fail === "setWorkMode") {
+        failCall("set_work_mode");
+      }
+      return base.setWorkMode(mode);
+    },
   };
 }
 
@@ -54,7 +61,8 @@ export function readTestBridgeFailMode(): TestBridgeFailMode {
     mode === "snapshot" ||
     mode === "queryReviewRows" ||
     mode === "queryQualityRows" ||
-    mode === "getMovePreview"
+    mode === "getMovePreview" ||
+    mode === "setWorkMode"
   ) {
     return mode;
   }

@@ -756,7 +756,10 @@ export const mockBridge: NovelGuardBridge = {
   async setAppSetting(key: AppSettingKey, value: AppSettingValue): Promise<AppSettingResponse> {
     if (key === "include_relation") {
       if (typeof value !== "boolean") {
-        throw new BridgeCallError("INVALID_SETTING_VALUE", "include_relation requires boolean");
+        throw new BridgeCallError("Bridge call rejected: INVALID_SETTING_VALUE", {
+          code: "rejected",
+          method: "set_app_setting",
+        });
       }
       includeRelation = value;
     } else {
@@ -866,7 +869,7 @@ export const mockBridge: NovelGuardBridge = {
     };
   },
 
-  subscribeSnapshotInvalidation(listener) {
+  subscribeSnapshotInvalidation(listener: (event: SnapshotInvalidationEvent) => void) {
     invalidationListeners.add(listener);
     return () => {
       invalidationListeners.delete(listener);

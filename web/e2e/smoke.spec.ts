@@ -57,6 +57,64 @@ test.describe("NovelGuard smoke", () => {
     await expect(page.getByTestId("work-mode-tab-quality")).toHaveClass(/bg-primary/);
   });
 
+  test("PR-31 rapid work mode tabs keep highlight and panel in sync", async ({ page }) => {
+    await page.goto("/");
+    const modes = ["scan", "resolve", "quality", "finalize"] as const;
+    const panelByMode = {
+      scan: page.getByRole("heading", { name: "라이브러리 인덱싱" }),
+      resolve: page.getByTestId("resolve-workspace"),
+      quality: page.getByTestId("quality-workspace"),
+      finalize: page.getByTestId("finalize-workspace"),
+    };
+
+    for (let i = 0; i < 10; i += 1) {
+      const mode = modes[i % modes.length];
+      await page.getByTestId(`work-mode-tab-${mode}`).click();
+      await expect(page.getByTestId(`work-mode-tab-${mode}`)).toHaveClass(/bg-primary/);
+      for (const other of modes) {
+        const panel = panelByMode[other];
+        if (other === mode) {
+          await expect(panel).toBeVisible();
+        } else {
+          await expect(panel).not.toBeVisible();
+        }
+      }
+    }
+  });
+
+  test("PR-31 resolve grid scroll survives quality detour", async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 900 });
+    await openResolveWorkspace(page);
+    const resolveGrid = page.getByTestId("resolve-review-grid");
+    const scrollBody = resolveGrid.getByTestId("grid-scroll-body");
+    await scrollBody.evaluate((el) => {
+      el.scrollTop = Math.min(480, el.scrollHeight - el.clientHeight);
+    });
+    const scrollBefore = await scrollBody.evaluate((el) => el.scrollTop);
+    expect(scrollBefore).toBeGreaterThan(0);
+
+    await page.getByTestId("work-mode-tab-quality").click();
+    await expect(page.getByTestId("quality-workspace")).toBeVisible();
+    await page.getByTestId("work-mode-tab-resolve").click();
+    await expect(resolveGrid).toBeVisible();
+
+    const scrollAfter = await scrollBody.evaluate((el) => el.scrollTop);
+    expect(scrollAfter).toBe(scrollBefore);
+  });
+
+  test("PR-31 setWorkMode failure rolls back and shows error strip", async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as unknown as { __NOVELGUARD_TEST_BRIDGE_FAIL__?: string }).__NOVELGUARD_TEST_BRIDGE_FAIL__ =
+        "setWorkMode";
+    });
+    await page.goto("/");
+    await expect(page.getByTestId("work-mode-tab-resolve")).toHaveClass(/bg-primary/);
+    await page.getByTestId("work-mode-tab-quality").click();
+    await expect(page.getByTestId("work-mode-error")).toBeVisible();
+    await expect(page.getByTestId("work-mode-tab-resolve")).toHaveClass(/bg-primary/);
+    await expect(page.getByTestId("quality-workspace")).not.toBeVisible();
+  });
+
   test("resolve grid loads rows from mock bridge", async ({ page }) => {
     await openResolveWorkspace(page);
   });
@@ -112,7 +170,8 @@ test.describe("NovelGuard smoke", () => {
   test("review grid horizontal scroll exposes action target conf headers", async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 900 });
     await openResolveWorkspace(page);
-    const scrollBody = page.getByTestId("grid-scroll-body");
+    const resolveGrid = page.getByTestId("resolve-review-grid");
+    const scrollBody = resolveGrid.getByTestId("grid-scroll-body");
     await scrollBody.evaluate((el) => {
       el.scrollLeft = el.scrollWidth - el.clientWidth;
     });
@@ -124,8 +183,9 @@ test.describe("NovelGuard smoke", () => {
   test("review grid exposes column resize handles", async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 900 });
     await openResolveWorkspace(page);
-    await expect(page.getByTestId("grid-resize-handle-name")).toHaveCount(1);
-    await expect(page.getByTestId("grid-resize-handle-proposedAction")).toHaveCount(1);
+    const resolveGrid = page.getByTestId("resolve-review-grid");
+    await expect(resolveGrid.getByTestId("grid-resize-handle-name")).toHaveCount(1);
+    await expect(resolveGrid.getByTestId("grid-resize-handle-proposedAction")).toHaveCount(1);
   });
 
   test("review grid header sort triggers sorted fetch", async ({ page }) => {
