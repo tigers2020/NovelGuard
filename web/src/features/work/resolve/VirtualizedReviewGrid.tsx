@@ -11,6 +11,9 @@ export function VirtualizedReviewGrid({
   onSelectRow,
   explicitRowIds,
   onToggleExplicit,
+  allVisibleSelected,
+  someVisibleSelected,
+  onToggleSelectAllVisible,
   onNearEnd,
   loadingMore,
   sorting,
@@ -25,6 +28,9 @@ export function VirtualizedReviewGrid({
   onSelectRow: (row: ReviewRow) => void;
   explicitRowIds?: ReadonlySet<string>;
   onToggleExplicit?: (row: ReviewRow) => void;
+  allVisibleSelected?: boolean;
+  someVisibleSelected?: boolean;
+  onToggleSelectAllVisible?: () => void;
   onNearEnd?: () => void;
   loadingMore?: boolean;
   sorting: SortingState;
@@ -38,10 +44,22 @@ export function VirtualizedReviewGrid({
     () =>
       buildReviewGridColumns(
         explicitRowIds && onToggleExplicit
-          ? { explicitRowIds, onToggleExplicit }
+          ? {
+              explicitRowIds,
+              onToggleExplicit,
+              allVisibleSelected,
+              someVisibleSelected,
+              onToggleSelectAllVisible,
+            }
           : undefined,
       ),
-    [explicitRowIds, onToggleExplicit],
+    [
+      explicitRowIds,
+      onToggleExplicit,
+      allVisibleSelected,
+      someVisibleSelected,
+      onToggleSelectAllVisible,
+    ],
   );
 
   return (

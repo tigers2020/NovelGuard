@@ -20,6 +20,7 @@ import {
   validateQualityRowsPage,
 } from "../contracts/qualityPageContract";
 import { clampQueryLimit, validateReviewRowsPage } from "../contracts/reviewPageContract";
+import { MAX_REVIEW_MUTATIONS, SELECTION_RESOLVE_ROW_CAP } from "../constants/reviewBulk";
 import {
   buildQualityRows,
   filterReviewRows,
@@ -373,7 +374,13 @@ function resolveSelectionIds(selection: SelectionScope): string[] {
   const filtered = filterReviewRows(mergedReviewRows(), selection.query).filter(
     (row) => !selection.excludeRowIds.includes(row.id),
   );
-  return filtered.map((row) => row.id);
+  const sorted = sortReviewRows(filtered, selection.query.sort);
+  const { slice } = paginateRows(
+    sorted,
+    selection.query.cursor ?? null,
+    SELECTION_RESOLVE_ROW_CAP,
+  );
+  return slice.map((row) => row.id);
 }
 
 function buildMockFinalizeSummary(): FinalizeSummary {
@@ -764,13 +771,13 @@ export const mockBridge: NovelGuardBridge = {
 
   async updateReviewDecisions(request: UpdateReviewDecisionsRequest) {
     const method = "updateReviewDecisions";
-    if (request.selection.type !== "explicit_rows" || request.selection.rowIds.length === 0) {
-      rejectApply(method, "INVALID_REVIEW_COMMAND");
-    }
     validateSelectionScope(request.selection, (query, excludeRowIds) =>
       countCurrentQuery(query, excludeRowIds),
     );
     const selected = resolveSelectedRows(request.selection);
+    if (selected.length === 0 || selected.length > MAX_REVIEW_MUTATIONS) {
+      rejectApply(method, "INVALID_REVIEW_COMMAND");
+    }
     const updated = applyMockReviewCommand(selected, request.command, request.keeperFileId);
     if (updated > 0) {
       libraryRevision += 1;

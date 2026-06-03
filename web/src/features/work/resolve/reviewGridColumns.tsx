@@ -26,12 +26,34 @@ import type { ColumnDef } from "@tanstack/react-table";
 export function buildReviewGridColumns(options?: {
   explicitRowIds: ReadonlySet<string>;
   onToggleExplicit: (row: ReviewRow) => void;
+  allVisibleSelected?: boolean;
+  someVisibleSelected?: boolean;
+  onToggleSelectAllVisible?: () => void;
 }): ColumnDef<ReviewRow>[] {
   const batchColumn: ColumnDef<ReviewRow>[] = options
     ? [
         helper.display({
           id: "batchSelect",
-          header: "",
+          header: () => (
+            <input
+              type="checkbox"
+              aria-label="현재 로드된 행 전체 선택"
+              data-testid="resolve-select-all-visible"
+              checked={Boolean(options.allVisibleSelected)}
+              ref={(el) => {
+                if (el) {
+                  el.indeterminate = Boolean(
+                    options.someVisibleSelected && !options.allVisibleSelected,
+                  );
+                }
+              }}
+              onChange={(event) => {
+                event.stopPropagation();
+                options.onToggleSelectAllVisible?.();
+              }}
+              onClick={(event) => event.stopPropagation()}
+            />
+          ),
           enableSorting: false,
           meta: { gridWidth: "2.5rem", minWidthPx: 40, resizable: false },
           cell: ({ row }) => (

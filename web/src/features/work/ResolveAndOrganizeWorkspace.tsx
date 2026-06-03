@@ -19,6 +19,11 @@ import { REVIEW_GRID_SIZING_KEY } from "./resolve/reviewGridColumns";
 import { mergeReviewColumnVisibility } from "./resolve/reviewGridLayout";
 import { DetailPanel } from "./resolve/DetailPanel";
 import { BatchActionBar } from "./resolve/BatchActionBar";
+import { BulkFilterConfirmDialog } from "./resolve/BulkFilterConfirmDialog";
+import {
+  bulkMutationChunkCursors,
+  bulkMutationTargetCount,
+} from "../../constants/reviewBulk";
 
 function loadColumnSizing(): Record<string, number> {
   try {
@@ -59,6 +64,11 @@ export function ResolveAndOrganizeWorkspace({
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailMutating, setDetailMutating] = useState(false);
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
+  const [bulkConfirm, setBulkConfirm] = useState<{
+    open: boolean;
+    command: "approve" | "exclude";
+  }>({ open: false, command: "approve" });
+  const [bulkMutating, setBulkMutating] = useState(false);
   const [isWideLayout, setIsWideLayout] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches,
   );
@@ -198,6 +208,32 @@ export function ResolveAndOrganizeWorkspace({
     );
   };
 
+  const selectAllVisible = useCallback(() => {
+    setExplicitIds(rows.map((row) => row.id));
+  }, [rows]);
+
+  const selectExactGroupHeaders = useCallback(() => {
+    setExplicitIds(
+      rows.filter((row) => row.rowKind === "group" && row.type === "exact").map((row) => row.id),
+    );
+  }, [rows]);
+
+  const clearExplicitSelection = useCallback(() => {
+    setExplicitIds([]);
+  }, []);
+
+  const allVisibleSelected =
+    rows.length > 0 && rows.every((row) => explicitRowIdSet.has(row.id));
+  const someVisibleSelected = explicitIds.length > 0;
+
+  const toggleSelectAllVisible = useCallback(() => {
+    if (allVisibleSelected) {
+      clearExplicitSelection();
+    } else {
+      selectAllVisible();
+    }
+  }, [allVisibleSelected, clearExplicitSelection, selectAllVisible]);
+
   const explicitSelection = useMemo<SelectionScope>(
     () => ({ type: "explicit_rows", rowIds: explicitIds }),
     [explicitIds],
@@ -208,6 +244,19 @@ export function ResolveAndOrganizeWorkspace({
       ? explicitSelection
       : { type: "current_query", query: currentQuery, excludeRowIds: [] };
 
+  const reviewOnlyBlockedReason = useMemo(() => {
+    if (rowTypeFilter === "near") {
+      return "Near 중복은 검토 전용이며 일괄 적용할 수 없습니다.";
+    }
+    if (rowTypeFilter === "relation") {
+      return "Relation 그룹은 검토 전용이며 일괄 적용할 수 없습니다.";
+    }
+    if (rowTypeFilter === "all") {
+      return "현재 필터에 검토 전용 유형이 포함되어 있습니다. Exact만 선택하세요.";
+    }
+    return undefined;
+  }, [rowTypeFilter]);
+
   const previewBlockedReason = useMemo(() => {
     if (explicitIds.length > 0) {
       const selected = rows.filter((row) => explicitIds.includes(row.id));
@@ -217,15 +266,9 @@ export function ResolveAndOrganizeWorkspace({
       if (selected.some((row) => row.type === "relation")) {
         return "Relation groups are review-only in PR-20 and cannot be applied.";
       }
-    } else if (rowTypeFilter === "near") {
-      return "Near duplicate groups are review-only in PR-19 and cannot be applied.";
-    } else if (rowTypeFilter === "relation") {
-      return "Relation groups are review-only in PR-20 and cannot be applied.";
-    } else if (rowTypeFilter === "all") {
-      return "Review-only row types are selected in the current filter.";
     }
-    return undefined;
-  }, [explicitIds, rows, rowTypeFilter]);
+    return reviewOnlyBlockedReason;
+  }, [explicitIds, rows, reviewOnlyBlockedReason]);
 
   const runDetailReviewCommand = useCallback(
     async (
@@ -264,10 +307,41 @@ export function ResolveAndOrganizeWorkspace({
     [bridge, explicitIds, explicitSelection, loadPage, refreshSnapshot],
   );
 
+  const runBulkQueryCommand = useCallback(
+    async (command: "approve" | "exclude") => {
+      const targetCount = bulkMutationTargetCount(filteredCount);
+      if (targetCount === 0) return;
+      setBulkMutating(true);
+      try {
+        setQueryError(null);
+        const cursors = bulkMutationChunkCursors(targetCount);
+        for (const cursor of cursors) {
+          await bridge.updateReviewDecisions({
+            selection: {
+              type: "current_query",
+              query: { ...currentQuery, cursor },
+              excludeRowIds: [],
+            },
+            command,
+          });
+        }
+        await refreshSnapshot();
+        await loadPage(null, false);
+        setExplicitIds([]);
+      } catch (err) {
+        setQueryError(err instanceof Error ? err.message : "Review update failed");
+      } finally {
+        setBulkMutating(false);
+        setBulkConfirm((prev) => ({ ...prev, open: false }));
+      }
+    },
+    [bridge, currentQuery, filteredCount, loadPage, refreshSnapshot],
+  );
+
   const selectionLabel =
     explicitIds.length > 0
-      ? `${explicitIds.length} selected`
-      : `${filteredCount} in current filter`;
+      ? `${explicitIds.length.toLocaleString()}건 선택`
+      : `선택 없음`;
 
   const handleSetKeeper = (member: DuplicateGroupMemberDetail) => {
     if (member.isKeeper) return;
@@ -337,6 +411,9 @@ export function ResolveAndOrganizeWorkspace({
             onSelectRow={selectMasterRow}
             explicitRowIds={explicitRowIdSet}
             onToggleExplicit={toggleExplicitRow}
+            allVisibleSelected={allVisibleSelected}
+            someVisibleSelected={someVisibleSelected}
+            onToggleSelectAllVisible={toggleSelectAllVisible}
             onNearEnd={handleNearEnd}
             loadingMore={loadingMore}
             sorting={sorting}
@@ -404,12 +481,29 @@ export function ResolveAndOrganizeWorkspace({
       <BatchActionBar
         selectionLabel={selectionLabel}
         filteredCount={filteredCount}
+        loadedCount={rows.length}
         explicitCount={explicitIds.length}
+        onSelectAllVisible={selectAllVisible}
+        onSelectExactGroupHeaders={selectExactGroupHeaders}
+        onClearSelection={clearExplicitSelection}
         onApprove={() => void runBatchCommand("approve")}
         onExclude={() => void runBatchCommand("exclude")}
+        onApproveAllFiltered={() => setBulkConfirm({ open: true, command: "approve" })}
+        onExcludeAllFiltered={() => setBulkConfirm({ open: true, command: "exclude" })}
+        bulkQueryDisabled={Boolean(reviewOnlyBlockedReason)}
+        bulkQueryDisabledReason={reviewOnlyBlockedReason}
         onPreview={() => onOpenPreview(previewSelection)}
         previewDisabled={Boolean(previewBlockedReason)}
         previewDisabledReason={previewBlockedReason}
+      />
+
+      <BulkFilterConfirmDialog
+        open={bulkConfirm.open}
+        command={bulkConfirm.command}
+        filteredCount={filteredCount}
+        mutating={bulkMutating}
+        onCancel={() => setBulkConfirm((prev) => ({ ...prev, open: false }))}
+        onConfirm={() => void runBulkQueryCommand(bulkConfirm.command)}
       />
     </main>
   );
