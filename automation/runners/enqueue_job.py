@@ -75,6 +75,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.payload_file:
         payload = load_payload_file(args.payload_file)
+        if args.id:
+            payload["id"] = args.id
     else:
         if not args.kind or not args.task:
             parser.error("--kind and --task required unless --payload-file is set")
