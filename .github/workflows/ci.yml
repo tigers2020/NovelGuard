@@ -46,3 +46,14 @@ jobs:
 
       - name: npm lint (web)
         run: npm run lint
+        working-directory: web
+
+      - name: vitest (web)
+        run: npm run test
+        working-directory: web
+
+      - name: verify packaging (static)
+        run: python scripts/verify_packaging.py
+
+      - name: fixture library smoke
+        run: python scripts/fixture_library_smoke.py

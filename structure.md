@@ -275,6 +275,8 @@ Web contract tests: `cd web && npm run test:contracts`
 | `perf_file_rows_query.py` | File-rows query perf probe |
 | `install_git_hooks.py` / `hooks/pre-commit` | Git hooks |
 | `automation_worker.py` / `automation_enqueue.py` | Job worker and enqueue (see `automation/`) |
+| `beta_gate.py` / `fixture_library_smoke.py` / `launch_packaged_smoke.py` | Beta smokes (in verify 9/9) |
+| `hermes_job_stdin.py` | Enqueue job JSON from stdin |
 
 ---
 

@@ -99,7 +99,8 @@ Smallest useful check first, then widen if needed.
 ruff check .
 mypy src
 pytest path::test          # prefer targeted
-python scripts/verify_phase_completion.py   # full gate when job asks
+python scripts/verify_phase_completion.py   # 9/9 full gate (fixture smoke; exe launch if dist/ built)
+python scripts/beta_gate.py               # packaging + fixture + launch smokes only
 
 # Web (when touched)
 cd web && npm run lint

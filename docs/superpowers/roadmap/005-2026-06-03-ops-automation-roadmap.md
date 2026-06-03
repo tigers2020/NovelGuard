@@ -13,9 +13,9 @@ parent_roadmap: docs/superpowers/roadmap/000-2026-06-01-novelguard-master-roadma
 
 | ID | Topic | Entry | Status |
 |----|-------|-------|--------|
-| OPS-1 | Hermes job dispatch | `scripts/hermes_enqueue.py` + `automation/schemas/job-payload.schema.json` | Ready |
-| OPS-2 | Local worker | `scripts/automation_worker.py --once` / loop | Ready |
-| OPS-3 | One-shot beta gate | `scripts/beta_gate.py` | Ready |
+| OPS-1 | Hermes job dispatch | `hermes_enqueue.py`, `hermes_job_stdin.py` (stdin JSON) | **Done** |
+| OPS-2 | Local worker | `automation_worker.py`, `run-worker-loop.ps1` | **Done** |
+| OPS-3 | One-shot beta gate | `beta_gate.py` | **Done** |
 | OPS-4 | Large-library perf | Plan [047 perf](../plans/047-2026-06-03-perf-large-library-near-relation.md) | Done on `main` |
 | OPS-5 | Resolve layout polish | Plan [047 layout](../plans/047-2026-06-03-feature-ui-layout-pane-hierarchy-minimal.md) | Done on `main` |
 

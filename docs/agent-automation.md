@@ -39,7 +39,15 @@ automation/
 
 Quick start: [automation/README.md](../automation/README.md).
 
-Hermes can POST/enqueue the same JSON shape as [automation/examples/hermes-job.json](../automation/examples/hermes-job.json).
+Hermes can enqueue the same JSON shape as [automation/examples/hermes-job.json](../automation/examples/hermes-job.json):
+
+```bash
+python scripts/hermes_enqueue.py automation/examples/hermes-job.json --id unique-id
+cat job.json | python scripts/hermes_job_stdin.py
+python scripts/automation_worker.py --once
+```
+
+Background worker (Windows): `automation/run-worker-loop.ps1`
 
 ## Optional external multi-repo hub
 

@@ -23,8 +23,10 @@ python scripts/automation_worker.py
 Hermes:
 
 ```powershell
-python scripts/hermes_enqueue.py automation/examples/hermes-job.json
+python scripts/hermes_enqueue.py automation/examples/hermes-job.json --id job-1
+Get-Content job.json -Raw | python scripts/hermes_job_stdin.py
 python scripts/automation_worker.py --once
+# loop: .\automation\run-worker-loop.ps1
 ```
 
 Quick beta (no full pytest):
