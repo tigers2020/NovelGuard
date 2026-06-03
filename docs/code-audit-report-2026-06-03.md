@@ -4,16 +4,16 @@
 
 ## 요약
 
-현재 Python/Frontend 기능 테스트는 통과하지만, 품질 게이트는 아직 녹색이 아니다.
+**2026-06-03 hotfix + PR #23 merge 이후:** `python scripts/verify_phase_completion.py` 7/7 PASS. 아래 §결론 참고.
 
-- `python -m pytest`: 통과, 141 passed
-- `npm run test --prefix web`: 통과, 95 passed
+- `python -m pytest`: 통과 (146)
+- `npm run test --prefix web`: 통과 (95)
 - `npm run build --prefix web`: 통과
-- `npm run lint --prefix web`: 통과, 경고 1개
-- `python -m ruff check .`: 실패, 20 errors
-- `python -m mypy src`: 실패, 2 errors
+- `npm run lint --prefix web`: 통과
+- `python -m ruff check .`: 통과
+- `python -m mypy src`: 통과
 
-즉시 막히는 문제는 `ruff`/`mypy` 실패다. 그 다음으로 봐야 할 리스크는 스캔 파이프라인 완료 처리 순서와 취소/동시 실행 경계다.
+이 문서 본문의 일부 발견 사항은 **hotfix 이전** 스냅샷을 기록한 것이다. 현재 코드 기준 재검증은 verify gate 및 PR #23 CI를 따른다.
 
 ## 발견 사항
 

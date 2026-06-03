@@ -336,6 +336,7 @@ test.describe("NovelGuard smoke", () => {
     await page.goto("/");
     await page.getByTestId("nav-settings").click();
     await expect(page.getByTestId("settings-route")).toBeVisible();
+    await page.getByTestId("settings-nav-app").click();
     await expect(page.getByTestId("app-info-diagnostics")).toBeVisible();
   });
 
