@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SortingState } from "@tanstack/react-table";
-import { useBridge, useSnapshot } from "../../app/providers/snapshotHooks";
+import { useBridge, useRefreshSnapshot, useSnapshot } from "../../app/providers/snapshotHooks";
 import type {
   QualityIssueDetail,
   QualityIssueType,
   QualityRow,
+  QualityRowsPage,
 } from "../../types/quality";
 import { ColumnChooser } from "../../components/grid/ColumnChooser";
 import { StatChip } from "../../components/ui/StatChip";
@@ -18,6 +19,7 @@ import {
   saveQualityColumnVisibility,
 } from "./quality/qualityGridPersistence";
 import { VirtualizedQualityGrid } from "./quality/VirtualizedQualityGrid";
+import { QualityDetailPanel } from "./quality/QualityDetailPanel";
 import { RepairSubflowDialog } from "./RepairSubflowDialog";
 
 const issueTabs: { id: QualityIssueType; label: string }[] = [
@@ -26,8 +28,15 @@ const issueTabs: { id: QualityIssueType; label: string }[] = [
   { id: "small_file", label: "소형 파일" },
 ];
 
+const emptyTabMessage: Record<QualityIssueType, string> = {
+  integrity: "무결성 이슈가 없습니다.",
+  encoding: "인코딩 이슈가 없습니다.",
+  small_file: "소형 파일 이슈가 없습니다.",
+};
+
 export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => void }) {
   const bridge = useBridge();
+  const refreshSnapshot = useRefreshSnapshot();
   const snapshot = useSnapshot();
   const quality = snapshot.work.quality;
   const libraryRevision = snapshot.work.resolve.libraryRevision;
@@ -35,6 +44,12 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
   const [issueType, setIssueType] = useState<QualityIssueType>("integrity");
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rows, setRows] = useState<QualityRow[]>([]);
+  const [filteredCount, setFilteredCount] = useState(0);
+  const [tabSummary, setTabSummary] = useState<QualityRowsPage["summary"]>({
+    issueCount: 0,
+    warningCount: 0,
+    errorCount: 0,
+  });
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -46,6 +61,12 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [repairOpen, setRepairOpen] = useState(false);
+  const [detailSheetOpen, setDetailSheetOpen] = useState(false);
+  const [isWideLayout, setIsWideLayout] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches,
+  );
+
+  const detailSeqRef = useRef(0);
 
   const detailStale = useMemo(
     () => detail !== null && detail.libraryRevision !== libraryRevision,
@@ -61,36 +82,62 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
     };
   }, [sorting]);
 
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1024px)");
+    const onChange = () => {
+      setIsWideLayout(media.matches);
+      if (media.matches) {
+        setDetailSheetOpen(false);
+      }
+    };
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    detailSeqRef.current += 1;
+    setSelected(null);
+    setDetail(null);
+    setDetailError(null);
+    setDetailLoading(false);
+  }, [issueType]);
+
   const loadDetail = useCallback(
-    (row: QualityRow | null) => {
+    async (row: QualityRow | null) => {
+      const seq = ++detailSeqRef.current;
       if (!row) {
+        if (seq !== detailSeqRef.current) return;
         setDetail(null);
         setDetailError(null);
+        setDetailLoading(false);
         return;
       }
       setDetailLoading(true);
-      void bridge
-        .getQualityIssueDetail(row.id)
-        .then((payload) => {
-          if (payload.status === "not_found") {
-            setDetail(null);
-            setDetailError("이슈를 찾을 수 없습니다.");
-            return;
-          }
-          setDetail(payload.detail);
-          setDetailError(null);
-        })
-        .catch((err) => {
+      setDetailError(null);
+      try {
+        const payload = await bridge.getQualityIssueDetail(row.id);
+        if (seq !== detailSeqRef.current) return;
+        if (payload.status === "not_found") {
           setDetail(null);
-          setDetailError(err instanceof Error ? err.message : "Failed to load detail");
-        })
-        .finally(() => setDetailLoading(false));
+          setDetailError("이슈를 찾을 수 없습니다.");
+          return;
+        }
+        setDetail(payload.detail);
+      } catch (err) {
+        if (seq !== detailSeqRef.current) return;
+        setDetail(null);
+        setDetailError(err instanceof Error ? err.message : "Failed to load detail");
+      } finally {
+        if (seq === detailSeqRef.current) {
+          setDetailLoading(false);
+        }
+      }
     },
     [bridge],
   );
 
   const loadPage = useCallback(
-    async (cursor: string | null, append: boolean) => {
+    async (cursor: string | null, append: boolean, preserveRowId?: string | null) => {
       if (append) setLoadingMore(true);
       else setLoading(true);
       try {
@@ -101,18 +148,27 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
           limit: 100,
           sort: currentSort,
         });
+        setFilteredCount(page.pageInfo.totalFiltered);
+        setTabSummary(page.summary);
         setNextCursor(page.pageInfo.nextCursor);
         setRows((prev) => (append ? [...prev, ...page.rows] : page.rows));
         if (!append) {
-          const first = page.rows[0] ?? null;
-          setSelected(first);
-          loadDetail(first);
+          const next =
+            preserveRowId != null
+              ? (page.rows.find((r) => r.id === preserveRowId) ?? page.rows[0] ?? null)
+              : (page.rows[0] ?? null);
+          setSelected(next);
+          void loadDetail(next);
         }
       } catch (err) {
         setQueryError(err instanceof Error ? err.message : "Failed to load quality rows");
         if (!append) {
           setRows([]);
           setNextCursor(null);
+          setFilteredCount(0);
+          setTabSummary({ issueCount: 0, warningCount: 0, errorCount: 0 });
+          setSelected(null);
+          setDetail(null);
         }
       } finally {
         setLoading(false);
@@ -137,8 +193,8 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
     }
     if (seenRevisionRef.current === libraryRevision) return;
     seenRevisionRef.current = libraryRevision;
-    void loadPage(null, false);
-  }, [libraryRevision, loadPage]);
+    void loadPage(null, false, selected?.id ?? null);
+  }, [libraryRevision, loadPage, selected?.id]);
 
   const loadingMoreRef = useRef(false);
   const handleNearEnd = () => {
@@ -151,19 +207,44 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
 
   const handleSelect = (row: QualityRow) => {
     setSelected(row);
-    loadDetail(row);
+    if (!isWideLayout) {
+      setDetailSheetOpen(true);
+    }
+    void loadDetail(row);
   };
 
   const handleDetailRetry = () => {
-    if (selected) loadDetail(selected);
+    if (selected) void loadDetail(selected);
   };
+
+  const handleRepairSuccess = async () => {
+    await refreshSnapshot();
+    const preserveId = selected?.id ?? null;
+    await loadPage(null, false, preserveId);
+  };
+
+  const activeTabLabel = issueTabs.find((t) => t.id === issueType)?.label ?? issueType;
+  const showEmptyTab = !loading && !queryError && rows.length === 0;
+
+  const detailPanel = (
+    <QualityDetailPanel
+      selectedRow={selected}
+      detail={detail}
+      loading={detailLoading}
+      error={detailError}
+      stale={detailStale}
+      onRetry={handleDetailRetry}
+      onOpenRepair={() => setRepairOpen(true)}
+      onClose={!isWideLayout ? () => setDetailSheetOpen(false) : undefined}
+    />
+  );
 
   return (
     <main
-      className="flex h-full min-h-0 flex-col overflow-hidden bg-background p-5"
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-background"
       data-testid="quality-workspace"
     >
-      <section className="shrink-0 rounded-md border border-outline bg-surface p-5">
+      <section className="shrink-0 border-b border-outline bg-surface p-5">
         <h1 className="text-xl font-bold text-on-surface">품질 · 무결성</h1>
         <p className="mt-1 text-sm text-on-surface-variant">품질 이슈 검토 · UTF-8 복구 (단건)</p>
         <div className="mt-4 grid gap-2 sm:grid-cols-3">
@@ -176,6 +257,7 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
             <button
               key={tab.id}
               type="button"
+              data-testid={`quality-tab-${tab.id}`}
               onClick={() => setIssueType(tab.id)}
               className={`rounded-md px-3 py-2 text-sm font-semibold ${
                 issueType === tab.id
@@ -209,7 +291,7 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
         </div>
         {loading && !queryError && (
           <p className="mt-2 text-xs text-muted" data-testid="quality-grid-loading">
-            Loading rows…
+            {activeTabLabel} 탭 불러오는 중…
           </p>
         )}
         {queryError && (
@@ -227,121 +309,94 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
             </button>
           </div>
         )}
+        {!loading && !queryError && filteredCount > 0 && (
+          <p className="mt-2 text-xs text-on-surface-variant" data-testid="quality-tab-summary">
+            {activeTabLabel}: {filteredCount.toLocaleString()}건 (경고{" "}
+            {tabSummary.warningCount.toLocaleString()} · 오류{" "}
+            {tabSummary.errorCount.toLocaleString()})
+          </p>
+        )}
       </section>
 
-      <div className="mt-4 grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_280px]">
-        <VirtualizedQualityGrid
-          rows={rows}
-          selectedRowId={selected?.id ?? null}
-          onSelectRow={handleSelect}
-          onNearEnd={handleNearEnd}
-          loadingMore={loadingMore}
-          sorting={sorting}
-          onSortingChange={setSorting}
-          userColumnVisibility={columnVisibility}
-          columnSizing={columnSizing}
-          onColumnSizingChange={(next) => {
-            setColumnSizing(next);
-            localStorage.setItem(QUALITY_GRID_SIZING_KEY, JSON.stringify(next));
-          }}
-        />
-        <aside className="overflow-y-auto rounded-md border border-outline bg-surface p-4 text-sm">
-          <p className="font-semibold text-on-surface">Issue detail</p>
-          {detailLoading && <p className="mt-2 text-muted">불러오는 중…</p>}
-          {detailError && (
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <p className="text-error" data-testid="quality-detail-error">
-                {detailError}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {!isWideLayout && selected && (
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-outline bg-surface px-3 py-2">
+              <p className="truncate text-xs text-on-surface-variant">
+                선택: <span className="font-semibold text-on-surface">{selected.name}</span>
               </p>
               <button
                 type="button"
-                data-testid="quality-detail-retry"
-                className="rounded-md border border-outline px-2 py-1 text-xs font-semibold hover:bg-hover"
-                onClick={handleDetailRetry}
+                data-testid="quality-detail-sheet-open"
+                className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-background"
+                onClick={() => setDetailSheetOpen(true)}
               >
-                Retry
+                상세 보기
               </button>
             </div>
           )}
-          {detailStale && (
-            <p
-              className="mt-2 rounded-md border border-outline bg-surface-elevated p-2 text-warning"
-              data-testid="quality-detail-stale"
-              role="status"
-            >
-              라이브러리가 변경되었습니다. 목록을 새로고침하거나 행을 다시 선택하세요.
-            </p>
-          )}
-          {detail && !detailError ? (
-            <dl className={`mt-3 space-y-2 ${detailStale ? "opacity-60" : ""}`}>
-              <div>
-                <dt className="text-muted">Name</dt>
-                <dd>{detail.name}</dd>
-              </div>
-              <div>
-                <dt className="text-muted">Path</dt>
-                <dd className="break-all">{detail.path}</dd>
-              </div>
-              <div>
-                <dt className="text-muted">Encoding</dt>
-                <dd>{detail.encoding}</dd>
-              </div>
-              <div>
-                <dt className="text-muted">Severity</dt>
-                <dd>{detail.severity}</dd>
-              </div>
-              <div>
-                <dt className="text-muted">Evidence</dt>
-                <dd>
-                  {detail.evidence.kind}: {detail.evidence.message}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-muted">File size</dt>
-                <dd>{detail.file.sizeBytes} bytes</dd>
-              </div>
-              <div>
-                <dt className="text-muted">Repair</dt>
-                <dd>{detail.repairEligibility.label}</dd>
-              </div>
-              {detail.repairEligibility.eligible && !detailStale && (
-                <button
-                  type="button"
-                  data-testid="quality-repair-open"
-                  className="mt-3 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-background hover:bg-primary/90"
-                  onClick={() => setRepairOpen(true)}
-                >
-                  복구 미리보기
-                </button>
-              )}
-              {import.meta.env.DEV && (
-                <div>
-                  <dt className="text-muted">Raw (dev)</dt>
-                  <dd>
-                    <pre className="mt-1 max-h-40 overflow-auto rounded bg-background p-2 text-xs">
-                      {JSON.stringify(detail, null, 2)}
-                    </pre>
-                  </dd>
-                </div>
-              )}
-            </dl>
-          ) : (
-            !detailLoading &&
-            !detailError && <p className="mt-2 text-muted">행을 선택하세요.</p>
-          )}
-        </aside>
+
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-5 pt-4">
+            {showEmptyTab && (
+              <p
+                className="mb-3 rounded-md border border-outline bg-surface p-4 text-sm text-on-surface-variant"
+                data-testid="quality-tab-empty"
+                role="status"
+              >
+                {emptyTabMessage[issueType]}
+              </p>
+            )}
+            <VirtualizedQualityGrid
+              rows={rows}
+              selectedRowId={selected?.id ?? null}
+              onSelectRow={handleSelect}
+              onNearEnd={handleNearEnd}
+              loadingMore={loadingMore}
+              sorting={sorting}
+              onSortingChange={setSorting}
+              userColumnVisibility={columnVisibility}
+              columnSizing={columnSizing}
+              onColumnSizingChange={(next) => {
+                setColumnSizing(next);
+                localStorage.setItem(QUALITY_GRID_SIZING_KEY, JSON.stringify(next));
+              }}
+              filteredCount={filteredCount}
+              tabSummary={tabSummary}
+            />
+          </div>
+        </div>
+
+        {isWideLayout && (
+          <QualityDetailPanel
+            className="w-[min(360px,36%)] shrink-0 border-l border-outline"
+            selectedRow={selected}
+            detail={detail}
+            loading={detailLoading}
+            error={detailError}
+            stale={detailStale}
+            onRetry={handleDetailRetry}
+            onOpenRepair={() => setRepairOpen(true)}
+          />
+        )}
       </div>
+
+      {!isWideLayout && detailSheetOpen && (
+        <div
+          className="fixed inset-0 z-40 flex flex-col bg-background/95 backdrop-blur-sm"
+          data-testid="quality-detail-sheet"
+          role="dialog"
+          aria-modal="true"
+        >
+          {detailPanel}
+        </div>
+      )}
+
       <RepairSubflowDialog
         open={repairOpen}
         issueId={selected?.id ?? null}
         snapshotLibraryRevision={libraryRevision}
         onClose={() => setRepairOpen(false)}
-        onSuccess={() => {
-          void loadPage(null, false);
-          if (selected) {
-            loadDetail(selected);
-          }
-        }}
+        onSuccess={() => void handleRepairSuccess()}
         onOpenFinalize={onOpenFinalize}
       />
     </main>
