@@ -75,18 +75,9 @@ flowchart TD
 
 ## Phase index
 
-| PR | Name | Wave | Mutation | Spec (proposed) | Plan (proposed) | Status |
-|----|------|------|----------|-----------------|-----------------|--------|
-| **PR-48** | Large-library scan sign-off | H — Perf UX | No | `specs/030-2026-06-03-infra-scan-operator-signoff-design.md` | `plans/048-2026-06-03-infra-scan-pr48-operator-signoff.md` | **Done** (2026-06-03) |
-| **PR-49** | ShellFileDock per-mode persistence | H — Layout | No | `specs/031-2026-06-03-feature-ui-shell-filedock-per-mode-design.md` | `plans/049-2026-06-03-feature-ui-shell-pr49-filedock-per-mode.md` | **Done** (2026-06-03) |
-| **PR-50** | Relation detection v2 | C+ | No | [032 relation v2](../specs/032-2026-06-03-domain-relation-v2-design.md) | [050 relation v2](../plans/050-2026-06-03-domain-relation-pr50-relation-v2.md) | **Ready** (spec+plan approved 2026-06-03) |
-| **PR-51** | Column chooser persistence | F+ | No | `specs/033-2026-06-03-feature-ui-grid-column-persistence-design.md` | `plans/051-2026-06-03-feature-ui-grid-pr51-column-persistence.md` | **Proposed** |
-| **PR-52** | Legacy `~/.novelguard` migration | I — Data | Limited | `specs/034-2026-06-03-infra-legacy-state-migration-design.md` | `plans/052-2026-06-03-infra-data-pr52-legacy-migration.md` | **Proposed** |
-| **PR-53** | Settings expert slice (P2 minimal) | F+ | No | extend [016 settings](../specs/016-2026-06-02-settings-logs-design.md) → `specs/035-…-settings-expert-v1-design.md` | `plans/053-2026-06-03-feature-ui-settings-pr53-expert-slice.md` | **Proposed** |
-| **PR-54** | Headless packaged E2E | J — Release | No | `specs/036-2026-06-03-infra-packaged-e2e-design.md` | `plans/054-2026-06-03-infra-e2e-pr54-packaged-smoke.md` | **Proposed** |
-| **PR-55** | Windows installer v1 (unsigned) | E+ | No | extend [012 packaging](../specs/012-2026-06-02-packaging-distribution-design.md) → `specs/037-…-installer-v1-design.md` | `plans/055-2026-06-03-infra-packaging-pr55-installer-v1.md` | **Proposed** |
-| **PR-56** | Code signing & trust | E+ | No | `specs/038-2026-06-03-infra-code-signing-design.md` | `plans/056-2026-06-03-infra-packaging-pr56-code-signing.md` | **Proposed** |
-| **PR-57** | Auto-update pilot | E+ | Limited | `specs/039-2026-06-03-infra-auto-update-pilot-design.md` | `plans/057-2026-06-03-infra-packaging-pr57-auto-update.md` | **Proposed** |
+**Status, column, spec/plan links:** [Kanban board](../../agent/KANBAN.md) (`.devtool/features/`, filter labels `track-007`) — includes PR-46/47 preambles.
+
+**Active slice:** [current_query.md](./current_query.md) · **Next open column:** first `proposed` card in program order (today PR-51 after PR-50 merges).
 
 Wave **H** = post-beta large-library UX; **I** = data migration; **J** = release automation. Extends master waves A–G ([000](./000-2026-06-01-novelguard-master-roadmap.md)).
 

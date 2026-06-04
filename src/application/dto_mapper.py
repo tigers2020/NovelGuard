@@ -76,6 +76,8 @@ def build_snapshot(
     queue_count: int = 0,
     approved_count: int = 0,
     conflict_count: int = 0,
+    exact_duplicate_file_count: int = 0,
+    move_target_count: int = 0,
     integrity_issue_count: int = 0,
     encoding_issue_count: int = 0,
     small_file_anomaly_count: int = 0,
@@ -88,6 +90,7 @@ def build_snapshot(
     finalize_warning_count: int = 0,
     connection: str = "Library session (Python)",
     scan_options: list[str] | None = None,
+    duplicate_archive_path: str | None = None,
 ) -> dict[str, Any]:
     return {
         "route": "work",
@@ -102,6 +105,7 @@ def build_snapshot(
             "integrityIssues": integrity_issue_count,
             "lastRun": scan_last_run,
             "scanOptions": scan_options or [".txt,.md", "하위 폴더 포함", "숨김 제외"],
+            "duplicateArchivePath": duplicate_archive_path,
         },
         "pipeline": {
             "phase": pipeline_phase,
@@ -125,6 +129,8 @@ def build_snapshot(
                 "groupCount": duplicate_group_count,
                 "conflictCount": conflict_count,
                 "approvedCount": approved_count,
+                "exactDuplicateFileCount": exact_duplicate_file_count,
+                "moveTargetCount": move_target_count,
                 "hasPendingApply": has_pending_apply,
                 "libraryRevision": library_revision,
             },

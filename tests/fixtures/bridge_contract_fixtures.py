@@ -38,6 +38,8 @@ VALID_SNAPSHOT: dict[str, Any] = {
             "groupCount": 0,
             "conflictCount": 0,
             "approvedCount": 0,
+            "exactDuplicateFileCount": 0,
+            "moveTargetCount": 0,
             "hasPendingApply": False,
             "libraryRevision": 0,
         },

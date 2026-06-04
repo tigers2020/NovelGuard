@@ -39,6 +39,8 @@ export const validAppSnapshot: AppSnapshot = {
       groupCount: 0,
       conflictCount: 0,
       approvedCount: 0,
+      exactDuplicateFileCount: 0,
+      moveTargetCount: 0,
       hasPendingApply: false,
       libraryRevision: 0,
     },

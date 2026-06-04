@@ -43,7 +43,11 @@ from application.quality_analyzer import analyze_quality
 from application.scan_settings import SettingsValidationError, parse_extension_filter
 from application.settings_store import SettingsStore
 from domain.apply_models import PreviewOperation
-from domain.apply_path_policy import build_move_duplicate_dest_relative, validate_move_operation
+from domain.apply_path_policy import (
+    build_move_duplicate_dest_relative,
+    resolve_destination_path,
+    validate_move_operation,
+)
 from domain.duplicate_exact import find_exact_duplicate_groups
 from domain.models import FileRecord, make_file_id
 from domain.quality import make_issue_id
@@ -1603,14 +1607,46 @@ def test_apply_path_policy_blocks_absolute_dest(tmp_path: Path) -> None:
     assert result.reason in ("absolute_path", "path_traversal", "invalid_target")
 
 
-def test_apply_path_policy_blocks_destination_exists(tmp_path: Path) -> None:
+def test_duplicate_archive_root_is_outside_library(tmp_path: Path) -> None:
+    from domain.duplicate_archive import duplicate_archive_root
+
+    root = tmp_path / "MyNovels"
+    root.mkdir()
+    archive = duplicate_archive_root(root)
+    assert archive == tmp_path / "MyNovels_duplicate"
+    assert archive.resolve().parent == root.resolve().parent
+
+
+def test_allocate_unique_dest_path_when_name_taken(tmp_path: Path) -> None:
+    from domain.duplicate_archive import allocate_unique_dest_path, duplicate_archive_root
+
     root = tmp_path / "lib"
-    (root / "duplicate").mkdir(parents=True)
-    (root / "duplicate" / "dup.txt").write_text("exists", encoding="utf-8")
+    root.mkdir()
+    archive = duplicate_archive_root(root)
+    archive.mkdir(parents=True)
+    (archive / "story.txt").write_text("old", encoding="utf-8")
+
+    unique = allocate_unique_dest_path(
+        archive / "story.txt",
+        path_exists=Path.exists,
+    )
+    assert unique.name == "story (2).txt"
+    assert not unique.exists()
+
+
+def test_apply_path_policy_blocks_destination_exists(tmp_path: Path) -> None:
+    from domain.duplicate_archive import build_duplicate_archive_dest, duplicate_archive_root
+
+    root = tmp_path / "lib"
+    root.mkdir()
+    archive = duplicate_archive_root(root)
+    archive.mkdir(parents=True)
+    (archive / "dup.txt").write_text("exists", encoding="utf-8")
     (root / "src.txt").write_text("src", encoding="utf-8")
+    dest = build_duplicate_archive_dest(root, "dup.txt")
     result = validate_move_operation(
         root,
-        _move_op(source="src.txt", dest="duplicate/dup.txt"),
+        _move_op(source="src.txt", dest=str(dest)),
         destination_exists=True,
     )
     assert not result.allowed
@@ -1618,17 +1654,35 @@ def test_apply_path_policy_blocks_destination_exists(tmp_path: Path) -> None:
 
 
 def test_apply_path_policy_allows_valid_move(tmp_path: Path) -> None:
+    from domain.duplicate_archive import build_duplicate_archive_dest
+
     root = tmp_path / "lib"
     root.mkdir()
     (root / "src.txt").write_text("src", encoding="utf-8")
-    dest_rel = build_move_duplicate_dest_relative("duplicate", "src.txt")
+    dest = build_duplicate_archive_dest(root, "src.txt")
     result = validate_move_operation(
         root,
-        _move_op(source="src.txt", dest=dest_rel),
+        _move_op(source="src.txt", dest=str(dest)),
         destination_exists=False,
     )
     assert result.allowed
     assert result.reason is None
+
+
+def test_scan_skips_in_library_duplicate_folder(tmp_path: Path) -> None:
+    (tmp_path / "keep.txt").write_text("a", encoding="utf-8")
+    dup_dir = tmp_path / "duplicate"
+    dup_dir.mkdir()
+    (dup_dir / "moved.txt").write_text("b", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    page = api.query_file_rows({"limit": 50, "filters": {}})
+    names = {row["name"] for row in page["rows"]}
+    assert "keep.txt" in names
+    assert "moved.txt" not in names
 
 
 def test_filesystem_apply_moves_file(tmp_path: Path) -> None:
@@ -1639,6 +1693,30 @@ def test_filesystem_apply_moves_file(tmp_path: Path) -> None:
     dest = root / "duplicate" / "src.txt"
     adapter = LocalFilesystemApplyAdapter()
     assert adapter.move_file(src, dest).outcome == "ok"
+    assert dest.read_text(encoding="utf-8") == "payload"
+    assert not src.exists()
+
+
+def test_filesystem_apply_cross_device_removes_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import errno
+    import os
+
+    from infrastructure.local_filesystem_apply import reliable_move
+
+    root = tmp_path / "lib"
+    archive = tmp_path / "lib_duplicate"
+    root.mkdir()
+    src = root / "a.txt"
+    src.write_text("payload", encoding="utf-8")
+    dest = archive / "a.txt"
+
+    def fail_replace(_src: str | os.PathLike[str], _dest: str | os.PathLike[str]) -> None:
+        raise OSError(errno.EXDEV, "cross-device")
+
+    monkeypatch.setattr(os, "replace", fail_replace)
+    reliable_move(src, dest)
     assert dest.read_text(encoding="utf-8") == "payload"
     assert not src.exists()
 
@@ -1712,6 +1790,144 @@ class _FailOnNthMoveAdapter(LocalFilesystemApplyAdapter):
         return super().move_file(src, dest)
 
 
+def test_scan_seeds_auto_approved_exact_groups(tmp_path: Path) -> None:
+    api = _duplicate_api(tmp_path)
+    page = api.query_review_rows({"viewMode": "all", "limit": 50, "filters": {"types": ["exact"]}})
+    file_rows = [row for row in page["rows"] if row.get("rowKind") == "file"]
+    assert file_rows
+    assert all(row.get("status") == "approved" for row in file_rows)
+
+
+def test_move_preview_uses_unique_dest_when_duplicate_folder_occupied(tmp_path: Path) -> None:
+    from domain.duplicate_archive import duplicate_archive_root
+
+    api = _duplicate_api(tmp_path)
+    archive = duplicate_archive_root(tmp_path)
+    archive.mkdir(parents=True, exist_ok=True)
+    (archive / "copy_a.txt").write_text("already there", encoding="utf-8")
+
+    page = api.query_review_rows({"viewMode": "move", "limit": 50, "filters": {"types": ["exact"]}})
+    move_rows = [row for row in page["rows"] if row.get("rowKind") == "file"]
+    assert move_rows
+    preview = api.get_move_preview({"type": "explicit_rows", "rowIds": [move_rows[0]["id"]]})
+    validate_move_preview(preview)
+    assert preview["summary"]["operationCount"] >= 1
+    assert preview["summary"].get("conflictCount", 0) == 0
+
+
+def test_snapshot_reports_move_target_count_after_scan(tmp_path: Path) -> None:
+    api = _duplicate_api(tmp_path)
+    snap = api.get_snapshot()
+    assert snap["work"]["resolve"]["moveTargetCount"] >= 1
+
+
+def test_preview_moves_approved_ignore_relation_rows(tmp_path: Path) -> None:
+    """Legacy relation rows may show ignore + approved; they must still preview."""
+    from application.review_move_targets import is_approved_non_keeper_file_row
+
+    (tmp_path / "Novel 01.txt").write_text("x", encoding="utf-8")
+    (tmp_path / "Novel 02.txt").write_text("y", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.set_app_setting("include_relation", True)  # type: ignore[arg-type]
+    api.start_scan()
+    _scan_until_idle(api)
+    page = api.query_review_rows({"viewMode": "all", "limit": 100, "filters": {"types": ["relation"]}})
+    move_rows = [
+        row
+        for row in page["rows"]
+        if is_approved_non_keeper_file_row(row)
+    ]
+    if len(move_rows) < 1:
+        return
+    preview = api.get_move_preview(
+        {"type": "explicit_rows", "rowIds": [move_rows[0]["id"]]}
+    )
+    validate_move_preview(preview)
+    assert preview["summary"]["operationCount"] >= 1
+
+
+def test_collect_canonical_move_target_prefers_exact_over_relation() -> None:
+    from application.review_move_targets import collect_canonical_approved_move_target_rows
+
+    file_id = "ab" * 32
+    exact_move = {
+        "id": f"file:exact-g:{file_id}",
+        "rowKind": "file",
+        "type": "exact",
+        "status": "approved",
+        "proposedAction": "move_duplicate",
+        "groupId": "exact-g",
+        "targetFolder": "duplicate/",
+    }
+    relation_move = {
+        "id": f"file:relation:r1:{file_id}",
+        "rowKind": "file",
+        "type": "relation",
+        "status": "approved",
+        "proposedAction": "move_duplicate",
+        "groupId": "relation:r1",
+        "targetFolder": "duplicate/",
+    }
+    exact_keeper = {**exact_move, "proposedAction": "keep", "targetFolder": None}
+    assert collect_canonical_approved_move_target_rows([exact_keeper, relation_move]) == []
+    picked = collect_canonical_approved_move_target_rows([exact_move, relation_move])
+    assert len(picked) == 1
+    assert picked[0]["type"] == "exact"
+
+
+def test_pick_keeper_record_prefers_size_then_path() -> None:
+    from domain.keeper_selection import pick_keeper_record
+    from domain.models import FileRecord
+
+    larger = FileRecord(
+        id="large",
+        relative_path="large.txt",
+        name="large.txt",
+        size_bytes=200,
+        modified_at_ns=1,
+        extension=".txt",
+    )
+    smaller = FileRecord(
+        id="small",
+        relative_path="small.txt",
+        name="small.txt",
+        size_bytes=100,
+        modified_at_ns=9_999,
+        extension=".txt",
+    )
+    assert pick_keeper_record([smaller, larger]).id == "large"
+
+    earlier_path = FileRecord(
+        id="a",
+        relative_path="a_early.txt",
+        name="a_early.txt",
+        size_bytes=100,
+        modified_at_ns=9_999,
+        extension=".txt",
+    )
+    later_path = FileRecord(
+        id="z",
+        relative_path="z_late.txt",
+        name="z_late.txt",
+        size_bytes=100,
+        modified_at_ns=1,
+        extension=".txt",
+    )
+    assert pick_keeper_record([earlier_path, later_path]).id == "z"
+
+
+def test_real_move_preview_rows_include_file_names(tmp_path: Path) -> None:
+    api = _duplicate_api(tmp_path)
+    page = api.query_review_rows({"viewMode": "move", "limit": 50, "filters": {"types": ["exact"]}})
+    move_row = next(row for row in page["rows"] if row.get("rowKind") == "file")
+    preview = api.get_move_preview({"type": "explicit_rows", "rowIds": [move_row["id"]]})
+    validate_move_preview(preview)
+    assert preview["rows"]
+    assert preview["rows"][0]["name"] == move_row["name"]
+
+
 def test_real_move_preview_lists_duplicate_member(tmp_path: Path) -> None:
     api = _duplicate_api(tmp_path)
     page = api.query_review_rows({"viewMode": "all", "limit": 50})
@@ -1744,9 +1960,12 @@ def test_real_apply_moves_duplicate_file(
     sel = {"type": "explicit_rows", "rowIds": [move_row["id"]]}
     preview = api.get_move_preview(sel)
     api.apply_resolved_actions({"selection": sel, "previewToken": preview["previewToken"]})
+    from domain.duplicate_archive import duplicate_archive_root
+
     src_name = move_row["name"]
+    archive = duplicate_archive_root(tmp_path)
     assert not (tmp_path / src_name).exists()
-    assert (tmp_path / "duplicate" / src_name).exists()
+    assert (archive / src_name).exists()
     snap = api.get_snapshot()
     assert snap["work"]["resolve"]["hasPendingApply"] is False
 
@@ -2025,7 +2244,7 @@ def test_get_near_duplicate_group_detail(tmp_path: Path) -> None:
     assert detail["evidence"]["matchKind"] == "near_ngram_v1"
 
 
-def test_preview_rejects_near_duplicate_rows(tmp_path: Path) -> None:
+def test_preview_includes_approved_near_duplicate_rows(tmp_path: Path) -> None:
     (tmp_path / "alpha.txt").write_text(_near_similar_body("alpha"), encoding="utf-8")
     (tmp_path / "beta.txt").write_text(_near_similar_body("beta"), encoding="utf-8")
     session = create_library_session(MemoryLibraryIndex())
@@ -2036,12 +2255,23 @@ def test_preview_rejects_near_duplicate_rows(tmp_path: Path) -> None:
     near_page = api.query_review_rows(
         {"viewMode": "all", "limit": 50, "filters": {"types": ["near"]}}
     )
-    file_row = next((row for row in near_page["rows"] if row["rowKind"] == "file"), None)
-    if file_row is None:
+    move_row = next(
+        (
+            row
+            for row in near_page["rows"]
+            if row["rowKind"] == "file" and row.get("proposedAction") == "move_duplicate"
+        ),
+        None,
+    )
+    if move_row is None:
         return
-    with pytest.raises(PreviewApplyError) as exc_info:
-        api.get_move_preview({"type": "explicit_rows", "rowIds": [file_row["id"]]})
-    assert exc_info.value.reason == "NEAR_DUPLICATE_APPLY_UNSUPPORTED"
+    if move_row.get("status") != "approved":
+        api.update_review_decisions(
+            {"selection": {"type": "explicit_rows", "rowIds": [move_row["id"]]}, "command": "approve"}
+        )
+    preview = api.get_move_preview({"type": "explicit_rows", "rowIds": [move_row["id"]]})
+    validate_move_preview(preview)
+    assert preview["summary"]["operationCount"] >= 1
 
 
 def test_relation_token_precedence_v2_is_version_not_numeric() -> None:
@@ -2334,7 +2564,7 @@ def test_get_relation_group_detail(tmp_path: Path) -> None:
     assert detail["evidence"]["matchKind"] == "relation_filename_v1"
 
 
-def test_preview_rejects_relation_rows(tmp_path: Path) -> None:
+def test_preview_includes_approved_relation_rows(tmp_path: Path) -> None:
     (tmp_path / "Novel 01.txt").write_text("x", encoding="utf-8")
     (tmp_path / "Novel 02.txt").write_text("y", encoding="utf-8")
     session = create_library_session(MemoryLibraryIndex())
@@ -2346,12 +2576,23 @@ def test_preview_rejects_relation_rows(tmp_path: Path) -> None:
     relation_page = api.query_review_rows(
         {"viewMode": "all", "limit": 50, "filters": {"types": ["relation"]}}
     )
-    file_row = next((row for row in relation_page["rows"] if row["rowKind"] == "file"), None)
-    if file_row is None:
+    move_row = next(
+        (
+            row
+            for row in relation_page["rows"]
+            if row["rowKind"] == "file" and row.get("proposedAction") == "move_duplicate"
+        ),
+        None,
+    )
+    if move_row is None:
         return
-    with pytest.raises(PreviewApplyError) as exc_info:
-        api.get_move_preview({"type": "explicit_rows", "rowIds": [file_row["id"]]})
-    assert exc_info.value.reason == "RELATION_APPLY_UNSUPPORTED"
+    if move_row.get("status") != "approved":
+        api.update_review_decisions(
+            {"selection": {"type": "explicit_rows", "rowIds": [move_row["id"]]}, "command": "approve"}
+        )
+    preview = api.get_move_preview({"type": "explicit_rows", "rowIds": [move_row["id"]]})
+    validate_move_preview(preview)
+    assert preview["summary"]["operationCount"] >= 1
 
 
 def _encoding_issue_row(api: BridgeApi) -> dict:
@@ -2482,6 +2723,26 @@ def test_preview_finalize_cleanup_lists_empty_dirs(tmp_path: Path) -> None:
     assert "previewedEmptyDirs" in preview
     assert "duplicate/empty-slot" in preview["previewedEmptyDirs"]
     assert "organized/empty-slot" in preview["previewedEmptyDirs"]
+
+
+def test_finalize_encoding_issues_are_warning_not_blocker() -> None:
+    from application.finalize_blockers import compute_finalize_blockers, compute_finalize_warnings
+
+    blockers = compute_finalize_blockers(
+        review_rows=[],
+        scan_state="success",
+        has_pending_apply=False,
+        has_pending_quality_repair=False,
+        encoding_issue_count=5903,
+        integrity_issue_count=0,
+    )
+    warnings = compute_finalize_warnings(
+        review_rows=[],
+        small_file_anomaly_count=0,
+        encoding_issue_count=5903,
+    )
+    assert blockers == []
+    assert any(item["code"] == "ENCODING_QUALITY_ISSUES" for item in warnings)
 
 
 def test_get_finalize_summary_requires_library() -> None:

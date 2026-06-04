@@ -21,3 +21,10 @@ def file_row_status_counts(rows: list[dict[str, Any]]) -> tuple[int, int, int]:
         if status in ("unreviewed", "conflict"):
             queue += 1
     return queue, approved, conflict
+
+
+def exact_duplicate_metrics(rows: list[dict[str, Any]]) -> tuple[int, int]:
+    """Return (duplicate_member_file_count, approved_move_target_count) for exact/near/relation."""
+    from application.review_move_targets import count_approved_move_targets
+
+    return count_approved_move_targets(rows)

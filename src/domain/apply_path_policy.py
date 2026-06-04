@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from domain.apply_models import PolicyBlockReason, PolicyResult, PreviewOperation
+from domain.duplicate_archive import (
+    build_duplicate_archive_dest,
+    is_path_under_duplicate_archive,
+)
 
 
 def resolve_under_library_root(
@@ -52,6 +57,32 @@ def resolve_destination_path(
     return candidate, None
 
 
+def resolve_apply_destination(
+    library_root: Path,
+    dest_path: str,
+) -> tuple[Path | None, PolicyBlockReason | None]:
+    """Resolve move destination: external duplicate archive or legacy library-relative path."""
+    dest_text = dest_path.strip()
+    if not dest_text:
+        return None, "invalid_target"
+
+    candidate = Path(dest_text)
+    if candidate.is_absolute():
+        resolved = candidate.resolve()
+        if is_path_under_duplicate_archive(resolved, library_root):
+            return resolved, None
+        return None, "outside_root"
+
+    dest_norm = dest_text.replace("\\", "/")
+    if dest_norm == "duplicate" or dest_norm.startswith("duplicate/"):
+        basename = Path(dest_norm).name
+        if not basename:
+            return None, "invalid_target"
+        return build_duplicate_archive_dest(library_root.resolve(), basename).resolve(), None
+
+    return resolve_destination_path(library_root, dest_text)
+
+
 def validate_move_operation(
     library_root: Path,
     operation: PreviewOperation,
@@ -65,9 +96,13 @@ def validate_move_operation(
     if src_reason is not None or source is None:
         return PolicyResult(allowed=False, reason=src_reason or "invalid_target")
 
-    dest, dest_reason = resolve_destination_path(library_root, operation.dest_path)
+    dest, dest_reason = resolve_apply_destination(library_root, operation.dest_path)
     if dest_reason is not None or dest is None:
         return PolicyResult(allowed=False, reason=dest_reason or "invalid_target")
+
+    root = library_root.resolve()
+    if _is_under_root(dest, root):
+        return PolicyResult(allowed=False, reason="invalid_target")
 
     if destination_exists:
         return PolicyResult(allowed=False, reason="destination_exists")
@@ -81,6 +116,29 @@ def build_move_duplicate_dest_relative(target_folder: str, source_basename: str)
     if not folder:
         return source_basename
     return f"{folder}/{source_basename}"
+
+
+def allocate_unique_dest_relative(
+    library_root: Path,
+    dest_relative: str,
+    *,
+    destination_exists: Callable[[str], bool],
+) -> str:
+    """Pick ``dest_relative`` or ``name (2).ext`` when the destination file already exists."""
+    if not destination_exists(dest_relative):
+        return dest_relative
+
+    path = Path(dest_relative.replace("\\", "/"))
+    parent = path.parent
+    parent_prefix = "" if parent == Path(".") else f"{parent.as_posix()}/"
+    stem = path.stem
+    suffix = path.suffix
+
+    for index in range(2, 10_000):
+        candidate = f"{parent_prefix}{stem} ({index}){suffix}"
+        if not destination_exists(candidate):
+            return candidate
+    return dest_relative
 
 
 def _normalize_relative(relative: str) -> Path | None:

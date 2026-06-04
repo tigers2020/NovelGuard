@@ -37,3 +37,9 @@ export function reviewDecisionsTimeoutMs(rowCount: number): number {
   const n = Math.max(1, rowCount);
   return Math.min(120_000, 15_000 + n * 150);
 }
+
+/** Bridge timeout for move preview / apply (per-file hash + move + index refresh). */
+export function applyMoveTimeoutMs(operationCount: number): number {
+  const n = Math.max(1, Math.min(operationCount, MAX_REVIEW_MUTATIONS));
+  return Math.min(600_000, 60_000 + n * 800);
+}

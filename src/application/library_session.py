@@ -117,6 +117,8 @@ class LibrarySession:
         self._queue_count = 0
         self._approved_count = 0
         self._conflict_count = 0
+        self._exact_duplicate_file_count = 0
+        self._move_target_count = 0
         self._files_by_id: dict[str, FileRecord] = {}
         self._quality_rows_cache: list[dict[str, Any]] = []
         self._integrity_issue_count = 0
@@ -344,9 +346,18 @@ class LibrarySession:
 
     def get_snapshot(self) -> dict[str, Any]:
         with self._lock:
+            if self._approved_count > 0 and self._move_target_count == 0:
+                self._refresh_resolve_counts()
             file_count, total_bytes = self._snapshot_library_metrics()
+            folder = self._index.folder_path
+            archive_path: str | None = None
+            if folder:
+                from domain.duplicate_archive import duplicate_archive_root
+
+                archive_path = str(duplicate_archive_root(Path(folder)))
             return build_snapshot(
-                folder_path=self._index.folder_path,
+                folder_path=folder,
+                duplicate_archive_path=archive_path,
                 file_count=file_count,
                 total_bytes=total_bytes,
                 library_revision=self._library_revision,
@@ -367,6 +378,8 @@ class LibrarySession:
                 queue_count=self._queue_count,
                 approved_count=self._approved_count,
                 conflict_count=self._conflict_count,
+                exact_duplicate_file_count=self._exact_duplicate_file_count,
+                move_target_count=self._move_target_count,
                 integrity_issue_count=self._integrity_issue_count,
                 encoding_issue_count=self._encoding_issue_count,
                 small_file_anomaly_count=self._small_file_anomaly_count,
@@ -773,7 +786,7 @@ class LibrarySession:
         root = save_root if save_root is not None else self.finalize_save_root()
         return read_finalize_report(root, self.finalize_session_id(), report_id)
 
-    def refresh_index_from_disk(self) -> None:
+    def refresh_index_from_disk(self, *, after_apply: bool = False) -> None:
         with self._lock:
             folder = self._index.folder_path
             if not folder:
@@ -797,9 +810,16 @@ class LibrarySession:
             self._rebuild_review_index(collected)
             self._rebuild_quality_index(folder, collected)
             try:
-                self._run_post_scan_detection_phases(folder, collected)
+                if after_apply:
+                    self._refresh_ancillary_review_rows(folder, collected)
+                else:
+                    self._run_post_scan_detection_phases(folder, collected)
             except Exception:
-                _LOGGER.exception("post-scan detection failed")
+                _LOGGER.exception(
+                    "post-scan detection failed"
+                    if not after_apply
+                    else "ancillary review refresh failed"
+                )
 
     def _clear_review_cache(self) -> None:
         self._review_rows_cache = []
@@ -809,6 +829,8 @@ class LibrarySession:
         self._queue_count = 0
         self._approved_count = 0
         self._conflict_count = 0
+        self._exact_duplicate_file_count = 0
+        self._move_target_count = 0
         self._files_by_id = {}
         self._clear_quality_cache()
 
@@ -907,10 +929,34 @@ class LibrarySession:
         )
 
     def _refresh_resolve_counts(self) -> None:
+        from application.review_move_targets import (
+            count_approved_move_targets,
+            normalize_row_for_move_execution,
+            reconcile_approved_duplicate_proposed_actions,
+        )
+
+        folder = self._index.folder_path
+        stored_groups = None
+        if folder:
+            stored_groups = self._index.load_review_state(folder).groups
+        if self._files_by_id:
+            reconcile_approved_duplicate_proposed_actions(
+                self._review_rows_cache,
+                self._files_by_id,
+                stored_groups=stored_groups,
+            )
+        self._review_rows_cache = [
+            normalize_row_for_move_execution(row) if row.get("rowKind") == "file" else row
+            for row in self._review_rows_cache
+        ]
         queue, approved, conflict = file_row_status_counts(self._review_rows_cache)
         self._queue_count = queue
         self._approved_count = approved
         self._conflict_count = conflict
+        (
+            self._exact_duplicate_file_count,
+            self._move_target_count,
+        ) = count_approved_move_targets(self._review_rows_cache)
 
     def _strip_near_rows(self) -> None:
         self._review_rows_cache = [
@@ -954,6 +1000,19 @@ class LibrarySession:
             relation_batch_id=relation_batch_id,
         )
         self._relation_groups_by_id = {group.group_id: group for group in result.groups}
+
+        from application.review_default_approval import seed_default_near_relation_approvals
+
+        relation_member_map = {
+            group.group_id: list(group.member_file_ids) for group in result.groups
+        }
+        if relation_member_map:
+            seed_default_near_relation_approvals(
+                self._index,
+                folder,
+                relation_member_map,
+                self._files_by_id,
+            )
 
         relation_skeleton = build_relation_review_rows(list(result.groups), self._files_by_id)
         stored = self._index.load_review_state(folder)
@@ -1024,6 +1083,18 @@ class LibrarySession:
         from domain.duplicate_exact import find_exact_duplicate_groups
 
         self._near_groups_by_id = {group.group_id: group for group in result.groups}
+
+        from application.review_default_approval import seed_default_near_relation_approvals
+
+        near_member_map = {group.group_id: list(group.member_file_ids) for group in result.groups}
+        if near_member_map:
+            seed_default_near_relation_approvals(
+                self._index,
+                folder,
+                near_member_map,
+                self._files_by_id,
+            )
+
         near_skeleton = build_near_review_rows(list(result.groups), self._files_by_id)
         stored = self._index.load_review_state(folder)
         exact_groups = find_exact_duplicate_groups(files)
@@ -1249,6 +1320,12 @@ class LibrarySession:
                     valid_group_ids = {group.group_id for group in review_groups}
                     valid_file_ids = {file_record.id for file_record in files}
                     self._index.prune_review_state(folder, valid_group_ids, valid_file_ids)
+                    from application.review_default_approval import seed_default_exact_group_approvals
+
+                    files_by_id_seed = {file_record.id: file_record for file_record in files}
+                    seed_default_exact_group_approvals(
+                        self._index, folder, review_groups, files_by_id_seed
+                    )
                     stored = self._index.load_review_state(folder)
                     self._set_exact_index_progress("검토 행 구성 중…", 91)
                     review_rows = rebuild_rows_with_review_state(files, stored, library_root=folder)

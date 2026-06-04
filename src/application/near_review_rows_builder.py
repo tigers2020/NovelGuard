@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from domain.duplicate_near import NearDuplicateGroup
+from domain.keeper_selection import pick_keeper_record
 from domain.models import FileRecord
 
 
@@ -25,7 +26,7 @@ def build_near_review_rows(
         members = [files_by_id[mid] for mid in group.member_file_ids if mid in files_by_id]
         if len(members) < 2:
             continue
-        keeper = min(members, key=lambda member: member.relative_path)
+        keeper = pick_keeper_record(members)
         rows.append(
             {
                 "id": near_group_row_id(group.group_id),
@@ -41,6 +42,7 @@ def build_near_review_rows(
             }
         )
         for member in members:
+            is_keeper = member.id == keeper.id
             rows.append(
                 {
                     "id": near_member_row_id(group.group_id, member.id),
@@ -51,7 +53,8 @@ def build_near_review_rows(
                     "path": member.relative_path,
                     "sizeBytes": member.size_bytes,
                     "keeperLabel": keeper.name,
-                    "proposedAction": "ignore",
+                    "proposedAction": "keep" if is_keeper else "move_duplicate",
+                    "targetFolder": None if is_keeper else "duplicate/",
                     "hasChildren": False,
                     "groupId": group.group_id,
                     "confidence": group.max_similarity,

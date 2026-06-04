@@ -26,6 +26,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 export function buildReviewGridColumns(options?: {
   explicitRowIds: ReadonlySet<string>;
   onToggleExplicit: (row: ReviewRow) => void;
+  isRowCheckEnabled?: (row: ReviewRow) => boolean;
   allVisibleSelected?: boolean;
   someVisibleSelected?: boolean;
   onToggleSelectAllVisible?: () => void;
@@ -57,19 +58,28 @@ export function buildReviewGridColumns(options?: {
           ),
           enableSorting: false,
           meta: { gridWidth: "2.5rem", minWidthPx: 40, resizable: false },
-          cell: ({ row }) => (
-            <input
-              type="checkbox"
-              aria-label={`Select ${row.original.name} for batch actions`}
-              data-testid={`resolve-row-check-${row.original.id}`}
-              checked={options.explicitRowIds.has(row.original.id)}
-              onChange={(event) => {
-                event.stopPropagation();
-                options.onToggleExplicit(row.original);
-              }}
-              onClick={(event) => event.stopPropagation()}
-            />
-          ),
+          cell: ({ row }) => {
+            const checkEnabled = options.isRowCheckEnabled?.(row.original) ?? true;
+            return (
+              <input
+                type="checkbox"
+                aria-label={`Select ${row.original.name} for batch actions`}
+                data-testid={`resolve-row-check-${row.original.id}`}
+                disabled={!checkEnabled}
+                title={
+                  checkEnabled
+                    ? undefined
+                    : "다른 우선순위 그룹(Exact)에서 이미 대표 행으로 표시됩니다."
+                }
+                checked={options.explicitRowIds.has(row.original.id)}
+                onChange={(event) => {
+                  event.stopPropagation();
+                  options.onToggleExplicit(row.original);
+                }}
+                onClick={(event) => event.stopPropagation()}
+              />
+            );
+          },
         }),
       ]
     : [];

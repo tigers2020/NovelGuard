@@ -1,0 +1,403 @@
+# Roadmap PR kanban — status truth for program slices.
+# column: proposed | ready | in_progress | done | cancelled
+# Scope / narrative: docs/superpowers/roadmap/<track>-*.md
+# Non-roadmap tickets: docs/agent/BACKLOG.yml
+
+meta:
+  updated: 2026-06-04
+  active_track: "007"
+  current_pr: PR-50
+  current_query: docs/superpowers/roadmap/current_query.md
+
+columns:
+  - proposed
+  - ready
+  - in_progress
+  - done
+  - cancelled
+
+cards:
+  # --- proposed ---
+  - id: PR-51
+    column: proposed
+    title: Column chooser persistence
+    track: "007"
+    wave: F+
+    spec: "`specs/033-2026-06-03-feature-ui-grid-column-persistence-design.md`"
+    plan: "`plans/051-2026-06-03-feature-ui-grid-pr51-column-persistence.md`"
+  - id: PR-52
+    column: proposed
+    title: "Legacy `~/.novelguard` migration"
+    track: "007"
+    wave: I — Data
+    mutation: Limited
+    spec: "`specs/034-2026-06-03-infra-legacy-state-migration-design.md`"
+    plan: "`plans/052-2026-06-03-infra-data-pr52-legacy-migration.md`"
+  - id: PR-53
+    column: proposed
+    title: Settings expert slice (P2 minimal)
+    track: "007"
+    wave: F+
+    spec: "extend [016 settings](../specs/016-2026-06-02-settings-logs-design.md) → `specs/035-…-settings-expert-v1-design.md`"
+    plan: "`plans/053-2026-06-03-feature-ui-settings-pr53-expert-slice.md`"
+  - id: PR-54
+    column: proposed
+    title: Headless packaged E2E
+    track: "007"
+    wave: J — Release
+    spec: "`specs/036-2026-06-03-infra-packaged-e2e-design.md`"
+    plan: "`plans/054-2026-06-03-infra-e2e-pr54-packaged-smoke.md`"
+  - id: PR-55
+    column: proposed
+    title: Windows installer v1 (unsigned)
+    track: "007"
+    wave: E+
+    spec: "extend [012 packaging](../specs/012-2026-06-02-packaging-distribution-design.md) → `specs/037-…-installer-v1-design.md`"
+    plan: "`plans/055-2026-06-03-infra-packaging-pr55-installer-v1.md`"
+  - id: PR-56
+    column: proposed
+    title: "Code signing & trust"
+    track: "007"
+    wave: E+
+    spec: "`specs/038-2026-06-03-infra-code-signing-design.md`"
+    plan: "`plans/056-2026-06-03-infra-packaging-pr56-code-signing.md`"
+  - id: PR-57
+    column: proposed
+    title: Auto-update pilot
+    track: "007"
+    wave: E+
+    mutation: Limited
+    spec: "`specs/039-2026-06-03-infra-auto-update-pilot-design.md`"
+    plan: "`plans/057-2026-06-03-infra-packaging-pr57-auto-update.md`"
+  # --- in_progress ---
+  - id: PR-50
+    column: in_progress
+    title: Relation detection v2
+    track: "007"
+    wave: C+
+    spec: "[032 relation v2](../specs/032-2026-06-03-domain-relation-v2-design.md)"
+    plan: "[050 relation v2](../plans/050-2026-06-03-domain-relation-pr50-relation-v2.md)"
+    branch: feat/pr50-relation-v2
+    note: Spec+plan approved; verify on branch then open PR
+  # --- done ---
+  - id: PR-0..9
+    column: done
+    title: Hybrid Work UI overhaul bundle
+    track: "000"
+    wave: UI
+    spec: "[000 UI overhaul](../specs/000-2026-06-01-novelguard-ui-overhaul-design.md)"
+    plan: "[000 plan](../plans/000-2026-06-01-novelguard-ui-overhaul.md)"
+  - id: PR-10
+    column: done
+    title: TS/Python contract validators
+    track: "000"
+    plan: "[001](../plans/001-2026-06-01-novelguard-ui-contract-hardening.md)"
+  - id: PR-11
+    column: done
+    title: Playwright smoke, bridge error UX
+    track: "000"
+    plan: "[002](../plans/002-2026-06-01-novelguard-ui-e2e-smoke.md)"
+  - id: PR-12
+    column: done
+    title: TanStack Table columns, perf gates
+    track: "000"
+    plan: "[003](../plans/003-2026-06-01-novelguard-ui-grid-perf.md)"
+  - id: PR-13
+    column: done
+    title: "`previewToken`, stale apply, `discardMovePreview`"
+    track: "000"
+    spec: "[001 PR-13](../specs/001-2026-06-01-pr13-preview-token-stale-apply-design.md)"
+    plan: "[004](../plans/004-2026-06-01-pr13-preview-token-stale-apply.md)"
+  - id: PR-14a
+    column: done
+    title: Greenfield scan, in-memory index, real snapshot
+    track: "000"
+    spec: "[002 greenfield](../specs/002-2026-06-01-novelguard-greenfield-library-session-design.md)"
+    plan: "[005](../plans/005-2026-06-01-pr14a-greenfield-library-session-scan.md)"
+  - id: PR-14b
+    column: done
+    title: Exact duplicate detection + SQLite index
+    track: "000"
+    spec: "[002 greenfield](../specs/002-2026-06-01-novelguard-greenfield-library-session-design.md)"
+    plan: "[006](../plans/006-2026-06-01-pr14b-exact-duplicate-sqlite.md)"
+  - id: PR-14c
+    column: done
+    title: "Quality analyzer + `query_quality_rows`"
+    track: "000"
+    spec: "[002 greenfield](../specs/002-2026-06-01-novelguard-greenfield-library-session-design.md)"
+    plan: "[007](../plans/007-2026-06-01-pr14c-quality-analyzer-and-rows.md)"
+  - id: PR-14d
+    column: done
+    title: Quality workspace real bridge, parity, error/retry
+    track: "000"
+    spec: "[002 greenfield](../specs/002-2026-06-01-novelguard-greenfield-library-session-design.md)"
+    plan: "[008](../plans/008-2026-06-01-pr14d-quality-real-bridge-rows.md)"
+  - id: PR-15
+    column: done
+    title: Real filesystem apply use cases
+    track: "000"
+    spec: "Safe real **move** (`move_duplicate`); dry-run → confirm → apply; audit log"
+    plan: A
+  - id: PR-16
+    column: done
+    title: Resolve UI real apply outcome
+    track: "000"
+    spec: UI shows real apply results; revision/errors after apply
+    plan: A
+  - id: PR-17
+    column: done
+    title: Review state persistence
+    track: "000"
+    spec: Keeper / approved / conflict state saved; snapshot counts truthful
+    plan: B
+  - id: PR-18
+    column: done
+    title: Duplicate group detail panel
+    track: "000"
+    spec: "`getDuplicateGroupDetail` + DetailPanel on real group data"
+    plan: B
+  - id: PR-19
+    column: done
+    title: Near duplicate detection
+    track: "000"
+    spec: Similar-content duplicate candidates (n-gram v1)
+    plan: C
+  - id: PR-20
+    column: done
+    title: Relation / filename-blocking signals
+    track: "001"
+    wave: C
+    spec: "[008 relation design](../specs/008-2026-06-02-relation-filename-blocking-design.md)"
+    plan: "[014 pr20 plan](../plans/014-2026-06-02-pr20-relation-filename-blocking.md)"
+  - id: PR-21
+    column: done
+    title: Quality issue detail
+    track: "001"
+    wave: D
+    spec: "[009 quality detail](../specs/009-2026-06-02-quality-issue-detail-design.md)"
+    plan: "[015 pr21 plan](../plans/015-2026-06-02-pr21-quality-issue-detail.md)"
+  - id: PR-22
+    column: done
+    title: Quality repair execution
+    track: "001"
+    wave: D
+    mutation: "**Yes**"
+    spec: "[010 quality repair](../specs/010-2026-06-02-quality-repair-execution-design.md)"
+    plan: "[016 pr22 plan](../plans/016-2026-06-02-pr22-quality-repair-execution.md)"
+  - id: PR-23
+    column: done
+    title: Finalize / cleanup pipeline
+    track: "001"
+    wave: D
+    mutation: Limited
+    spec: "[011 finalize](../specs/011-2026-06-02-finalize-cleanup-pipeline-design.md)"
+    plan: "[017 pr23 plan](../plans/017-2026-06-02-pr23-finalize-cleanup-pipeline.md)"
+  - id: PR-24
+    column: done
+    title: Packaging / distribution
+    track: "001"
+    wave: E
+    spec: "[012 packaging](../specs/012-2026-06-02-packaging-distribution-design.md)"
+    plan: "[018 pr24 plan](../plans/018-2026-06-02-pr24-packaging-distribution.md)"
+  - id: PR-25
+    column: done
+    title: Shell FileDock
+    track: "001"
+    wave: F
+    spec: "[013 shell filedock](../specs/013-2026-06-02-shell-filedock-design.md)"
+    plan: "[019 pr25 plan](../plans/019-2026-06-02-pr25-shell-filedock.md)"
+  - id: PR-26
+    column: done
+    title: Snapshot invalidation events
+    track: "002"
+    wave: F
+    spec: "`specs/014-2026-06-02-snapshot-invalidation-design.md`"
+    plan: "`plans/020-2026-06-02-pr26-snapshot-invalidation.md`"
+  - id: PR-27
+    column: done
+    title: Quality grid parity with Resolve
+    track: "002"
+    wave: F
+    spec: "`specs/015-2026-06-02-quality-grid-parity-design.md`"
+    plan: "`plans/021-2026-06-02-pr27-quality-grid-parity.md`"
+  - id: PR-28
+    column: done
+    title: Settings/Logs v1 (minimal subset)
+    track: "002"
+    wave: F
+    mutation: Limited
+    spec: "`specs/016-2026-06-02-settings-logs-design.md`"
+    plan: "`plans/022-2026-06-02-pr28-settings-logs.md`"
+  - id: PR-29
+    column: done
+    title: "`queryFileRows` advanced / SQL page query"
+    track: "002"
+    wave: F
+    spec: "`specs/017-2026-06-02-query-file-rows-advanced-design.md`"
+    plan: "`plans/023-2026-06-02-pr29-query-file-rows-advanced.md`"
+  - id: PR-30
+    column: done
+    title: Bridge / app hygiene refactor
+    track: "002"
+    wave: G
+    spec: "[020 bridge hygiene](../specs/020-2026-06-02-refactor-bridge-bridge-hygiene-design.md)"
+    plan: "[026 pr30 plan](../plans/026-2026-06-02-refactor-bridge-pr30-bridge-hygiene.md)"
+  - id: PR-31
+    column: done
+    title: Work mode tab transition (optimistic + keep-alive)
+    track: "002"
+    wave: F
+    spec: "[018 work mode tab](../specs/018-2026-06-02-feature-ui-shell-work-mode-tab-transition-design.md)"
+    plan: "[024 pr31 plan](../plans/024-2026-06-02-feature-ui-shell-pr31-work-mode-tab-transition.md)"
+  - id: PR-32
+    column: done
+    title: Scan folder picker UI (React CTA)
+    track: "002"
+    wave: F
+    spec: "[019 scan folder picker](../specs/019-2026-06-02-feature-ui-shell-scan-folder-picker-ui-design.md)"
+    plan: "[025 pr32 plan](../plans/025-2026-06-02-feature-ui-shell-pr32-scan-folder-picker-ui.md)"
+  - id: PR-33
+    column: done
+    title: IA reconciliation + UI overhaul spec v2
+    track: "003"
+    wave: H
+    spec: "[021 ia-reconciliation](../specs/021-2026-06-02-feature-fullstack-shell-ia-reconciliation-design.md)"
+    plan: "[027 ia-reconciliation](../plans/027-2026-06-02-feature-fullstack-shell-pr33-ia-reconciliation.md)"
+  - id: PR-34
+    column: done
+    title: 3-mode shell cleanup (not hub scroll)
+    track: "003"
+    wave: H
+    spec: "[021 LOCK-33-13](../specs/021-2026-06-02-feature-fullstack-shell-ia-reconciliation-design.md)"
+    plan: "[028 work-mode shell](../plans/028-2026-06-02-feature-ui-shell-pr34-work-mode-shell-cleanup.md)"
+  - id: PR-35
+    column: done
+    title: Scan section reassembly
+    track: "003"
+    wave: H
+    spec: "[023 scan section](../specs/023-2026-06-02-feature-ui-scan-scan-section-design.md)"
+    plan: "[032 scan section](../plans/032-2026-06-02-feature-ui-scan-pr35-scan-section.md)"
+  - id: PR-36
+    column: done
+    title: Duplicate review master-detail
+    track: "003"
+    wave: H
+    spec: "[021 LOCK-33-4](../specs/021-2026-06-02-feature-fullstack-shell-ia-reconciliation-design.md)"
+    plan: "[029 master-detail](../plans/029-2026-06-02-feature-ui-resolve-pr36-duplicate-master-detail.md)"
+  - id: PR-37
+    column: done
+    title: FinalizeSubflowDialog + move/finalize integration
+    track: "003"
+    wave: H
+    mutation: Limited
+    spec: "[021 LOCK-33-7..12](../specs/021-2026-06-02-feature-fullstack-shell-ia-reconciliation-design.md)"
+    plan: "[030 finalize subflow](../plans/030-2026-06-02-feature-ui-work-pr37-finalize-subflow-dialog.md)"
+  - id: PR-38
+    column: done
+    title: FileDock / global bottom dock alignment
+    track: "003"
+    wave: H
+    spec: "[024 filedock global](../specs/024-2026-06-02-feature-ui-shell-filedock-global-design.md)"
+    plan: "[033 filedock](../plans/033-2026-06-02-feature-ui-shell-pr38-filedock-global.md)"
+  - id: PR-39
+    column: done
+    title: App shell / GlobalActionToolbar / design tokens
+    track: "003"
+    wave: H
+    spec: "[025 app shell](../specs/025-2026-06-02-feature-ui-shell-app-shell-polish-design.md)"
+    plan: "[034 app shell](../plans/034-2026-06-02-feature-ui-shell-pr39-app-shell-polish.md)"
+  - id: PR-40
+    column: done
+    title: Logs / Settings v2 (navigation, search)
+    track: "003"
+    wave: H
+    mutation: Limited
+    spec: "[026 logs settings v2](../specs/026-2026-06-02-feature-ui-settings-logs-v2-design.md)"
+    plan: "[035 logs settings v2](../plans/035-2026-06-02-feature-ui-settings-pr40-logs-settings-v2.md)"
+  - id: PR-41
+    column: done
+    title: Finalize pipeline debt (cleanup placeholder, async UX)
+    track: "003"
+    wave: I
+    spec: "[027 finalize debt](../specs/027-2026-06-03-infra-quality-finalize-cleanup-debt-design.md)"
+    plan: "[036 finalize debt](../plans/036-2026-06-03-infra-quality-pr41-finalize-debt.md)"
+  - id: PR-42
+    column: done
+    title: Regression — bridge contract, mock parity, stale apply
+    track: "003"
+    wave: I
+    spec: "[022 bridge regression](../specs/022-2026-06-03-infra-bridge-quality-bridge-regression-design.md)"
+    plan: "[031 bridge regression](../plans/031-2026-06-03-infra-bridge-quality-pr42-bridge-regression.md)"
+  - id: PR-43
+    column: done
+    title: E2E — scan → duplicate → move → finalize
+    track: "003"
+    wave: I
+    spec: "extends E2E plan [002](../plans/002-2026-06-01-novelguard-ui-e2e-smoke.md)"
+    plan: "extends plan 002 (PR-43 scenario in `web/e2e/smoke.spec.ts`)"
+  - id: PR-44
+    column: done
+    title: Packaging smoke + known limitations
+    track: "003"
+    wave: I
+    spec: "extends [012 packaging](../specs/012-2026-06-02-packaging-distribution-design.md)"
+    plan: "[038 packaging smoke](../plans/038-2026-06-02-infra-release-pr44-packaging-smoke.md)"
+  - id: PR-45
+    column: done
+    title: Release candidate — UX copy, beta gate, docs
+    track: "003"
+    wave: I
+    plan: "[039 release candidate](../plans/039-2026-06-02-docs-release-pr45-release-candidate.md)"
+  - id: PR-46
+    column: done
+    title: Streaming scan phases
+    track: "007"
+    wave: H
+    spec: docs/superpowers/specs/028-2026-06-03-infra-scan-streaming-phases-design.md
+    plan: docs/superpowers/plans/046-2026-06-03-infra-scan-streaming-phases.md
+  - id: PR-47
+    column: done
+    title: Layout pane hierarchy MVP
+    track: "007"
+    wave: H
+    spec: docs/superpowers/specs/029-2026-06-03-feature-ui-layout-pane-hierarchy-minimal-design.md
+    plan: docs/superpowers/plans/047-2026-06-03-feature-ui-layout-pane-hierarchy.md
+  - id: PR-48
+    column: done
+    title: Large-library scan sign-off
+    track: "007"
+    wave: H — Perf UX
+    spec: "`specs/030-2026-06-03-infra-scan-operator-signoff-design.md`"
+    plan: "`plans/048-2026-06-03-infra-scan-pr48-operator-signoff.md`"
+  - id: PR-49
+    column: done
+    title: ShellFileDock per-mode persistence
+    track: "007"
+    wave: H — Layout
+    spec: "`specs/031-2026-06-03-feature-ui-shell-filedock-per-mode-design.md`"
+    plan: "`plans/049-2026-06-03-feature-ui-shell-pr49-filedock-per-mode.md`"
+  - id: OPS-1
+    column: done
+    title: Hermes dispatch
+    track: "005"
+    wave: ops
+  - id: OPS-2
+    column: done
+    title: Worker
+    track: "005"
+    wave: ops
+  - id: OPS-3
+    column: done
+    title: Beta gate
+    track: "005"
+    wave: ops
+  - id: OPS-4
+    column: done
+    title: Large-library perf
+    track: "005"
+    wave: ops
+  - id: OPS-5
+    column: done
+    title: Resolve layout
+    track: "005"
+    wave: ops

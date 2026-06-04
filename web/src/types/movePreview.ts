@@ -24,6 +24,9 @@ export interface ApplyFailedDetails {
 
 export interface MovePreviewRow {
   id: string;
+  name: string;
+  path?: string;
+  destPath?: string;
   action: string;
 }
 
@@ -32,6 +35,7 @@ export interface MovePreviewSummary {
   conflictCount?: number;
   operationCount?: number;
   blockedCount?: number;
+  skippedCount?: number;
 }
 
 export interface MovePreviewResult {
@@ -46,6 +50,8 @@ export interface MovePreviewResult {
 export interface ApplyResolvedActionsRequest {
   selection: SelectionScope;
   previewToken: string;
+  /** Used by the bridge to scale call timeout; ignored by Python. */
+  expectedOperationCount?: number;
 }
 
 export interface DiscardMovePreviewRequest {

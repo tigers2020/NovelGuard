@@ -48,17 +48,7 @@ flowchart LR
 
 ### PR index (done)
 
-| PR | Theme | Spec | Plan | Status |
-|----|-------|------|------|--------|
-| PR-0..9 | Hybrid Work UI, shell, virtualized Resolve, mock bridge | [000 UI overhaul](../specs/000-2026-06-01-novelguard-ui-overhaul-design.md) | [000 plan](../plans/000-2026-06-01-novelguard-ui-overhaul.md) | Done |
-| PR-10 | TS/Python contract validators | (UI overhaul §) | [001](../plans/001-2026-06-01-novelguard-ui-contract-hardening.md) | Done |
-| PR-11 | Playwright smoke, bridge error UX | (UI overhaul §) | [002](../plans/002-2026-06-01-novelguard-ui-e2e-smoke.md) | Done |
-| PR-12 | TanStack Table columns, perf gates | (UI overhaul §) | [003](../plans/003-2026-06-01-novelguard-ui-grid-perf.md) | Done |
-| PR-13 | `previewToken`, stale apply, `discardMovePreview` | [001 PR-13](../specs/001-2026-06-01-pr13-preview-token-stale-apply-design.md) | [004](../plans/004-2026-06-01-pr13-preview-token-stale-apply.md) | Done |
-| PR-14a | Greenfield scan, in-memory index, real snapshot | [002 greenfield](../specs/002-2026-06-01-novelguard-greenfield-library-session-design.md) | [005](../plans/005-2026-06-01-pr14a-greenfield-library-session-scan.md) | Done |
-| PR-14b | Exact duplicate detection + SQLite index | [002 greenfield](../specs/002-2026-06-01-novelguard-greenfield-library-session-design.md) | [006](../plans/006-2026-06-01-pr14b-exact-duplicate-sqlite.md) | Done |
-| PR-14c | Quality analyzer + `query_quality_rows` | [002 greenfield](../specs/002-2026-06-01-novelguard-greenfield-library-session-design.md) | [007](../plans/007-2026-06-01-pr14c-quality-analyzer-and-rows.md) | Done |
-| PR-14d | Quality workspace real bridge, parity, error/retry | [002 greenfield](../specs/002-2026-06-01-novelguard-greenfield-library-session-design.md) | [008](../plans/008-2026-06-01-pr14d-quality-real-bridge-rows.md) | Done |
+**Kanban:** [board](../../agent/KANBAN.md) — label `track-000` (PR-0..9 bundle through PR-19).
 
 ### What PR-14 delivered (retained constraints)
 
@@ -75,24 +65,9 @@ Sources: [002 greenfield spec § Out of scope](../specs/002-2026-06-01-novelguar
 
 **Sequencing and direction are locked; each PR still requires spec + plan approval before implementation.** Supersedes any earlier draft that ordered Quality detail/repair before real apply.
 
-| PR | Theme | Plain description | Wave | Spec status |
-|----|-------|-------------------|------|-------------|
-| **PR-15** | Real filesystem apply use cases | Safe real **move** (`move_duplicate`); dry-run → confirm → apply; audit log | A | **Done** — [009 plan](../plans/009-2026-06-01-pr15-real-apply-use-cases.md) |
-| **PR-16** | Resolve UI real apply outcome | UI shows real apply results; revision/errors after apply | A | **Done** — [004 spec](../specs/004-2026-06-01-resolve-ui-apply-outcome-design.md) |
-| **PR-17** | Review state persistence | Keeper / approved / conflict state saved; snapshot counts truthful | B | **Done** — [005 spec](../specs/005-2026-06-01-review-state-persistence-design.md) · [011 plan](../plans/011-2026-06-01-pr17-review-state-persistence.md) |
-| **PR-18** | Duplicate group detail panel | `getDuplicateGroupDetail` + DetailPanel on real group data | B | **Done** — [006 spec](../specs/006-2026-06-01-duplicate-group-detail-design.md) · [012 plan](../plans/012-2026-06-01-pr18-duplicate-group-detail.md) |
-| **PR-19** | Near duplicate detection | Similar-content duplicate candidates (n-gram v1) | C | **Done** — [007 spec](../specs/007-2026-06-01-near-duplicate-detection-design.md) · [013 plan](../plans/013-2026-06-01-pr19-near-duplicate-detection.md) |
-| **PR-20** | Relation / filename-blocking signals | Title/filename relation grouping candidates | C | Not written — [001 roadmap § PR-20](./001-2026-06-02-pr20-pr25-development-roadmap.md#pr-20--relation--filename-blocking-signals) |
+**PR-15..25:** all **done** — see [kanban](../../agent/KANBAN.md) (`track-000`, `track-001`). Narrative: [001 PR-20..25 roadmap](./001-2026-06-02-pr20-pr25-development-roadmap.md).
 
 **Quality track (intentionally after PR-20):** detail in [001 PR-20..25 roadmap](./001-2026-06-02-pr20-pr25-development-roadmap.md).
-
-| PR | Theme | Plain description | Wave | Spec status |
-|----|-------|-------------------|------|-------------|
-| **PR-21** | Quality issue detail | Detail drawer on real quality payloads | D | Not written |
-| **PR-22** | Quality repair execution | UTF-8 / integrity repair (batch, cancellable) | D | Not written |
-| **PR-23** | Finalize / cleanup pipeline | Finalize subflow after repair patterns exist | D | Not written |
-| **PR-24** | Packaging / distribution | Production desktop package | E | Not written |
-| **PR-25** | Shell FileDock | Persistent shell-level file dock | F | Not written |
 
 ---
 

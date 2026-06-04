@@ -1,5 +1,6 @@
 import type { ReviewRow } from "../types/review";
 import type { ReviewDecisionCommand } from "../types/reviewDecisions";
+import { collectCanonicalApprovedMoveTargetRows } from "../features/work/resolve/canonicalMoveTargets";
 
 const groupState = new Map<string, { keeperFileId?: string; groupStatus?: string }>();
 const memberState = new Map<string, string>();
@@ -19,6 +20,17 @@ function fileIdFromRowId(rowId: string): string | null {
 export function resetMockReviewState(): void {
   groupState.clear();
   memberState.clear();
+}
+
+/** After scan: auto-approve duplicate groups (exact / near / relation). */
+export function seedMockAutoApprovedExactGroups(rows: ReviewRow[]): void {
+  for (const row of rows) {
+    if (row.rowKind !== "group" || !row.groupId) continue;
+    if (row.type !== "exact" && row.type !== "near" && row.type !== "relation") continue;
+    const entry = groupState.get(row.groupId);
+    if (entry?.groupStatus) continue;
+    groupState.set(row.groupId, { ...entry, groupStatus: "approved" });
+  }
 }
 
 export function applyMockReviewState(rows: ReviewRow[]): ReviewRow[] {
@@ -51,6 +63,20 @@ export function applyMockReviewState(rows: ReviewRow[]): ReviewRow[] {
     }
     return updated;
   });
+}
+
+export function exactDuplicateMetrics(rows: ReviewRow[]): {
+  exactDuplicateFileCount: number;
+  moveTargetCount: number;
+} {
+  let exactDuplicateFileCount = 0;
+  for (const row of rows) {
+    if (row.rowKind !== "file") continue;
+    if (row.type !== "exact" && row.type !== "near" && row.type !== "relation") continue;
+    exactDuplicateFileCount += 1;
+  }
+  const moveTargetCount = collectCanonicalApprovedMoveTargetRows(rows).length;
+  return { exactDuplicateFileCount, moveTargetCount };
 }
 
 export function fileRowStatusCounts(rows: ReviewRow[]): {

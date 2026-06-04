@@ -3,7 +3,9 @@ import type { FileRowsQuery } from "../types/fileRows";
 import { validateFileRowsPage, clampFileRowsLimit } from "../contracts/fileRowsPageContract";
 import { queryMockFileRows } from "./mockFileRows";
 import type { AppSnapshot, FinalizeLastStatus, WorkMode } from "../types/snapshot";
-import type { ReviewRowsQuery } from "../types/review";
+import type { ReviewRow, ReviewRowsQuery } from "../types/review";
+import { collectCanonicalApprovedMoveTargetRows } from "../features/work/resolve/canonicalMoveTargets";
+import { fileIdFromReviewRowId } from "../features/work/resolve/reviewRowSelectionPriority";
 import type { SelectionScope } from "../types/selection";
 import type {
   ApplyResolvedActionsRequest,
@@ -35,7 +37,9 @@ import { selectionFingerprint, sha256HexUtf8 } from "./selectionFingerprint";
 import {
   applyMockReviewCommand,
   applyMockReviewState,
+  exactDuplicateMetrics,
   fileRowStatusCounts,
+  seedMockAutoApprovedExactGroups,
 } from "./mockReviewState";
 import type { DuplicateGroupDetail, ReviewRow } from "../types/review";
 import { buildMockDuplicateGroupDetail } from "./mockDuplicateGroupDetail";
@@ -238,6 +242,7 @@ function finalizeLastStatusFromReport(doc: FinalizeReportDocument | null): Final
 function buildSnapshot(): AppSnapshot {
   const merged = mergedReviewRows();
   const counts = fileRowStatusCounts(merged);
+  const exactMetrics = exactDuplicateMetrics(merged);
   const qualityRows = buildQualityRows();
 
   return {
@@ -276,6 +281,8 @@ function buildSnapshot(): AppSnapshot {
         groupCount: 37,
         conflictCount: counts.conflictCount,
         approvedCount: counts.approvedCount,
+        exactDuplicateFileCount: exactMetrics.exactDuplicateFileCount,
+        moveTargetCount: exactMetrics.moveTargetCount,
         hasPendingApply: state.hasPendingApply,
         libraryRevision,
       },
@@ -313,6 +320,28 @@ function resolveSelectedRows(selection: SelectionScope): ReviewRow[] {
   return mergedReviewRows().filter((row) => idSet.has(row.id));
 }
 
+function resolveMockMoveRows(selection: SelectionScope): ReviewRow[] {
+  const all = mergedReviewRows();
+  if (selection.type === "explicit_rows") {
+    const idSet = new Set(selection.rowIds);
+    const picked = all.filter((row) => idSet.has(row.id));
+    const fileIds = new Set(
+      picked
+        .map((row) => fileIdFromReviewRowId(row.id))
+        .filter((id): id is string => id !== null),
+    );
+    const pool = all.filter((row) => {
+      const fileId = fileIdFromReviewRowId(row.id);
+      return fileId !== null && fileIds.has(fileId);
+    });
+    return collectCanonicalApprovedMoveTargetRows(pool);
+  }
+  const filtered = filterReviewRows(all, { ...selection.query, viewMode: "move" }).filter(
+    (row) => !selection.excludeRowIds.includes(row.id),
+  );
+  return collectCanonicalApprovedMoveTargetRows(filtered);
+}
+
 function buildMockPreviewPlan(selection: SelectionScope): {
   rows: MovePreviewRow[];
   summary: {
@@ -323,26 +352,17 @@ function buildMockPreviewPlan(selection: SelectionScope): {
   };
   planFingerprint: string;
 } {
-  const selectedRows = resolveSelectedRows(selection);
+  const selectedRows = resolveMockMoveRows(selection);
   const rows: MovePreviewRow[] = [];
-  let blockedCount = 0;
+  const blockedCount = 0;
 
   for (const row of selectedRows) {
-    if (row.rowKind !== "file") continue;
-    if (row.status === "approved" || row.status === "excluded" || row.status === "conflict") {
-      continue;
-    }
-    const action = row.proposedAction;
-    if (action === "keep" || action === "ignore") continue;
-    if (action === "move_organized") {
-      blockedCount += 1;
-      continue;
-    }
-    if (action === "move_duplicate") {
-      rows.push({ id: row.id, action: "move_duplicate" });
-    } else {
-      blockedCount += 1;
-    }
+    rows.push({
+      id: row.id,
+      name: row.name,
+      path: row.path,
+      action: "move_duplicate",
+    });
   }
 
   const operations = rows.map((r) => ({ rowId: r.id, action: r.action }));
@@ -500,6 +520,7 @@ export const mockBridge: NovelGuardBridge = {
         stopScanSimulation();
         state.pipelineRunning = false;
         libraryRevision += 1;
+        seedMockAutoApprovedExactGroups(mergedReviewRows());
         emitSnapshotInvalidation("libraryRevision", { libraryRevision });
       }
     }, 300);

@@ -1,0 +1,60 @@
+---
+description: Kanban-driven work processing — column gates, spec/plan before code
+alwaysApply: true
+---
+
+# Kanban workflow (mandatory)
+
+All feature and roadmap work is processed through the **Kanban Markdown** board (`.devtool/features/`).  
+Board config: `.vscode/settings.json` · Human guide: `docs/agent/KANBAN.md` · Meta: `docs/agent/KANBAN.yml`.
+
+When the user gives a requirement, **do not jump to implementation**. Read the active card’s `status` (column) and only perform actions allowed for that column. **Move the card** (or tell the user to drag it) when the gate for the next column is satisfied.
+
+## Columns (order)
+
+```text
+Triage → Spec → Plan → Todo → Scheduled → Ready → In Progress → Blocked → Review → Done
+```
+
+## Column gates (what agents may do)
+
+| Column | Agent may | Must not | Exit gate (move to next) |
+|--------|-----------|----------|---------------------------|
+| **triage** | Clarify scope, link roadmap, create/update card | Spec-sized design, code | Slice named; owner path clear → **spec** |
+| **spec** | Draft/revise `docs/superpowers/specs/*-design.md`, self-review, `/grill-me` | Implementation, plan tasks | Spec **approved** (decisions locked) → **plan** |
+| **plan** | Draft/revise `docs/superpowers/plans/*`, plan↔spec review | Code changes | Plan **approved**; matches spec → **todo** |
+| **todo** | Break work into prioritized chunks (plan sections, checklist, or child notes on card) | Start coding | Priorities documented → pick next slice → **scheduled** |
+| **scheduled** | Select **one** priority item for this run; link branch name on card | Other priorities in same run | One item queued; spec+plan paths on card → **ready** |
+| **ready** | Verify spec+plan alignment, branch exists, acceptance listed | Write product code | Gates green → **in-progress** |
+| **in-progress** | Implement per plan on feature branch | Expand scope beyond spec | Implementation complete → **review** |
+| **blocked** | Document blocker on card; minimal unblock work | Pretend progress | Blocker cleared → prior column |
+| **review** | Code review, verification matrix, fix findings | New scope | PR merged / matrix green → **done** |
+| **done** | Changelog, `current_query.md`, archive notes | Re-open without new card | — |
+
+## User request → first action
+
+1. Find or create a card under `.devtool/features/` (default new status: **triage**).
+2. If no card exists for the ask, create one (title = user intent) and start at **triage** or **spec** if they already asked for a spec.
+3. State aloud: **current column**, **allowed actions this run**, **exit gate**.
+
+## Hard stops
+
+- **No code** (src/, web/) until the card is **ready** or **in-progress** (and only after **ready** was satisfied in the same slice).
+- **No plan** until spec is approved.
+- **No implementation** until plan is approved and card is **ready**.
+- **One scheduled item per run** unless the user explicitly asks for parallel work.
+
+## Card body conventions
+
+Each card should link:
+
+- `spec:` path under `docs/superpowers/specs/`
+- `plan:` path under `docs/superpowers/plans/`
+- `branch:` when in **ready** / **in-progress**
+- **Todo** section: numbered priority list for the slice
+
+After moving columns, run `python scripts/sync_kanban_folders.py` if folders drift.
+
+## Non-roadmap work
+
+`docs/agent/BACKLOG.yml` tickets: create a kanban card at **triage** or map to the same columns; do not bypass gates.

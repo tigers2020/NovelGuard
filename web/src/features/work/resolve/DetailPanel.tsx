@@ -19,10 +19,6 @@ function rowTypeBadgeClass(type: ReviewRowType | undefined): string {
   return "bg-surface text-muted";
 }
 
-function isReviewOnlyRowType(type: ReviewRowType | undefined): boolean {
-  return type === "near" || type === "relation";
-}
-
 export function DetailPanel({
   selectedRow,
   detail,
@@ -49,8 +45,9 @@ export function DetailPanel({
   className?: string;
 }) {
   const rowType = selectedRow?.type;
-  const reviewOnly = isReviewOnlyRowType(rowType);
-  const keeperEditable = !reviewOnly && detail?.status === "ok" && detail.type === "exact";
+  const keeperEditable =
+    detail?.status === "ok" &&
+    (detail.type === "exact" || detail.type === "near" || detail.type === "relation");
 
   return (
     <aside
@@ -92,18 +89,6 @@ export function DetailPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        {reviewOnly && selectedRow && (
-          <div
-            className="mb-4 rounded-md border border-secondary/40 bg-secondary/10 p-3 text-sm text-on-surface"
-            data-testid="detail-review-only-banner"
-            role="status"
-          >
-            {rowType === "near"
-              ? "Near duplicate 그룹은 검토 전용입니다. 이동 미리보기·적용은 Exact 그룹에서만 가능합니다."
-              : "Relation 그룹은 검토 전용입니다. 이동 미리보기·적용은 Exact 그룹에서만 가능합니다."}
-          </div>
-        )}
-
         {loading && (
           <p className="text-sm text-muted" data-testid="detail-loading">
             Loading group detail…
@@ -231,7 +216,7 @@ export function DetailPanel({
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                disabled={!selectedRow || mutating || reviewOnly}
+                disabled={!selectedRow || mutating}
                 data-testid="detail-mark-conflict"
                 onClick={onMarkConflict}
                 className="rounded-md border border-outline px-3 py-2 text-xs font-semibold text-on-surface hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
@@ -240,7 +225,7 @@ export function DetailPanel({
               </button>
               <button
                 type="button"
-                disabled={!selectedRow || mutating || reviewOnly}
+                disabled={!selectedRow || mutating}
                 data-testid="detail-reset"
                 onClick={onReset}
                 className="rounded-md border border-outline px-3 py-2 text-xs font-semibold text-on-surface hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"

@@ -1,0 +1,27 @@
+# Non-roadmap agent tickets. Roadmap PRs: docs/agent/KANBAN.yml + current_query.md.
+# status: pending | in_progress | done | blocked | cancelled
+
+tickets:
+  - id: AG-001
+    title: Create agent runtime scaffold
+    status: done
+    priority: P2
+    type: docs
+    source: agent
+    roadmap_pr: null
+    module: docs
+    depends_on: []
+    acceptance:
+      - docs/agent/RUNBOOK.md exists and defines one-ticket execution
+      - docs/agent/AGENT_STATE.json exists with idle initial state
+      - docs/agent/BACKLOG.yml exists with schema-compatible example ticket
+      - docs/agent/BUGS.yml exists
+      - docs/agent/CHANGELOG-agent.md exists
+      - AGENTS.md contains a short pointer to RUNBOOK and current_query/BACKLOG routing
+    files_allowed:
+      - AGENTS.md
+      - docs/agent/**
+    files_forbidden:
+      - src/**
+      - docs/superpowers/specs/**
+      - docs/superpowers/plans/**

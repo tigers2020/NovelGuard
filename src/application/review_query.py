@@ -98,9 +98,18 @@ def _filter_rows(rows: list[dict[str, Any]], query: dict[str, Any]) -> list[dict
             continue
         if view_mode == "groups" and row.get("type") == "move_only":
             continue
-        if view_mode == "move" and "move" not in str(row.get("proposedAction", "")):
-            continue
-        if view_mode == "action" and row.get("status") not in ("unreviewed", "conflict"):
+        if view_mode == "move":
+            if row.get("rowKind") != "file":
+                continue
+            if row.get("status") != "approved":
+                continue
+            if row.get("proposedAction") == "keep":
+                continue
+        if view_mode == "action" and row.get("status") not in (
+            "unreviewed",
+            "approved",
+            "conflict",
+        ):
             continue
         if status_filter and row.get("status") not in status_filter:
             continue

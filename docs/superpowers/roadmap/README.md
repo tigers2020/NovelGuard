@@ -4,7 +4,8 @@ Program-level sequencing and status — **not** implementation detail.
 
 | Artifact | Location | Purpose |
 |----------|----------|---------|
-| **Roadmap** | `roadmap/NNN-YYYY-MM-DD-<area>-<topic>-roadmap.md` | Multi-PR waves, done vs next, dependencies, links to specs/plans |
+| **Kanban** | [Kanban Markdown board](../../agent/KANBAN.md) (`.devtool/features/`) | PR **status/column**, spec/plan links, active track |
+| **Roadmap** | `roadmap/NNN-YYYY-MM-DD-<area>-<topic>-roadmap.md` | Sequencing narrative, scope sections, dependencies |
 | **Spec** | `specs/NNN-YYYY-MM-DD-<kind>-<layer>-<area>-<topic>-design.md` | Approved design — human gate before plan |
 | **Plan** | `plans/NNN-YYYY-MM-DD-<kind>-<layer>-<area>-prNN-<topic>.md` | Task-level execution for one PR slice |
 
@@ -13,10 +14,10 @@ Full taxonomy (`kind`, `layer`, `area`, `risk`, directory-local `NNN`): [agent-w
 ## Workflow
 
 ```text
-roadmap (orientation) → spec (approve) → plan (approve) → implement → update roadmap status
+roadmap (orientation) → spec (approve) → plan (approve) → implement → move kanban card
 ```
 
-Roadmap entries are **proposed** until a matching spec is approved. Do not treat roadmap PR labels as committed scope without a spec.
+Kanban cards are **proposed** until a matching spec is approved. Do not treat kanban/roadmap PR labels as committed scope without a spec.
 
 ## Files
 

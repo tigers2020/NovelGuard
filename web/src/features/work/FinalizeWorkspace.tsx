@@ -3,9 +3,11 @@ import { useBridge, useRefreshSnapshot, useSnapshot } from "../../app/providers/
 import { StatChip } from "../../components/ui/StatChip";
 import type {
   FinalizeCleanupResult,
+  FinalizeReportDocument,
   FinalizeResult,
   FinalizeSummary,
 } from "../../types/finalize";
+import { FinalizeReportPanel } from "./FinalizeReportPanel";
 
 type SectionState = "empty" | "ready" | "warning" | "disabled" | "running" | "success" | "error";
 
@@ -53,7 +55,7 @@ export function FinalizeSubflowContent({
   const [includeCleanup, setIncludeCleanup] = useState(false);
   const [cleanupPreview, setCleanupPreview] = useState<string[] | null>(null);
   const [lastCleanup, setLastCleanup] = useState<FinalizeCleanupResult | null>(null);
-  const [reportJson, setReportJson] = useState<string | null>(null);
+  const [report, setReport] = useState<FinalizeReportDocument | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -133,7 +135,7 @@ export function FinalizeSubflowContent({
       await loadSummary();
       if (result.reportId) {
         const doc = await bridge.getFinalizeReport(result.reportId);
-        setReportJson(JSON.stringify(doc, null, 2));
+        setReport(doc);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -148,7 +150,7 @@ export function FinalizeSubflowContent({
     }
     try {
       const doc = await bridge.getFinalizeReport(finalize.lastReportId);
-      setReportJson(JSON.stringify(doc, null, 2));
+      setReport(doc);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -251,9 +253,10 @@ export function FinalizeSubflowContent({
             }}
           />
           <span>
-            <span className="font-semibold">빈 출력 폴더(duplicate/, organized/) 삭제</span>
+            <span className="font-semibold">라이브러리 안 빈 출력 폴더(duplicate/, organized/) 삭제</span>
             <span className="mt-1 block text-xs text-muted">
-              파일은 삭제하지 않고, 비어 있는 출력 폴더만 정리합니다.
+              파일은 삭제하지 않습니다. 이동본은 라이브러리 옆 «이름_duplicate» 폴더에 있으며, 여기서는
+              라이브러리 내부의 빈 폴더만 정리합니다.
             </span>
           </span>
         </label>
@@ -331,14 +334,7 @@ export function FinalizeSubflowContent({
         </section>
       )}
 
-      {reportJson && (
-        <section className="rounded-md border border-outline bg-surface p-4">
-          <h2 className="text-sm font-semibold text-on-surface">보고서</h2>
-          <pre className="mt-2 max-h-96 overflow-auto text-xs text-on-surface-variant">
-            {reportJson}
-          </pre>
-        </section>
-      )}
+      {report && <FinalizeReportPanel report={report} />}
     </div>
   );
 }

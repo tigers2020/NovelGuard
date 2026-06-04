@@ -66,15 +66,7 @@ flowchart TD
 
 ## Phase index
 
-| PR | Name | Wave | Mutation | Spec (proposed) | Plan (proposed) | Status |
-|----|------|------|----------|-----------------|-----------------|--------|
-| **PR-26** | Snapshot invalidation events | F | No | `specs/014-2026-06-02-snapshot-invalidation-design.md` | `plans/020-2026-06-02-pr26-snapshot-invalidation.md` | **Done** (2026-06-02) |
-| **PR-27** | Quality grid parity with Resolve | F | No | `specs/015-2026-06-02-quality-grid-parity-design.md` | `plans/021-2026-06-02-pr27-quality-grid-parity.md` | **Done** (2026-06-02) |
-| **PR-28** | Settings/Logs v1 (minimal subset) | F | Limited | `specs/016-2026-06-02-settings-logs-design.md` | `plans/022-2026-06-02-pr28-settings-logs.md` | **Done** (2026-06-02); **merge to `main` before PR-29 implement** |
-| **PR-29** | `queryFileRows` advanced / SQL page query | F | No | `specs/017-2026-06-02-query-file-rows-advanced-design.md` | `plans/023-2026-06-02-pr29-query-file-rows-advanced.md` | **Done** (2026-06-02) |
-| **PR-31** | Work mode tab transition (optimistic + keep-alive) | F | No | [018 work mode tab](../specs/018-2026-06-02-feature-ui-shell-work-mode-tab-transition-design.md) | [024 pr31 plan](../plans/024-2026-06-02-feature-ui-shell-pr31-work-mode-tab-transition.md) | **Done** (2026-06-02) |
-| **PR-30** | Bridge / app hygiene refactor | G | No | [020 bridge hygiene](../specs/020-2026-06-02-refactor-bridge-bridge-hygiene-design.md) | [026 pr30 plan](../plans/026-2026-06-02-refactor-bridge-pr30-bridge-hygiene.md) | **Done** (2026-06-02) |
-| **PR-32** | Scan folder picker UI (React CTA) | F | No | [019 scan folder picker](../specs/019-2026-06-02-feature-ui-shell-scan-folder-picker-ui-design.md) | [025 pr32 plan](../plans/025-2026-06-02-feature-ui-shell-pr32-scan-folder-picker-ui.md) | **Done** (2026-06-03; manual pywebview smoke optional) |
+**Closed track** — all cards `done` in [kanban](../../agent/KANBAN.md) (label `track-002`).
 
 ---
 

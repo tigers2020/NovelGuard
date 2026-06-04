@@ -133,7 +133,11 @@ export function filterReviewRows(rows: ReviewRow[], query: ReviewRowsQuery): Rev
   return rows.filter((row) => {
     if (query.viewMode === "conflicts" && row.status !== "conflict") return false;
     if (query.viewMode === "groups" && row.type === "move_only") return false;
-    if (query.viewMode === "move" && !row.proposedAction.includes("move")) return false;
+    if (query.viewMode === "move") {
+      if (row.rowKind !== "file") return false;
+      if (row.status !== "approved") return false;
+      if (row.proposedAction === "keep") return false;
+    }
     if (query.viewMode === "action" && row.status !== "unreviewed" && row.status !== "conflict") {
       return false;
     }

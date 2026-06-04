@@ -31,6 +31,10 @@ export interface ResolveSnapshot {
   groupCount: number;
   conflictCount: number;
   approvedCount: number;
+  /** Exact duplicate member file rows in the review index (all statuses). */
+  exactDuplicateFileCount: number;
+  /** Exact file rows with proposedAction move_duplicate (files to move). */
+  moveTargetCount: number;
   hasPendingApply: boolean;
   libraryRevision: number;
 }
@@ -73,6 +77,7 @@ export interface AppSnapshot {
     integrityIssues: number;
     lastRun: string | null;
     scanOptions: string[];
+    duplicateArchivePath?: string | null;
   };
   pipeline: PipelineSnapshot;
   work: {

@@ -204,6 +204,9 @@ def enrich_scan_entries_with_content_probe(
                     on_progress(pct, f"파일 확인 중… ({completed}/{total})")
 
 
+from domain.duplicate_archive import LIBRARY_OUTPUT_DIR_NAMES
+
+
 def collect_scan_path_entries(
     root: Path,
     *,
@@ -219,6 +222,7 @@ def collect_scan_path_entries(
             return entries
         if not include_hidden:
             dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        dirnames[:] = [d for d in dirnames if d not in LIBRARY_OUTPUT_DIR_NAMES]
         for name in filenames:
             if not include_hidden and name.startswith("."):
                 continue

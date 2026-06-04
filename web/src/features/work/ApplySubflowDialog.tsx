@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SelectionScope } from "../../types/selection";
 import type {
   ApplyFailedDetails,
@@ -35,7 +35,7 @@ function applyErrorMessage(err: unknown): {
     const reason = err.reason;
     const details = err.details;
     const byReason: Record<PreviewApplyErrorCode, string> = {
-      STALE_PREVIEW: "라이브러리가 변경되었습니다. 다시 미리보기하세요.",
+      STALE_PREVIEW: "이동 계획을 맞추는 중입니다. 잠시 후 다시 시도하세요.",
       SELECTION_CHANGED: "선택이 변경되었습니다. 다시 미리보기하세요.",
       NO_PENDING_APPLY: "적용 가능한 미리보기가 없습니다.",
       MISSING_PREVIEW_TOKEN: "미리보기 토큰이 없습니다.",
@@ -88,6 +88,13 @@ function SummaryChips({ summary }: { summary: MovePreviewSummary }) {
       testId: "apply-summary-blocked",
     });
   }
+  if (summary.skippedCount) {
+    chips.push({
+      label: "이미 이동됨",
+      value: summary.skippedCount,
+      testId: "apply-summary-skipped",
+    });
+  }
 
   return (
     <dl className="mt-3 flex flex-wrap gap-2" data-testid="apply-preview-summary">
@@ -122,15 +129,24 @@ function PreviewRowsTable({ rows }: { rows: MovePreviewResult["rows"] }) {
       <table className="w-full text-left text-sm">
         <thead className="sticky top-0 bg-surface-elevated text-on-surface-variant">
           <tr>
-            <th className="px-3 py-2 font-semibold">행 ID</th>
+            <th className="px-3 py-2 font-semibold">파일명</th>
+            <th className="px-3 py-2 font-semibold">원본 경로</th>
             <th className="px-3 py-2 font-semibold">동작</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
             <tr key={row.id} className="border-t border-outline" data-testid={`apply-preview-row-${row.id}`}>
-              <td className="px-3 py-2 font-mono text-xs text-on-surface">{row.id}</td>
-              <td className="px-3 py-2 text-on-surface">{row.action}</td>
+              <td className="max-w-[12rem] truncate px-3 py-2 font-medium text-on-surface" title={row.name}>
+                {row.name}
+              </td>
+              <td
+                className="max-w-[14rem] truncate px-3 py-2 text-xs text-on-surface-variant"
+                title={row.path ?? ""}
+              >
+                {row.path ?? "—"}
+              </td>
+              <td className="px-3 py-2 text-on-surface">중복 이동</td>
             </tr>
           ))}
         </tbody>
@@ -142,12 +158,15 @@ export function ApplySubflowDialog({
   open,
   selection,
   snapshotLibraryRevision,
+  estimatedMoveOperations = 0,
   onOpenFinalize,
   onClose,
 }: {
   open: boolean;
   selection: SelectionScope | null;
   snapshotLibraryRevision: number;
+  /** Snapshot move-target count; scales bridge timeouts for preview/apply. */
+  estimatedMoveOperations?: number;
   onOpenFinalize: () => void;
   onClose: () => void;
 }) {
@@ -161,6 +180,8 @@ export function ApplySubflowDialog({
   const [applyOutcome, setApplyOutcome] = useState<ApplyOutcome | null>(null);
   /** Token last issued by preview; used for discard on close even when UI shows stale. */
   const [activePreviewToken, setActivePreviewToken] = useState<string | null>(null);
+  const [autoRefreshingPreview, setAutoRefreshingPreview] = useState(false);
+  const autoRefreshInFlight = useRef(false);
 
   const effectivePreviewState = useMemo((): PreviewState => {
     if (previewState.status !== "ready" || !selection) {
@@ -170,11 +191,79 @@ export function ApplySubflowDialog({
     if (fp !== previewState.preview.selectionFingerprint) {
       return { status: "stale", reason: "selection_changed" };
     }
-    if (snapshotLibraryRevision !== previewState.preview.libraryRevision) {
-      return { status: "stale", reason: "library_changed" };
-    }
     return previewState;
-  }, [previewState, selection, snapshotLibraryRevision]);
+  }, [previewState, selection]);
+
+  const libraryRevisionDrift =
+    previewState.status === "ready" &&
+    snapshotLibraryRevision !== previewState.preview.libraryRevision;
+
+  const fetchFreshPreview = useCallback(async (): Promise<MovePreviewResult | null> => {
+    if (!selection) {
+      return null;
+    }
+    const result = await bridge.getMovePreview(selection, {
+      expectedOperationCount:
+        estimatedMoveOperations > 0 ? estimatedMoveOperations : undefined,
+    });
+    setActivePreviewToken(result.previewToken);
+    setPreviewState({ status: "ready", preview: result });
+    setPreviewError(null);
+    setApplyError(null);
+    return result;
+  }, [bridge, estimatedMoveOperations, selection]);
+
+  useEffect(() => {
+    if (!open || !selection || busy || autoRefreshInFlight.current) {
+      return;
+    }
+    if (step !== "confirm" || previewState.status !== "ready") {
+      return;
+    }
+    if (!libraryRevisionDrift) {
+      return;
+    }
+
+    let cancelled = false;
+    autoRefreshInFlight.current = true;
+
+    void (async () => {
+      setAutoRefreshingPreview(true);
+      try {
+        await fetchFreshPreview();
+        if (!cancelled) {
+          setStep("confirm");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setPreviewState({
+            status: "stale",
+            reason: "library_changed",
+          });
+          setPreviewError(err instanceof Error ? err.message : "Preview refresh failed");
+        }
+      } finally {
+        autoRefreshInFlight.current = false;
+        if (!cancelled) {
+          setAutoRefreshingPreview(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      autoRefreshInFlight.current = false;
+      setAutoRefreshingPreview(false);
+    };
+  }, [
+    busy,
+    fetchFreshPreview,
+    libraryRevisionDrift,
+    open,
+    previewState.status,
+    selection,
+    step,
+  ]);
 
   if (!open || !selection) return null;
 
@@ -200,13 +289,10 @@ export function ApplySubflowDialog({
 
   const runPreview = async () => {
     setBusy(true);
-    setPreviewError(null);
     setApplyError(null);
     setApplyOutcome(null);
     try {
-      const result = await bridge.getMovePreview(selection);
-      setActivePreviewToken(result.previewToken);
-      setPreviewState({ status: "ready", preview: result });
+      await fetchFreshPreview();
       setStep("confirm");
     } catch (err) {
       setPreviewError(err instanceof Error ? err.message : "Preview failed");
@@ -218,36 +304,70 @@ export function ApplySubflowDialog({
   };
 
   const runApply = async () => {
-    if (effectivePreviewState.status !== "ready") {
+    if (effectivePreviewState.status !== "ready" && effectivePreviewState.status !== "stale") {
       return;
     }
-    setBusy(true);
-    setApplyError(null);
-    try {
+    const applyOnce = async (plan: MovePreviewResult) => {
+      const opCount = plan.summary.operationCount ?? 0;
       await bridge.applyResolvedActions({
         selection,
-        previewToken: effectivePreviewState.preview.previewToken,
+        previewToken: plan.previewToken,
+        expectedOperationCount: opCount > 0 ? opCount : estimatedMoveOperations,
       });
-      const opCount = effectivePreviewState.preview.summary.operationCount ?? 0;
-      setApplyOutcome({
-        operationCount: opCount,
-        libraryRevision: effectivePreviewState.preview.libraryRevision,
-      });
+      return opCount;
+    };
+
+    setBusy(true);
+    setStep("apply");
+    setApplyError(null);
+    try {
+      const preview =
+        previewState.status === "ready" &&
+        snapshotLibraryRevision === previewState.preview.libraryRevision
+          ? previewState.preview
+          : await fetchFreshPreview();
+      if (!preview) {
+        return;
+      }
+
+      const opCount = await applyOnce(preview);
+      setApplyOutcome({ operationCount: opCount, libraryRevision: snapshotLibraryRevision });
       setActivePreviewToken(null);
       setPreviewState({ status: "idle" });
       setStep("done");
       await refreshSnapshot();
     } catch (err) {
+      if (err instanceof BridgeCallError && err.code === "timeout") {
+        setApplyError(
+          "이동 적용이 예상보다 오래 걸리고 있습니다. 잠시 후 스냅샷·감사 로그에서 완료 여부를 확인하세요.",
+        );
+        await refreshSnapshot();
+        setStep("confirm");
+        return;
+      }
       const { message, reason, details } = applyErrorMessage(err);
+      if (reason === "STALE_PREVIEW") {
+        try {
+          const refreshed = await fetchFreshPreview();
+          if (refreshed && (refreshed.summary.operationCount ?? 0) > 0) {
+            const opCount = await applyOnce(refreshed);
+            setApplyOutcome({ operationCount: opCount, libraryRevision: snapshotLibraryRevision });
+            setActivePreviewToken(null);
+            setPreviewState({ status: "idle" });
+            setStep("done");
+            await refreshSnapshot();
+            return;
+          }
+        } catch {
+          // Fall through to user-visible error.
+        }
+      }
       setApplyError(message);
       if (reason === "APPLY_FAILED" && details?.partialSuccess && (details.succeededCount ?? 0) > 0) {
         void refreshSnapshot();
       }
-      if (reason === "STALE_PREVIEW" || reason === "SELECTION_CHANGED") {
-        setPreviewState({
-          status: "stale",
-          reason: reason === "STALE_PREVIEW" ? "library_changed" : "selection_changed",
-        });
+      if (reason === "SELECTION_CHANGED") {
+        setPreviewState({ status: "stale", reason: "selection_changed" });
       }
       setStep("confirm");
     } finally {
@@ -259,6 +379,8 @@ export function ApplySubflowDialog({
     effectivePreviewState.status === "ready" &&
     step === "confirm" &&
     !previewError &&
+    !autoRefreshingPreview &&
+    !busy &&
     operationCount > 0;
 
   return (
@@ -298,9 +420,17 @@ export function ApplySubflowDialog({
           ))}
         </ol>
 
-        {effectivePreviewState.status === "stale" && (
+        {autoRefreshingPreview && (
+          <p className="mt-3 text-sm text-on-surface-variant" data-testid="apply-refresh-banner" role="status">
+            라이브러리가 갱신되어 이동 계획을 다시 맞추는 중입니다…
+          </p>
+        )}
+
+        {effectivePreviewState.status === "stale" && !autoRefreshingPreview && (
           <p className="mt-3 text-sm text-warning" data-testid="apply-stale-banner" role="status">
-            미리보기가 오래되었습니다. 다시 미리보기가 필요합니다.
+            {effectivePreviewState.reason === "selection_changed"
+              ? "선택이 바뀌었습니다. 다시 미리보기하세요."
+              : "미리보기를 다시 실행하세요."}
           </p>
         )}
 
@@ -316,7 +446,10 @@ export function ApplySubflowDialog({
           </p>
         )}
 
-        {readyPreview && (step === "confirm" || step === "apply") && !previewError && (
+        {readyPreview &&
+          (step === "confirm" || step === "apply") &&
+          !previewError &&
+          !autoRefreshingPreview && (
           <>
             <SummaryChips summary={readyPreview.summary} />
             <PreviewRowsTable rows={readyPreview.rows} />
@@ -360,7 +493,7 @@ export function ApplySubflowDialog({
               최종 검증 열기
             </button>
           )}
-          {step === "preview" && (
+          {(step === "preview" || effectivePreviewState.status === "stale") && (
             <button
               type="button"
               disabled={busy}
@@ -368,7 +501,7 @@ export function ApplySubflowDialog({
               onClick={() => void runPreview()}
               className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-background"
             >
-              미리보기
+              {effectivePreviewState.status === "stale" ? "다시 미리보기" : "미리보기"}
             </button>
           )}
           {canApply && (

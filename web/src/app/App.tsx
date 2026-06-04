@@ -187,6 +187,7 @@ function AppContent() {
         key={applyOpen ? "apply-open" : "apply-closed"}
         open={applyOpen}
         selection={applySelection}
+        estimatedMoveOperations={snapshot.work.resolve.moveTargetCount}
         snapshotLibraryRevision={snapshot.work.resolve.libraryRevision}
         onOpenFinalize={() => setFinalizeOpen(true)}
         onClose={() => {

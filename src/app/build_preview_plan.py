@@ -10,19 +10,23 @@ from app.bridge_contract import PreviewApplyError
 from app.preview_apply_guard import PreviewApplyGuard
 from app.quality_repair_guard import QualityRepairGuard
 from app.selection_fingerprint import selection_fingerprint
-from app.selection_guards import (
-    selection_includes_near_rows,
-    selection_includes_relation_rows,
+from app.selection_resolve import resolve_move_selection_rows
+from application.review_move_targets import (
+    is_approved_non_keeper_file_row,
+    normalize_row_for_move_execution,
 )
-from app.selection_resolve import resolve_selection_rows
 from application.audit_log import AuditLog
 from application.library_session import LibrarySession
 from application.ports.filesystem_apply import FilesystemApplyPort
 from domain.apply_models import PreviewOperation
 from domain.apply_path_policy import (
-    build_move_duplicate_dest_relative,
-    resolve_destination_path,
+    resolve_apply_destination,
+    resolve_under_library_root,
     validate_move_operation,
+)
+from domain.duplicate_archive import (
+    allocate_unique_dest_path,
+    build_duplicate_archive_dest,
 )
 from domain.duplicate_content_variant import is_head_tail_variant_group_id
 from domain.models import FileRecord
@@ -51,24 +55,20 @@ class BuildPreviewPlanUseCase:
         if root is None:
             return self._empty_preview(selection)
 
-        selected_rows = resolve_selection_rows(self._session.review_rows_snapshot(), selection)
-        if selection_includes_near_rows(selected_rows):
-            raise PreviewApplyError("NEAR_DUPLICATE_APPLY_UNSUPPORTED")
-        if selection_includes_relation_rows(selected_rows):
-            raise PreviewApplyError("RELATION_APPLY_UNSUPPORTED")
+        selected_rows = resolve_move_selection_rows(
+            self._session.review_rows_snapshot(), selection
+        )
         operations: list[PreviewOperation] = []
         preview_rows: list[dict[str, str]] = []
         conflict_count = 0
         blocked_count = 0
+        skipped_count = 0
 
         for row in selected_rows:
-            if row.get("rowKind") != "file":
+            if not is_approved_non_keeper_file_row(row):
                 continue
-            if row.get("status") in ("excluded", "conflict"):
-                continue
+            row = normalize_row_for_move_execution(row)
             action = row.get("proposedAction")
-            if action in ("keep", "ignore", "delete"):
-                continue
             if action == "move_organized":
                 blocked_count += 1
                 continue
@@ -81,16 +81,30 @@ class BuildPreviewPlanUseCase:
                 conflict_count += 1
                 continue
 
-            target_folder = row.get("targetFolder") or "duplicate"
-            dest_rel = build_move_duplicate_dest_relative(target_folder, file_record.name)
-            dest_abs, _ = resolve_destination_path(root, dest_rel)
-            dest_exists = bool(dest_abs and self._filesystem.file_exists(dest_abs))
+            dest_file = build_duplicate_archive_dest(root, file_record.name)
+
+            src_abs, src_reason = resolve_under_library_root(root, file_record.relative_path)
+            source_missing = (
+                src_reason is not None or src_abs is None or not src_abs.is_file()
+            )
+            if source_missing:
+                if self._filesystem.file_exists(dest_file):
+                    skipped_count += 1
+                    continue
+                conflict_count += 1
+                continue
+
+            dest_file = allocate_unique_dest_path(
+                dest_file,
+                path_exists=self._filesystem.file_exists,
+            )
+            dest_exists = self._filesystem.file_exists(dest_file)
 
             op = PreviewOperation(
                 row_id=str(row["id"]),
                 action="move_duplicate",
                 source_path=file_record.relative_path,
-                dest_path=dest_rel,
+                dest_path=str(dest_file),
                 source_file_id=file_record.id,
                 source_size=file_record.size_bytes,
                 source_content_hash=self._content_hash(root, file_record, row),
@@ -105,7 +119,15 @@ class BuildPreviewPlanUseCase:
                 continue
 
             operations.append(op)
-            preview_rows.append({"id": op.row_id, "action": "move_duplicate"})
+            preview_rows.append(
+                {
+                    "id": op.row_id,
+                    "name": file_record.name,
+                    "path": file_record.relative_path,
+                    "destPath": str(dest_file),
+                    "action": "move_duplicate",
+                }
+            )
 
         token = f"preview-{uuid4()}"
         fingerprint = selection_fingerprint(selection)
@@ -127,6 +149,8 @@ class BuildPreviewPlanUseCase:
             summary["conflictCount"] = conflict_count
         if blocked_count:
             summary["blockedCount"] = blocked_count
+        if skipped_count:
+            summary["skippedCount"] = skipped_count
 
         self._audit.append(
             "preview_built",

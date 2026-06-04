@@ -14,6 +14,7 @@ export function VirtualizedReviewGrid({
   allVisibleSelected,
   someVisibleSelected,
   onToggleSelectAllVisible,
+  isRowCheckEnabled,
   onNearEnd,
   loadingMore,
   sorting,
@@ -31,6 +32,7 @@ export function VirtualizedReviewGrid({
   allVisibleSelected?: boolean;
   someVisibleSelected?: boolean;
   onToggleSelectAllVisible?: () => void;
+  isRowCheckEnabled?: (row: ReviewRow) => boolean;
   onNearEnd?: () => void;
   loadingMore?: boolean;
   sorting: SortingState;
@@ -50,6 +52,7 @@ export function VirtualizedReviewGrid({
               allVisibleSelected,
               someVisibleSelected,
               onToggleSelectAllVisible,
+              isRowCheckEnabled,
             }
           : undefined,
       ),
@@ -59,6 +62,7 @@ export function VirtualizedReviewGrid({
       allVisibleSelected,
       someVisibleSelected,
       onToggleSelectAllVisible,
+      isRowCheckEnabled,
     ],
   );
 

@@ -19,7 +19,11 @@ import type { WorkMode } from "../types/snapshot";
 import type { FileRowsPage, FileRowsQuery } from "../types/fileRows";
 import { validateFileRowsPage } from "../contracts/fileRowsPageContract";
 import { BridgeCallError } from "./bridgeErrors";
-import { reviewDecisionsTimeoutMs, SELECTION_RESOLVE_ROW_CAP } from "../constants/reviewBulk";
+import {
+  applyMoveTimeoutMs,
+  reviewDecisionsTimeoutMs,
+  SELECTION_RESOLVE_ROW_CAP,
+} from "../constants/reviewBulk";
 import { callBridge } from "./callBridge";
 
 function reviewMutationTimeoutMs(selection: SelectionScope): number {
@@ -123,13 +127,19 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
       callBridge(() => call(api, "discard_quality_repair_preview", request).then(() => undefined), {
         method: "discard_quality_repair_preview",
       }),
-    getMovePreview: (selection: SelectionScope) =>
+    getMovePreview: (selection: SelectionScope, options?: { expectedOperationCount?: number }) =>
       callBridge(() => call<MovePreviewResult>(api, "get_move_preview", selection), {
         method: "get_move_preview",
+        timeoutMs: applyMoveTimeoutMs(
+          options?.expectedOperationCount ?? SELECTION_RESOLVE_ROW_CAP,
+        ),
       }),
     applyResolvedActions: (request: ApplyResolvedActionsRequest) =>
       callBridge(() => call(api, "apply_resolved_actions", request).then(() => undefined), {
         method: "apply_resolved_actions",
+        timeoutMs: applyMoveTimeoutMs(
+          request.expectedOperationCount ?? SELECTION_RESOLVE_ROW_CAP,
+        ),
       }),
     discardMovePreview: (request: DiscardMovePreviewRequest) =>
       callBridge(() => call(api, "discard_move_preview", request).then(() => undefined), {

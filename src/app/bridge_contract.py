@@ -212,6 +212,15 @@ def validate_move_preview(payload: Any) -> None:
             raise PageContractError(f"Move preview missing {key}")
     if not isinstance(payload.get("rows"), list):
         raise PageContractError("Move preview rows must be an array")
+    for index, row in enumerate(payload["rows"]):
+        if not isinstance(row, dict):
+            raise PageContractError(f"Move preview row {index} must be a dict")
+        if not isinstance(row.get("id"), str):
+            raise PageContractError(f"Move preview row {index} missing id")
+        if not isinstance(row.get("name"), str) or not row.get("name"):
+            raise PageContractError(f"Move preview row {index} missing name")
+        if not isinstance(row.get("action"), str):
+            raise PageContractError(f"Move preview row {index} missing action")
     if payload.get("hasPendingApply") is not True:
         raise PageContractError("Move preview hasPendingApply must be true")
 

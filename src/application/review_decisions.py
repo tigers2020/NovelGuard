@@ -82,13 +82,27 @@ class UpdateReviewDecisionsUseCase:
                 continue
 
             if command == "setKeeper":
-                if scope != "exact":
+                if scope not in ("exact", "near", "relation"):
                     continue
+                if scope == "exact":
+                    group_members = members_by_group[group_id]
+                else:
+                    from application.review_state_merge import _file_id_from_row_id
+
+                    group_members = set()
+                    for member_row in self._session.review_rows_snapshot():
+                        if member_row.get("groupId") != group_id:
+                            continue
+                        if member_row.get("rowKind") != "file":
+                            continue
+                        file_id = _file_id_from_row_id(str(member_row.get("id", "")))
+                        if file_id:
+                            group_members.add(file_id)
                 updated += self._apply_set_keeper(
                     folder,
                     row,
                     group_id,
-                    members_by_group[group_id],
+                    group_members,
                     keeper_file_id=keeper_file_id,
                 )
                 continue

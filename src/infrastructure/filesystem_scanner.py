@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from domain.duplicate_archive import LIBRARY_OUTPUT_DIR_NAMES
 from domain.models import FileRecord, make_file_id
 from infrastructure.scan_content_probe import (
     collect_scan_path_entries,
@@ -80,6 +81,7 @@ def scan_folder(
             return
         if not include_hidden:
             dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        dirnames[:] = [d for d in dirnames if d not in LIBRARY_OUTPUT_DIR_NAMES]
         for name in filenames:
             if not include_hidden and name.startswith("."):
                 continue

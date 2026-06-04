@@ -105,21 +105,7 @@ flowchart TD
 
 ## Phase index
 
-| PR | Name | Wave | Mutation | Spec (proposed) | Plan (proposed) | Status |
-|----|------|------|----------|-----------------|-----------------|--------|
-| **PR-33** | IA reconciliation + UI overhaul spec v2 | H | No | [021 ia-reconciliation](../specs/021-2026-06-02-feature-fullstack-shell-ia-reconciliation-design.md) | [027 ia-reconciliation](../plans/027-2026-06-02-feature-fullstack-shell-pr33-ia-reconciliation.md) | **Done** (2026-06-03) |
-| **PR-34** | **3-mode shell cleanup** (not hub scroll) | H | No | [021 LOCK-33-13](../specs/021-2026-06-02-feature-fullstack-shell-ia-reconciliation-design.md) | [028 work-mode shell](../plans/028-2026-06-02-feature-ui-shell-pr34-work-mode-shell-cleanup.md) | **Done** (2026-06-03) — **MVP** |
-| **PR-35** | Scan section reassembly | H | No | [023 scan section](../specs/023-2026-06-02-feature-ui-scan-scan-section-design.md) | [032 scan section](../plans/032-2026-06-02-feature-ui-scan-pr35-scan-section.md) | **Done** (2026-06-03) |
-| **PR-36** | Duplicate review master-detail | H | No | [021 LOCK-33-4](../specs/021-2026-06-02-feature-fullstack-shell-ia-reconciliation-design.md) | [029 master-detail](../plans/029-2026-06-02-feature-ui-resolve-pr36-duplicate-master-detail.md) | **Done** (2026-06-03) — **MVP** |
-| **PR-37** | FinalizeSubflowDialog + move/finalize integration | H | Limited | [021 LOCK-33-7..12](../specs/021-2026-06-02-feature-fullstack-shell-ia-reconciliation-design.md) | [030 finalize subflow](../plans/030-2026-06-02-feature-ui-work-pr37-finalize-subflow-dialog.md) | **Done** (2026-06-03) — **MVP** |
-| **PR-38** | FileDock / global bottom dock alignment | H | No | [024 filedock global](../specs/024-2026-06-02-feature-ui-shell-filedock-global-design.md) | [033 filedock](../plans/033-2026-06-02-feature-ui-shell-pr38-filedock-global.md) | **Done** (2026-06-03) |
-| **PR-39** | App shell / GlobalActionToolbar / design tokens | H | No | [025 app shell](../specs/025-2026-06-02-feature-ui-shell-app-shell-polish-design.md) | [034 app shell](../plans/034-2026-06-02-feature-ui-shell-pr39-app-shell-polish.md) | **Done** (2026-06-03) |
-| **PR-40** | Logs / Settings v2 (navigation, search) | H | Limited | [026 logs settings v2](../specs/026-2026-06-02-feature-ui-settings-logs-v2-design.md) | [035 logs settings v2](../plans/035-2026-06-02-feature-ui-settings-pr40-logs-settings-v2.md) | **Done** (2026-06-03) |
-| **PR-41** | Finalize pipeline debt (cleanup placeholder, async UX) | I | No | [027 finalize debt](../specs/027-2026-06-03-infra-quality-finalize-cleanup-debt-design.md) | [036 finalize debt](../plans/036-2026-06-03-infra-quality-pr41-finalize-debt.md) | **Done** (2026-06-03) |
-| **PR-42** | Regression — bridge contract, mock parity, stale apply | I | No | [022 bridge regression](../specs/022-2026-06-03-infra-bridge-quality-bridge-regression-design.md) | [031 bridge regression](../plans/031-2026-06-03-infra-bridge-quality-pr42-bridge-regression.md) | **Done** (2026-06-03) — **MVP** |
-| **PR-43** | E2E — scan → duplicate → move → finalize | I | No | extends E2E plan [002](../plans/002-2026-06-01-novelguard-ui-e2e-smoke.md) | extends plan 002 (PR-43 scenario in `web/e2e/smoke.spec.ts`) | **Done** (2026-06-03) |
-| **PR-44** | Packaging smoke + known limitations | I | No | extends [012 packaging](../specs/012-2026-06-02-packaging-distribution-design.md) | [038 packaging smoke](../plans/038-2026-06-02-infra-release-pr44-packaging-smoke.md) | **Done** (2026-06-03) |
-| **PR-45** | Release candidate — UX copy, beta gate, docs | I | No | (copy sweep; no separate spec) | [039 release candidate](../plans/039-2026-06-02-docs-release-pr45-release-candidate.md) | **Done** (2026-06-03) |
+**Closed track** — all cards `done` in [kanban](../../agent/KANBAN.md) (label `track-003`).
 
 **Waves:** H = UI overhaul & IA; I = stabilization & release.
 

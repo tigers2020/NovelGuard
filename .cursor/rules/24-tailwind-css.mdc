@@ -1,0 +1,22 @@
+---
+description: Tailwind CSS v4 and design-token conventions
+globs: web/**/*.{tsx,css}
+alwaysApply: false
+---
+
+# Tailwind CSS v4
+
+- Tokens defined once in `web/src/styles/globals.css` `@theme`. Consume as utilities — never hardcode hex in components.
+
+```tsx
+// ❌ hardcoded palette
+<div className="bg-[#1e1e1e] text-[#bb86fc]">
+
+// ✅ design tokens
+<div className="bg-surface text-primary">
+```
+
+- Reuse primitives under `components/ui/`; avoid copy-pasted long `className` strings.
+- Prefer semantic token utilities (`bg-surface`, `text-muted`, `border-outline`) over raw spacing/color one-offs.
+- WCAG AA: visible focus rings, keyboard paths, `aria-*` on icon-only controls.
+- Product states: `empty` · `ready` · `running` · `success` · `warning` · `error` · `disabled` · `awaiting-approval`. See `DESIGN.md`.

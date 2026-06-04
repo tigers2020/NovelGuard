@@ -1,0 +1,55 @@
+---
+description: Kanban-driven agent workflow — all work follows board columns; no code before Ready
+alwaysApply: true
+---
+
+# Kanban workflow (mandatory)
+
+All agent work is processed through the **Kanban Markdown** board (`.devtool/features/`).  
+Read [docs/agent/KANBAN.md](../../docs/agent/KANBAN.md) and the active card’s `status` before acting.
+
+## On every user request
+
+1. **Locate or create** a card under `.devtool/features/` (default new → `triage/`).
+2. **Read** `status` in frontmatter — that column is the **only** phase you execute this turn unless the user explicitly overrides.
+3. **Do not write product code** until the card is in **`ready`** or **`in-progress`** (and `in-progress` only after passing the Ready gate).
+4. **Advance the card** when the phase exit criteria are met (move on board or run `python scripts/sync_kanban_folders.py` after editing `status`).
+5. Report: **current column**, **what you did**, **exit criteria met?**, **next column**.
+
+## Column → agent obligations
+
+| Column | You do | Exit → next |
+|--------|--------|-------------|
+| **triage** | Clarify intent; link roadmap slice; name PR/slice | Scope bounded → **spec** |
+| **spec** | Draft `docs/superpowers/specs/NNN-…-design.md` (`brainstorming`) | Draft complete → stay for review |
+| **spec** (review) | Self-review / `grill-me`; lock decisions; mark spec **approved** in doc | Spec approved → **plan** |
+| **plan** | Draft `docs/superpowers/plans/NNN-…-….md` (`writing-plans`) | Draft complete → review |
+| **plan** (review) | Plan vs spec; fix gaps; mark plan **approved** | Plan approved → **todo** |
+| **todo** | Break work into **priority-ordered** tasks on the card (checklist); no implementation | Priorities set → **scheduled** |
+| **scheduled** | Select **one** next task; confirm spec+plan links on card | Task queued → **ready** (or stay if more scheduling passes) |
+| **ready** | Verify spec ↔ plan ↔ acceptance; branch name; `files_allowed` mental model | Gate pass → **in-progress** |
+| **in-progress** | Implement (`executing-plans` / minimal diff); targeted tests | Implementation complete → **review** |
+| **review** | Code review, PR, verification matrix | Green + merged → **done** |
+| **blocked** | Report blocker only; no scope creep | User/unblock → prior column |
+| **done** | Update `current_query.md`, roadmap changelog; close card | — |
+
+## Hard gates
+
+- **No `src/` or `web/` product changes** in `triage`, `spec`, `plan`, or `todo`.
+- **`scheduled`**: at most **one** active “next task” per card body; do not start coding.
+- **`ready`**: card must link approved spec + approved plan paths; agent prints a 3-line gate checklist before **in-progress**.
+- **`in-progress` → `review`**: tests run or explain why not.
+- Roadmap PRs: also follow [AGENTS.md](../../AGENTS.md); kanban column wins over informal “just implement” unless user approves skipping gates.
+
+## Artifacts on the card
+
+Keep on the card markdown body:
+
+- Links to spec, plan, branch, roadmap
+- **Todo** section: numbered priority list
+- **Scheduled** section: which task is active
+- **Ready** checklist: spec approved ✓ plan approved ✓ scope match ✓
+
+## Non-roadmap work
+
+Small tickets in `BACKLOG.yml` still get a kanban card (label `backlog`) or reuse an existing card; same column rules apply.

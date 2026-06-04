@@ -47,7 +47,10 @@ export interface NovelGuardBridge {
   ): Promise<QualityRepairPreviewResult>;
   applyQualityRepair(request: ApplyQualityRepairRequest): Promise<void>;
   discardQualityRepairPreview(request: DiscardQualityRepairPreviewRequest): Promise<void>;
-  getMovePreview(selection: SelectionScope): Promise<MovePreviewResult>;
+  getMovePreview(
+    selection: SelectionScope,
+    options?: { expectedOperationCount?: number },
+  ): Promise<MovePreviewResult>;
   applyResolvedActions(request: ApplyResolvedActionsRequest): Promise<void>;
   discardMovePreview(request: DiscardMovePreviewRequest): Promise<void>;
   updateReviewDecisions(

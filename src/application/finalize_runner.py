@@ -189,6 +189,7 @@ def _warnings_from_session(session: Any, review_rows: list[dict[str, Any]]) -> l
     return compute_finalize_warnings(
         review_rows=review_rows,
         small_file_anomaly_count=session.small_file_anomaly_count(),
+        encoding_issue_count=session.encoding_issue_count(),
     )
 
 

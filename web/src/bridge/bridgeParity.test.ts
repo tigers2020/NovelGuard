@@ -277,10 +277,18 @@ describe("bridge parity", () => {
   });
 
   it("getMovePreview executable rows are move_duplicate only", async () => {
-    const moveIds = getAllReviewRows()
-      .filter((row) => row.rowKind === "file" && row.proposedAction === "move_duplicate")
-      .slice(0, 5)
-      .map((row) => row.id);
+    const { collectCanonicalApprovedMoveTargetRows } = await import(
+      "../features/work/resolve/canonicalMoveTargets"
+    );
+    const { applyMockReviewState, seedMockAutoApprovedExactGroups } = await import(
+      "./mockReviewState",
+    );
+    seedMockAutoApprovedExactGroups(getAllReviewRows());
+    const moveRows = collectCanonicalApprovedMoveTargetRows(
+      applyMockReviewState(getAllReviewRows()),
+    ).slice(0, 5);
+    expect(moveRows.length).toBeGreaterThan(0);
+    const moveIds = moveRows.map((row) => row.id);
     const preview = await mockBridge.getMovePreview({
       type: "explicit_rows",
       rowIds: moveIds,

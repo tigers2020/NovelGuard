@@ -11,13 +11,7 @@ parent_roadmap: docs/superpowers/roadmap/000-2026-06-01-novelguard-master-roadma
 
 ## Delivered
 
-| ID | Topic | Artifact |
-|----|-------|----------|
-| OPS-1 | Hermes dispatch | `hermes_enqueue.py`, `hermes_job_stdin.py`, `job-payload.schema.json` |
-| OPS-2 | Worker | `automation_worker.py`, `run-worker.ps1`, `run-worker-loop.ps1` |
-| OPS-3 | Beta gate | `beta_gate.py`, `fixture_library_smoke.py`, `launch_packaged_smoke.py` |
-| OPS-4 | Large-library perf | Plan 047 perf — on `main` |
-| OPS-5 | Resolve layout | Plan 047 layout — on `main` |
+**Kanban:** [board](../../agent/KANBAN.md) — label `track-005` (OPS-1..OPS-5, column `done`).
 
 ## Gates
 

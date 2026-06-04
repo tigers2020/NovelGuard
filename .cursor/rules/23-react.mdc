@@ -1,0 +1,22 @@
+---
+description: React + TypeScript conventions for web/
+globs: web/**/*.{tsx,ts}
+alwaysApply: false
+---
+
+# React
+
+- Functional components + TypeScript only. Features in `web/src/features/`; shared UI in `components/ui/`.
+- Extract custom hooks for reusable state/effects; keep components mostly presentational.
+- Colocate feature types and helpers under the feature folder; avoid cross-feature imports unless through shared layers.
+
+```tsx
+// ❌ feature importing another feature's internals
+import { ResolveGridToolbar } from "../resolve/ResolveGridToolbar";
+
+// ✅ shared primitive or explicit public export from feature index
+import { DataGridToolbar } from "@/components/grid/DataGridToolbar";
+```
+
+- Destructive file ops: **dry-run preview → explicit user approval → apply**. Never one undifferentiated “실행” button.
+- Korean UI copy; verb labels; status text includes the next action (see DESIGN.md).

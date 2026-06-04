@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from domain.keeper_selection import pick_keeper_record
 from domain.models import DuplicateGroup, FileRecord
 
 
@@ -36,4 +37,4 @@ def find_exact_duplicate_groups(files: list[FileRecord]) -> list[DuplicateGroup]
 
 
 def _pick_keeper(members: list[FileRecord]) -> FileRecord:
-    return max(members, key=lambda m: (m.size_bytes, m.relative_path))
+    return pick_keeper_record(members)

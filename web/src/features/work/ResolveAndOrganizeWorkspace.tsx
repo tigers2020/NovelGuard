@@ -5,14 +5,12 @@ import type {
   DuplicateGroupDetail,
   DuplicateGroupMemberDetail,
   ReviewRow,
-  ReviewRowType,
   ReviewRowsQuery,
   ReviewViewMode,
 } from "../../types/review";
 import { reviewRowGroupId } from "../../types/review";
 import type { ReviewDecisionCommand } from "../../types/reviewDecisions";
 import type { SelectionScope } from "../../types/selection";
-import { FacetPanel } from "./resolve/FacetPanel";
 import { ResolveGridToolbar } from "./resolve/ResolveGridToolbar";
 import { VirtualizedReviewGrid } from "./resolve/VirtualizedReviewGrid";
 import { REVIEW_GRID_SIZING_KEY } from "./resolve/reviewGridColumns";
@@ -25,6 +23,15 @@ import {
   bulkMutationTargetCount,
   chunkExplicitRowIds,
 } from "../../constants/reviewBulk";
+import {
+  buildPreviewBlockedReason,
+  buildPreviewSelection,
+  isRowSelectableForBatch,
+} from "./resolve/resolvePreviewPolicy";
+import {
+  buildPrimaryRowIdByFileId,
+  isPrimaryReviewRowForFile,
+} from "./resolve/reviewRowSelectionPriority";
 
 function loadColumnSizing(): Record<string, number> {
   try {
@@ -47,8 +54,7 @@ export function ResolveAndOrganizeWorkspace({
   const snapshot = useSnapshot();
   const resolve = snapshot.work.resolve;
 
-  const [viewMode, setViewMode] = useState<ReviewViewMode>("action");
-  const [rowTypeFilter, setRowTypeFilter] = useState<"exact" | "near" | "relation" | "all">("all");
+  const [viewMode, setViewMode] = useState<ReviewViewMode>("move");
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [filteredCount, setFilteredCount] = useState(0);
@@ -89,26 +95,23 @@ export function ResolveAndOrganizeWorkspace({
   }, []);
 
   const explicitRowIdSet = useMemo(() => new Set(explicitIds), [explicitIds]);
-
-  const rowTypeFilterTypes = useMemo((): ReviewRowType[] | undefined => {
-    if (rowTypeFilter === "exact") return ["exact"];
-    if (rowTypeFilter === "near") return ["near"];
-    if (rowTypeFilter === "relation") return ["relation"];
-    return ["exact", "near", "relation"];
-  }, [rowTypeFilter]);
+  const primaryRowIdByFileId = useMemo(() => buildPrimaryRowIdByFileId(rows), [rows]);
 
   const currentQuery = useMemo<ReviewRowsQuery>(() => {
     const primary = sorting[0];
     return {
       viewMode,
-      filters: { search: search || undefined, types: rowTypeFilterTypes },
+      filters: {
+        search: search || undefined,
+        types: ["exact", "near", "relation"],
+      },
       cursor: null,
       limit: 100,
       sort: primary
         ? { field: primary.id, direction: primary.desc ? "desc" : "asc" }
         : undefined,
     };
-  }, [viewMode, search, sorting, rowTypeFilterTypes]);
+  }, [viewMode, search, sorting]);
 
   const loadDetail = useCallback(
     async (row: ReviewRow | null) => {
@@ -205,14 +208,23 @@ export function ResolveAndOrganizeWorkspace({
   };
 
   const toggleExplicitRow = (row: ReviewRow) => {
+    if (!isPrimaryReviewRowForFile(row, primaryRowIdByFileId)) {
+      return;
+    }
     setExplicitIds((ids) =>
       ids.includes(row.id) ? ids.filter((id) => id !== row.id) : [...ids, row.id],
     );
   };
 
   const selectAllVisible = useCallback(() => {
-    setExplicitIds(rows.map((row) => row.id));
-  }, [rows]);
+    setExplicitIds(
+      rows
+        .filter((row) =>
+          isRowSelectableForBatch(row, isPrimaryReviewRowForFile(row, primaryRowIdByFileId)),
+        )
+        .map((row) => row.id),
+    );
+  }, [primaryRowIdByFileId, rows]);
 
   const selectExactGroupHeaders = useCallback(() => {
     setExplicitIds(
@@ -236,41 +248,28 @@ export function ResolveAndOrganizeWorkspace({
     }
   }, [allVisibleSelected, clearExplicitSelection, selectAllVisible]);
 
-  const explicitSelection = useMemo<SelectionScope>(
-    () => ({ type: "explicit_rows", rowIds: explicitIds }),
-    [explicitIds],
+  const previewQuery = useMemo<ReviewRowsQuery>(
+    () => ({
+      ...currentQuery,
+      viewMode: "move",
+    }),
+    [currentQuery],
   );
 
-  const previewSelection: SelectionScope =
-    explicitIds.length > 0
-      ? explicitSelection
-      : { type: "current_query", query: currentQuery, excludeRowIds: [] };
+  const previewSelection = useMemo(
+    () =>
+      buildPreviewSelection({
+        explicitIds,
+        visibleRows: rows,
+        previewQuery,
+      }),
+    [explicitIds, previewQuery, rows],
+  );
 
-  const reviewOnlyBlockedReason = useMemo(() => {
-    if (rowTypeFilter === "near") {
-      return "Near 중복은 검토 전용이며 일괄 적용할 수 없습니다.";
-    }
-    if (rowTypeFilter === "relation") {
-      return "Relation 그룹은 검토 전용이며 일괄 적용할 수 없습니다.";
-    }
-    if (rowTypeFilter === "all") {
-      return "현재 필터에 검토 전용 유형이 포함되어 있습니다. Exact만 선택하세요.";
-    }
-    return undefined;
-  }, [rowTypeFilter]);
-
-  const previewBlockedReason = useMemo(() => {
-    if (explicitIds.length > 0) {
-      const selected = rows.filter((row) => explicitIds.includes(row.id));
-      if (selected.some((row) => row.type === "near")) {
-        return "Near duplicate groups are review-only in PR-19 and cannot be applied.";
-      }
-      if (selected.some((row) => row.type === "relation")) {
-        return "Relation groups are review-only in PR-20 and cannot be applied.";
-      }
-    }
-    return reviewOnlyBlockedReason;
-  }, [explicitIds, rows, reviewOnlyBlockedReason]);
+  const previewBlockedReason = useMemo(
+    () => buildPreviewBlockedReason({ moveTargetCount: resolve.moveTargetCount }),
+    [resolve.moveTargetCount],
+  );
 
   const runDetailReviewCommand = useCallback(
     async (
@@ -392,7 +391,6 @@ export function ResolveAndOrganizeWorkspace({
       data-testid="resolve-workspace"
     >
       <div className="relative z-0 flex min-h-0 min-w-0 flex-1 overflow-hidden">
-        <FacetPanel viewMode={viewMode} onViewModeChange={setViewMode} />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {!isWideLayout && selectedRow && (
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-outline bg-surface px-3 py-2">
@@ -410,12 +408,12 @@ export function ResolveAndOrganizeWorkspace({
             </div>
           )}
           <ResolveGridToolbar
-            queueCount={resolve.queueCount}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
             groupCount={resolve.groupCount}
             conflictCount={resolve.conflictCount}
-            approvedCount={resolve.approvedCount}
-            rowTypeFilter={rowTypeFilter}
-            onRowTypeFilterChange={setRowTypeFilter}
+            moveTargetCount={resolve.moveTargetCount}
+            listFilteredCount={filteredCount}
             search={search}
             onSearchChange={setSearch}
             loading={loading}
@@ -432,6 +430,9 @@ export function ResolveAndOrganizeWorkspace({
             allVisibleSelected={allVisibleSelected}
             someVisibleSelected={someVisibleSelected}
             onToggleSelectAllVisible={toggleSelectAllVisible}
+            isRowCheckEnabled={(row) =>
+              isRowSelectableForBatch(row, isPrimaryReviewRowForFile(row, primaryRowIdByFileId))
+            }
             onNearEnd={handleNearEnd}
             loadingMore={loadingMore}
             sorting={sorting}
@@ -509,8 +510,9 @@ export function ResolveAndOrganizeWorkspace({
         onExclude={() => void runBatchCommand("exclude")}
         onApproveAllFiltered={() => setBulkConfirm({ open: true, command: "approve" })}
         onExcludeAllFiltered={() => setBulkConfirm({ open: true, command: "exclude" })}
-        bulkQueryDisabled={Boolean(reviewOnlyBlockedReason)}
-        bulkQueryDisabledReason={reviewOnlyBlockedReason}
+        bulkQueryDisabled={false}
+        bulkQueryDisabledReason={undefined}
+        moveTargetCount={resolve.moveTargetCount}
         onPreview={() => onOpenPreview(previewSelection)}
         previewDisabled={Boolean(previewBlockedReason)}
         previewDisabledReason={previewBlockedReason}

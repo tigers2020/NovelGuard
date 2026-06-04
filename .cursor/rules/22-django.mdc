@@ -1,0 +1,25 @@
+---
+description: Django conventions when Django apps are present
+globs: **/manage.py,**/settings.py,**/wsgi.py,**/asgi.py,**/apps/**/*.py
+alwaysApply: false
+---
+
+# Django
+
+- One app per bounded context; business logic in **services/selectors** — not views, signals, or `save()` overrides.
+- Thin views: validate input → call service → return serializer/response.
+
+```python
+# ❌ logic in view
+def duplicate_list(request):
+    groups = DuplicateGroup.objects.filter(library_id=...).annotate(...)
+
+# ✅ view delegates to service
+def duplicate_list(request):
+    groups = duplicate_service.list_groups(library_id=request.library.id)
+    return DuplicateGroupSerializer(groups, many=True).data
+```
+
+- ORM access stays in repositories/selectors; keep serializers for shape, not rules.
+- Settings via environment variables; never commit secrets. Migrations in VCS.
+- No raw SQL unless an approved spec requires it.

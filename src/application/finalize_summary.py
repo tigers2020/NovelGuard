@@ -51,6 +51,7 @@ def build_finalize_summary(
     warnings = compute_finalize_warnings(
         review_rows=review_rows,
         small_file_anomaly_count=small_file_anomaly_count,
+        encoding_issue_count=encoding_issue_count,
     )
     return {
         "libraryRevision": library_revision,

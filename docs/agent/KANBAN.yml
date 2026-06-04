@@ -1,0 +1,38 @@
+# Roadmap PR kanban — Kanban Markdown (source of truth for card status).
+# Cards: .devtool/features/<status>/*.md — open with Kanban Markdown extension.
+# Scope / narrative: docs/superpowers/roadmap/<track>-*.md
+# Non-roadmap tickets: docs/agent/BACKLOG.yml
+# Full YAML card export (archive): docs/agent/KANBAN.full.yml
+
+meta:
+  updated: 2026-06-04
+  active_track: '007'
+  current_pr: PR-50
+  current_query: docs/superpowers/roadmap/current_query.md
+  board: .devtool/features
+  board_format: kanban-markdown
+  migrated: '2026-06-04'
+  open_board: Cmd/Ctrl+Shift+P → "Open Kanban Board"
+columns:
+- triage
+- spec
+- plan
+- todo
+- scheduled
+- ready
+- in-progress
+- blocked
+- review
+- done
+workflow: Triage → Spec → Plan → Todo → Scheduled → Ready → In Progress → Blocked → Review → Done
+agent_rule: .cursor/rules/20-kanban-workflow.mdc
+gates:
+  spec: no plan or code until spec approved
+  plan: no todo/scheduling until plan approved
+  todo: dev priority list on card before scheduling
+  scheduled: one item per agent run
+  ready: spec+plan match; no src/web edits until ready
+  in-progress: implement only after ready
+note: PR cards live as markdown under .devtool/features/<status>/. Regenerate from
+  KANBAN.full.yml via scripts/migrate_roadmap_to_kanban.py only when bulk-importing;
+  day-to-day status moves happen in the Kanban board.

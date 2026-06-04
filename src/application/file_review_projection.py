@@ -31,10 +31,24 @@ def build_file_review_projection(
         group_key = text_sort_key(group_id)
         candidate = (type_rank, group_id, is_keeper, group_key)
         current = winners.get(file_id)
-        if current is None or (type_rank, group_id) < (current[0], current[1]):
+        if current is None or _should_replace_projection_winner(type_rank, group_id, current):
             winners[file_id] = candidate
 
     return [
         (file_id, group_id, is_keeper, group_key)
         for file_id, (_, group_id, is_keeper, group_key) in winners.items()
     ]
+
+
+def _should_replace_projection_winner(
+    candidate_rank: int,
+    candidate_group_id: str,
+    current: tuple[int, str, bool, str],
+) -> bool:
+    """Higher-priority duplicate type wins; lower priority must not overwrite."""
+    cur_rank, cur_group_id = current[0], current[1]
+    if candidate_rank > cur_rank:
+        return False
+    if candidate_rank < cur_rank:
+        return True
+    return candidate_group_id < cur_group_id

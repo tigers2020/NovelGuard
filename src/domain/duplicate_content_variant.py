@@ -42,7 +42,9 @@ def _size_ratio_ok(left: int, right: int) -> bool:
 
 
 def _pick_keeper(members: list[FileRecord]) -> FileRecord:
-    return max(members, key=lambda record: (record.size_bytes, record.relative_path))
+    from domain.keeper_selection import pick_keeper_record
+
+    return pick_keeper_record(members)
 
 
 def find_head_tail_variant_groups(

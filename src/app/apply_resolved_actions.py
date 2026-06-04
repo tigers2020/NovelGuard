@@ -11,7 +11,10 @@ from application.audit_log import AuditLog
 from application.library_session import LibrarySession
 from application.plan_fingerprint import plan_fingerprint
 from application.ports.filesystem_apply import FilesystemApplyPort
-from domain.apply_path_policy import resolve_destination_path, resolve_under_library_root
+from domain.apply_path_policy import (
+    resolve_apply_destination,
+    resolve_under_library_root,
+)
 from domain.duplicate_content_variant import is_head_tail_variant_group_id
 from infrastructure.content_hasher import head_tail_apply_hash, library_content_hash
 
@@ -51,13 +54,6 @@ class ApplyResolvedActionsUseCase:
         rows_by_id = {
             row["id"]: row for row in self._session.review_rows_snapshot() if row.get("id")
         }
-        for operation in operations:
-            row = rows_by_id.get(operation.row_id)
-            if row is not None and row.get("type") == "near":
-                raise PreviewApplyError("NEAR_DUPLICATE_APPLY_UNSUPPORTED")
-            if row is not None and row.get("type") == "relation":
-                raise PreviewApplyError("RELATION_APPLY_UNSUPPORTED")
-
         root = self._session.library_root_path()
         if root is None:
             self._finish_empty()
@@ -88,7 +84,7 @@ class ApplyResolvedActionsUseCase:
                     raise PreviewApplyError("STALE_PREVIEW")
 
                 src, src_reason = resolve_under_library_root(root, op.source_path)
-                dest, dest_reason = resolve_destination_path(root, op.dest_path)
+                dest, dest_reason = resolve_apply_destination(root, op.dest_path)
                 if src_reason or dest is None or src is None:
                     failed_row_id = op.row_id
                     error_message = src_reason or dest_reason or "invalid path"
@@ -149,7 +145,7 @@ class ApplyResolvedActionsUseCase:
             if succeeded >= 1:
                 self._session.increment_library_revision()
                 try:
-                    self._session.refresh_index_from_disk()
+                    self._session.refresh_index_from_disk(after_apply=True)
                 except Exception as exc:
                     self._audit.append(
                         "apply_failed",
@@ -223,7 +219,7 @@ class ApplyResolvedActionsUseCase:
             return True
         if src.stat().st_size != op.source_size:
             return True
-        dest, dest_reason = resolve_destination_path(root, op.dest_path)
+        dest, dest_reason = resolve_apply_destination(root, op.dest_path)
         if dest_reason or dest is None:
             return True
         return self._filesystem.file_exists(dest)

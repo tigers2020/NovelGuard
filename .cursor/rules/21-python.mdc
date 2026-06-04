@@ -1,0 +1,23 @@
+---
+description: Python conventions for NovelGuard src/ and tests
+globs: src/**/*.py,tests/**/*.py,automation/**/*.py
+alwaysApply: false
+---
+
+# Python
+
+- Python 3.12+; type hints on public APIs; `from __future__ import annotations`.
+- Layers: `domain` → `application` → `infrastructure` → `web`/`app`. Domain has no I/O or framework imports.
+- Lint/format: ruff + black (line-length 100). Verify with targeted `pytest` paths.
+
+```python
+# ❌ domain importing sqlite
+from infrastructure.sqlite_library_index import SqliteLibraryIndex
+
+# ✅ application depends on ports; infrastructure implements them
+class LibrarySession:
+    def __init__(self, index: LibraryIndexPort) -> None: ...
+```
+
+- Prefer `@dataclass(frozen=True, slots=True)` for value objects; explicit ports (protocols/ABC) at application boundaries.
+- No destructive file moves without dry-run preview and user approval (see AGENTS.md).
