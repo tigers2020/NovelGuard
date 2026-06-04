@@ -64,21 +64,18 @@ class UpdateReviewDecisionsUseCase:
             )
 
         files = self._index.files()
-        folder = self._index.folder_path
         from pathlib import Path
 
-        groups = find_duplicate_groups(
-            files,
-            library_root=Path(folder) if folder else None,
-        )
+        groups = find_duplicate_groups(files, library_root=Path(folder))
         members_by_group = {g.group_id: set(g.member_ids) for g in groups}
 
         updated = 0
         for row in rows:
-            group_id = group_id_from_row(row)
-            scope = _review_group_scope(row, group_id, members_by_group)
-            if scope is None:
+            raw_group_id = group_id_from_row(row)
+            scope = _review_group_scope(row, raw_group_id, members_by_group)
+            if scope is None or raw_group_id is None:
                 continue
+            group_id = raw_group_id
 
             if command == "reset":
                 updated += self._apply_reset(folder, row, group_id)

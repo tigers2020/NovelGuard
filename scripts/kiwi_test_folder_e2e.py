@@ -147,9 +147,7 @@ def run_e2e(library_folder: Path, *, seed_exact_duplicate: bool) -> dict:
         src_path = library_folder / str(move_row.get("path", move_row["name"]))
         src_exists_before = src_path.is_file()
 
-        api.apply_resolved_actions(
-            {"selection": sel, "previewToken": preview["previewToken"]}
-        )
+        api.apply_resolved_actions({"selection": sel, "previewToken": preview["previewToken"]})
         dest_path = library_folder / "duplicate" / move_row["name"]
         moved = src_exists_before and not src_path.is_file() and dest_path.is_file()
         step(

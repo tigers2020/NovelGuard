@@ -1251,9 +1251,7 @@ class LibrarySession:
                     self._index.prune_review_state(folder, valid_group_ids, valid_file_ids)
                     stored = self._index.load_review_state(folder)
                     self._set_exact_index_progress("검토 행 구성 중…", 91)
-                    review_rows = rebuild_rows_with_review_state(
-                        files, stored, library_root=folder
-                    )
+                    review_rows = rebuild_rows_with_review_state(files, stored, library_root=folder)
                 else:
                     files_by_id = {file_record.id: file_record for file_record in files}
                     review_rows = build_review_rows(review_groups, files_by_id)
