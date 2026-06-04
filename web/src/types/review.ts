@@ -2,7 +2,11 @@ export type ReviewViewMode = "action" | "groups" | "move" | "all" | "conflicts";
 
 export type ReviewStatus = "unreviewed" | "approved" | "conflict" | "excluded";
 
-export type RelationKind = "same_title_series" | "chapter_sequence" | "version_variant";
+export type RelationKind =
+  | "same_title_series"
+  | "chapter_sequence"
+  | "version_variant"
+  | "title_prefix_overlap";
 export type ConfidenceLabel = "low" | "medium" | "high";
 
 export type ReviewRowType = "exact" | "near" | "relation" | "move_only";

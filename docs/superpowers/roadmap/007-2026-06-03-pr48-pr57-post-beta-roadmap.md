@@ -79,7 +79,7 @@ flowchart TD
 |----|------|------|----------|-----------------|-----------------|--------|
 | **PR-48** | Large-library scan sign-off | H — Perf UX | No | `specs/030-2026-06-03-infra-scan-operator-signoff-design.md` | `plans/048-2026-06-03-infra-scan-pr48-operator-signoff.md` | **Done** (2026-06-03) |
 | **PR-49** | ShellFileDock per-mode persistence | H — Layout | No | `specs/031-2026-06-03-feature-ui-shell-filedock-per-mode-design.md` | `plans/049-2026-06-03-feature-ui-shell-pr49-filedock-per-mode.md` | **Done** (2026-06-03) |
-| **PR-50** | Relation detection v2 | C+ | No | extend [008 relation](../specs/008-2026-06-02-relation-filename-blocking-design.md) → `specs/032-…-relation-v2-design.md` | `plans/050-2026-06-03-domain-relation-pr50-relation-v2.md` | **Proposed** |
+| **PR-50** | Relation detection v2 | C+ | No | [032 relation v2](../specs/032-2026-06-03-domain-relation-v2-design.md) | [050 relation v2](../plans/050-2026-06-03-domain-relation-pr50-relation-v2.md) | **Ready** (spec+plan approved 2026-06-03) |
 | **PR-51** | Column chooser persistence | F+ | No | `specs/033-2026-06-03-feature-ui-grid-column-persistence-design.md` | `plans/051-2026-06-03-feature-ui-grid-pr51-column-persistence.md` | **Proposed** |
 | **PR-52** | Legacy `~/.novelguard` migration | I — Data | Limited | `specs/034-2026-06-03-infra-legacy-state-migration-design.md` | `plans/052-2026-06-03-infra-data-pr52-legacy-migration.md` | **Proposed** |
 | **PR-53** | Settings expert slice (P2 minimal) | F+ | No | extend [016 settings](../specs/016-2026-06-02-settings-logs-design.md) → `specs/035-…-settings-expert-v1-design.md` | `plans/053-2026-06-03-feature-ui-settings-pr53-expert-slice.md` | **Proposed** |
@@ -367,7 +367,7 @@ cd web && npm run test:e2e   # when UI/E2E affected
 
 - [x] PR-48 spec 030 approved
 - [x] PR-49 spec 031 approved
-- [ ] PR-50 spec 032 approved (relation apply policy locked)
+- [x] PR-50 spec 032 approved (relation apply policy locked — read-only)
 - [ ] PR-51 spec 033 approved
 - [ ] PR-52 spec 034 approved (`risk: destructive` for apply path)
 - [ ] PR-53 spec 035 approved

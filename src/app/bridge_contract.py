@@ -274,6 +274,7 @@ def validate_duplicate_group_detail(payload: Any) -> None:
             "same_title_series",
             "chapter_sequence",
             "version_variant",
+            "title_prefix_overlap",
         ):
             raise PageContractError("evidence.relationKind invalid")
         if evidence.get("confidenceLabel") not in ("low", "medium", "high"):

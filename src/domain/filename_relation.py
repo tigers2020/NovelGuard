@@ -12,20 +12,25 @@ from pathlib import PurePosixPath
 
 from domain.models import FileRecord
 
-ALGORITHM_VERSION = "relation-filename-v1"
+ALGORITHM_VERSION = "relation-filename-v2"
 MIN_STEM_CHARS = 4
 MIN_GROUP_MEMBERS = 2
 MAX_CHAPTER_GAP = 50
 MIN_NON_GENERIC_TOKEN_LEN = 4
 MIN_PARENT_PATH_TOKEN_LEN = 3
+MIN_PREFIX_CHARS = 12
+MIN_PREFIX_TOKENS = 2
+MAX_PREFIX_SUFFIX_TOKENS = 4
 
 RELATION_KINDS_V1 = frozenset(
     {
         "same_title_series",
         "chapter_sequence",
         "version_variant",
+        "title_prefix_overlap",
     }
 )
+RELATION_KINDS = RELATION_KINDS_V1
 
 GENERIC_STEM_DENYLIST = frozenset(
     {
@@ -50,6 +55,7 @@ _RELATION_KIND_PRIORITY = {
     "chapter_sequence": 0,
     "same_title_series": 1,
     "version_variant": 2,
+    "title_prefix_overlap": 3,
 }
 
 _CONFIDENCE_BY_LABEL = {
@@ -250,6 +256,15 @@ def detect_filename_relations(
             )
         )
 
+    v1_member_sets = {frozenset(group.member_file_ids) for _, group in raw_groups}
+    prefix_groups = _detect_prefix_overlap_groups(
+        prepared,
+        v1_member_sets=v1_member_sets,
+        exact_membership_by_file_id=exact_membership_by_file_id,
+        near_membership_by_file_id=near_membership_by_file_id,
+    )
+    raw_groups.extend(prefix_groups)
+
     raw_groups.sort(key=lambda item: item[0])
     groups: list[RelationGroup] = []
     for index, (_, group) in enumerate(raw_groups):
@@ -391,6 +406,8 @@ def _stem_differs_only_by_version(left: str, right: str) -> bool:
 
 
 def _confidence_label(kind: str, items: Sequence[_PreparedFile]) -> str:
+    if kind == "title_prefix_overlap":
+        return "low"
     if kind == "version_variant":
         return "high"
     numerics = [item.parse.numeric_tokens for item in items if item.parse.numeric_tokens]
@@ -414,6 +431,172 @@ def _evidence_tokens(items: Sequence[_PreparedFile]) -> tuple[tuple[str, ...], t
 def _member_digest(member_ids: tuple[str, ...]) -> str:
     payload = "|".join(sorted(member_ids))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:8]
+
+
+def _detect_prefix_overlap_groups(
+    prepared: Sequence[_PreparedFile],
+    *,
+    v1_member_sets: set[frozenset[str]],
+    exact_membership_by_file_id: Mapping[str, str],
+    near_membership_by_file_id: Mapping[str, str],
+) -> list[tuple[tuple[str, str, str, str], RelationGroup]]:
+    edges = _collect_prefix_overlap_edges(prepared)
+    if not edges:
+        return []
+
+    parent: dict[str, str] = {item.record.id: item.record.id for item in prepared}
+
+    def find(file_id: str) -> str:
+        while parent[file_id] != file_id:
+            parent[file_id] = parent[parent[file_id]]
+            file_id = parent[file_id]
+        return file_id
+
+    def union(left_id: str, right_id: str) -> None:
+        root_left, root_right = find(left_id), find(right_id)
+        if root_left != root_right:
+            parent[root_right] = root_left
+
+    for left_id, right_id in edges:
+        union(left_id, right_id)
+
+    by_id = {item.record.id: item for item in prepared}
+    components: dict[str, list[_PreparedFile]] = {}
+    active_ids = {file_id for edge in edges for file_id in edge}
+    for file_id in active_ids:
+        components.setdefault(find(file_id), []).append(by_id[file_id])
+
+    raw: list[tuple[tuple[str, str, str, str], RelationGroup]] = []
+    for component_items in components.values():
+        if len(component_items) < MIN_GROUP_MEMBERS:
+            continue
+        member_ids = tuple(sorted(item.record.id for item in component_items))
+        if frozenset(member_ids) in v1_member_sets:
+            continue
+        if _should_suppress_group(
+            member_ids, exact_membership_by_file_id, near_membership_by_file_id
+        ):
+            continue
+        stem = min((item.parse.normalized_stem for item in component_items), key=len)
+        matched, differing = _prefix_overlap_evidence(component_items)
+        confidence_label = "low"
+        cluster_key = (
+            "title_prefix_overlap",
+            stem,
+            min(member_ids),
+            _member_digest(member_ids),
+        )
+        raw.append(
+            (
+                cluster_key,
+                RelationGroup(
+                    group_id="",
+                    member_file_ids=member_ids,
+                    relation_kind="title_prefix_overlap",
+                    confidence=_CONFIDENCE_BY_LABEL[confidence_label],
+                    confidence_label=confidence_label,
+                    normalized_stem=stem,
+                    normalized_names=tuple(
+                        item.record.name
+                        for item in sorted(component_items, key=lambda x: x.record.id)
+                    ),
+                    matched_tokens=matched,
+                    differing_tokens=differing,
+                ),
+            )
+        )
+    return raw
+
+
+def _collect_prefix_overlap_edges(prepared: Sequence[_PreparedFile]) -> set[tuple[str, str]]:
+    edges: set[tuple[str, str]] = set()
+    by_parent: dict[str, list[_PreparedFile]] = {}
+    for item in prepared:
+        by_parent.setdefault(item.parent_dir, []).append(item)
+    for items in by_parent.values():
+        if len(items) >= MIN_GROUP_MEMBERS:
+            edges |= _prefix_edges_among(items)
+
+    token_map: dict[str, list[_PreparedFile]] = {}
+    for item in prepared:
+        for token in item.parse.non_generic_tokens:
+            if len(token) >= MIN_NON_GENERIC_TOKEN_LEN:
+                token_map.setdefault(token, []).append(item)
+    for items in token_map.values():
+        if len(items) >= MIN_GROUP_MEMBERS:
+            edges |= _prefix_edges_among(items)
+    return edges
+
+
+def _prefix_edges_among(items: Sequence[_PreparedFile]) -> set[tuple[str, str]]:
+    edges: set[tuple[str, str]] = set()
+    for left_index in range(len(items)):
+        for right_index in range(left_index + 1, len(items)):
+            left_item, right_item = items[left_index], items[right_index]
+            if _is_prefix_overlap_pair(left_item, right_item):
+                pair = sorted((left_item.record.id, right_item.record.id))
+                edges.add((pair[0], pair[1]))
+    return edges
+
+
+def _is_prefix_overlap_pair(left: _PreparedFile, right: _PreparedFile) -> bool:
+    shorter_stem, longer_stem = _ordered_prefix_stems(
+        left.parse.normalized_stem, right.parse.normalized_stem
+    )
+    if shorter_stem == longer_stem:
+        return False
+    if len(shorter_stem) < MIN_PREFIX_CHARS:
+        return False
+    if not longer_stem.startswith(f"{shorter_stem} "):
+        return False
+    prefix_tokens = _stem_tokens(shorter_stem)
+    if len(prefix_tokens) < MIN_PREFIX_TOKENS:
+        return False
+    if all(token in GENERIC_STEM_DENYLIST for token in prefix_tokens):
+        return False
+    if not _prefix_suffix_ok(longer_stem, shorter_stem):
+        return False
+    return _pair_strengthened(left, right)
+
+
+def _ordered_prefix_stems(left: str, right: str) -> tuple[str, str]:
+    if len(left) < len(right) or (len(left) == len(right) and left <= right):
+        return left, right
+    return right, left
+
+
+def _prefix_suffix_ok(longer_stem: str, shorter_stem: str) -> bool:
+    suffix = longer_stem[len(shorter_stem) :].strip()
+    suffix_tokens = _stem_tokens(suffix)
+    if not suffix_tokens or len(suffix_tokens) > MAX_PREFIX_SUFFIX_TOKENS:
+        return False
+    if all(token.isdigit() for token in suffix_tokens):
+        return False
+    return not all(token in GENERIC_STEM_DENYLIST for token in suffix_tokens)
+
+
+def _pair_strengthened(left: _PreparedFile, right: _PreparedFile) -> bool:
+    items = (left, right)
+    return (
+        _same_parent_directory(items)
+        or _shared_non_generic_token(items)
+        or _parent_path_overlap(items)
+    )
+
+
+def _prefix_overlap_evidence(
+    items: Sequence[_PreparedFile],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    stems = [item.parse.normalized_stem for item in items]
+    shorter = min(stems, key=len)
+    matched = _stem_tokens(shorter)
+    differing: set[str] = set()
+    for stem in stems:
+        if stem == shorter:
+            continue
+        suffix = stem[len(shorter) :].strip()
+        differing.update(_stem_tokens(suffix))
+    return tuple(matched), tuple(sorted(differing))
 
 
 def _should_suppress_group(
