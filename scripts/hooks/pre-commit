@@ -2,4 +2,4 @@
 # Installed by: python scripts/install_git_hooks.py
 set -e
 cd "$(git rev-parse --show-toplevel)" || exit 1
-exec python scripts/guard_new_tests.py
+exec python scripts/verify/guard_new_tests.py

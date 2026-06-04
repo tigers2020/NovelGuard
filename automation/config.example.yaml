@@ -14,6 +14,7 @@ cursor:
     - cursor-agent
     - agent
   args: ["-p"]
+  prompt_prefix: "/caveman"
   dry_run: false  # true = skip CLI, still runs git + verify (for queue testing)
 
 queue:

@@ -52,6 +52,8 @@ export interface FinalizeSummary {
 
 export interface RunFinalizeRequest {
   includeCleanup: boolean;
+  /** Used by the bridge to scale call timeout; ignored by Python. */
+  qualityReverifyFileCount?: number;
 }
 
 export interface FinalizeCleanupPreview {

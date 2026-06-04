@@ -1,0 +1,16 @@
+{
+  "at": "2026-06-04T15:44:14Z",
+  "blockers": [
+    "linked spec missing"
+  ],
+  "changed_paths": [
+    ".devtool/features/pr-58-exact-keeper-move-2026-06-04-spec-draft-scheduled.md"
+  ],
+  "end_column": "scheduled",
+  "next_action": "fix scheduled gate metadata",
+  "script": "kanban_scheduled_to_inprogress",
+  "start_column": "scheduled",
+  "status": "BLOCKED",
+  "verification": [],
+  "work_id": "pr-58-exact-keeper-move-2026-06-04-spec-draft"
+}

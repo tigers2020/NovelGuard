@@ -78,7 +78,7 @@ Per-repo lock so only one job mutates a repo at a time.
 1. Command ingested → `status = queued`
 2. Worker: `git fetch`; checkout `main`; `git pull`
 3. `git checkout -b ai/job-<id>`
-4. Run Cursor CLI (`cursor-agent` / `agent` — confirm flags with `--help` on your install)
+4. Run Cursor CLI (`cursor-agent` / `agent` — confirm flags with `--help` on your install). All automation prompts are prefixed `/caveman` via `cursor.prompt_prefix` (see `scripts/cursor_cli_common.py`).
 5. Verify: `ruff`, `mypy`, `pytest`, `npm run lint` as applicable
 6. Emit: patch or diff stat, summary, test output, logs on failure
 7. Notify channel; await human for commit/PR/merge if not pre-authorized

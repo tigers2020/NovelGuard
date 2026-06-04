@@ -1,0 +1,15 @@
+{
+  "at": "2026-06-04T14:23:28Z",
+  "blockers": [
+    "missing acceptance"
+  ],
+  "changed_paths": [
+    ".devtool/features/pr-51-column-chooser-persistence-2026-06-04-inbox.md"
+  ],
+  "end_column": "inbox",
+  "next_action": "fix inbox metadata",
+  "script": "kanban_inbox_to_scheduled",
+  "start_column": "inbox",
+  "status": "BLOCKED",
+  "work_id": "pr-51-2026-06-04"
+}

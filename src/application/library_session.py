@@ -43,6 +43,7 @@ from domain.settings_keys import (
 )
 
 _MAX_QUERY_LIMIT = 200
+_REVIEW_MAX_QUERY_LIMIT = 5000
 _DEFAULT_QUERY_LIMIT = 100
 _WORK_MODES = frozenset({"scan", "resolve", "quality"})
 _LOGGER = logging.getLogger(__name__)
@@ -395,7 +396,7 @@ class LibrarySession:
 
     def query_review_rows(self, query: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
-            limit = _clamp_query_limit(query)
+            limit = _clamp_review_query_limit(query)
             return query_review_page(self._review_rows_cache, query, limit=limit)
 
     def query_quality_rows(self, query: dict[str, Any]) -> dict[str, Any]:
@@ -1450,6 +1451,15 @@ class LibrarySession:
             self._index.replace_quality_issues(folder, [])
             self._clear_review_cache()
             self._scan_state = "error"
+
+
+def _clamp_review_query_limit(query: dict[str, Any]) -> int:
+    raw = query.get("limit", _DEFAULT_QUERY_LIMIT)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = _DEFAULT_QUERY_LIMIT
+    return min(max(1, value), _REVIEW_MAX_QUERY_LIMIT)
 
 
 def _clamp_query_limit(query: dict[str, Any]) -> int:

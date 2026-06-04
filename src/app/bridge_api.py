@@ -13,6 +13,7 @@ from app.bridge_contract import (
     PreviewApplyError,
     QualityQueryError,
     clamp_query_limit,
+    clamp_review_query_limit,
     validate_app_info,
     validate_app_setting_response,
     validate_app_snapshot,
@@ -115,7 +116,7 @@ class BridgeApi:
         self._session.cancel_run()
 
     def query_review_rows(self, query: dict[str, Any]) -> dict[str, Any]:
-        _ = clamp_query_limit(query)
+        _ = clamp_review_query_limit(query)
 
         payload = self._session.query_review_rows(query)
 

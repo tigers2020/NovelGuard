@@ -19,6 +19,7 @@ import type { WorkMode } from "../types/snapshot";
 import type { FileRowsPage, FileRowsQuery } from "../types/fileRows";
 import { validateFileRowsPage } from "../contracts/fileRowsPageContract";
 import { BridgeCallError } from "./bridgeErrors";
+import { finalizeVerificationTimeoutMs } from "../constants/finalize";
 import {
   applyMoveTimeoutMs,
   reviewDecisionsTimeoutMs,
@@ -169,6 +170,7 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
     runFinalizeVerification: (request: RunFinalizeRequest) =>
       callBridge(() => call<FinalizeResult>(api, "run_finalize_verification", request), {
         method: "run_finalize_verification",
+        timeoutMs: finalizeVerificationTimeoutMs(request.qualityReverifyFileCount ?? 0),
       }),
     getFinalizeReport: (reportId: string) =>
       callBridge(() => call<FinalizeReportDocument>(api, "get_finalize_report", reportId), {

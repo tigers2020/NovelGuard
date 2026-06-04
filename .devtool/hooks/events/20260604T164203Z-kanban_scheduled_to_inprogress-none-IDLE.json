@@ -1,0 +1,12 @@
+{
+  "at": "2026-06-04T16:42:03Z",
+  "blockers": [],
+  "changed_paths": [],
+  "end_column": "scheduled",
+  "next_action": "no scheduled cards found",
+  "script": "kanban_scheduled_to_inprogress",
+  "start_column": "scheduled",
+  "status": "IDLE",
+  "verification": [],
+  "work_id": "none"
+}

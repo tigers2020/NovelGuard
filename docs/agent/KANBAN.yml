@@ -1,8 +1,8 @@
-# Roadmap PR kanban — Kanban Markdown (source of truth for card status).
-# Cards: .devtool/features/<status>/*.md — open with Kanban Markdown extension.
-# Scope / narrative: docs/superpowers/roadmap/<track>-*.md
-# Non-roadmap tickets: docs/agent/BACKLOG.yml
-# Full YAML card export (archive): docs/agent/KANBAN.full.yml
+# Roadmap PR kanban meta/config (track, current_pr, columns, gates).
+# Card status truth: frontmatter status on .devtool/features/*.md (+ done/*.md for completed).
+# Narrative: docs/superpowers/roadmap/<track>-*.md
+# Non-roadmap: docs/agent/BACKLOG.yml
+# Archive export only (legacy columns): docs/agent/KANBAN.full.yml — not day-to-day truth
 
 meta:
   updated: 2026-06-04
@@ -12,27 +12,48 @@ meta:
   board: .devtool/features
   board_format: kanban-markdown
   migrated: '2026-06-04'
+  pipeline_version: v2-event-pipeline
   open_board: Cmd/Ctrl+Shift+P → "Open Kanban Board"
 columns:
-- triage
-- spec
-- plan
+- inbox
+- spec-draft
+- spec-review
+- plan-draft
+- plan-review
 - todo
 - scheduled
-- ready
+- ready-gate
 - in-progress
-- blocked
-- review
+- verify
 - done
-workflow: Triage → Spec → Plan → Todo → Scheduled → Ready → In Progress → Blocked → Review → Done
+- blocked
+workflow: >-
+  Inbox → Spec Draft → Spec Review → Plan Draft → Plan Review → Todo → Scheduled
+  → Ready Gate → In Progress → Verify → Done (Blocked from any column)
 agent_rule: .cursor/rules/20-kanban-workflow.mdc
+automation_triggers:
+  inbox_created: create spec-draft card
+  spec_draft_exit: move/create spec-review card
+  spec_review_approved: create plan-draft card
+  plan_draft_exit: move/create plan-review card
+  plan_review_approved: create todo card
+  todo_exit: create scheduled card
+  scheduled_selected: create ready-gate card
+  ready_gate_passed: create in-progress card
+  in_progress_completed: create verify card
+  verify_passed: move to done
 gates:
-  spec: no plan or code until spec approved
-  plan: no todo/scheduling until plan approved
+  spec-draft: no plan or code; draft spec only
+  spec-review: grill/gap fix/approval; no code
+  plan-draft: no todo/scheduling until spec approved
+  plan-review: grill/gap fix/approval; no code
   todo: dev priority list on card before scheduling
   scheduled: one item per agent run
-  ready: spec+plan match; no src/web edits until ready
-  in-progress: implement only after ready
-note: PR cards live as markdown under .devtool/features/<status>/. Regenerate from
-  KANBAN.full.yml via scripts/migrate_roadmap_to_kanban.py only when bulk-importing;
-  day-to-day status moves happen in the Kanban board.
+  ready-gate: spec+plan approved; gate-check only — no product code
+  in-progress: src/web edits only after ready-gate satisfied
+  verify: tests/review matrix; no new scope
+note: PR cards live as markdown under .devtool/features/ (active) and .devtool/features/done/.
+  Column = frontmatter status; sync_kanban_folders.py flattens for the board UI. Regenerate from
+  KANBAN.full.yml via scripts/kanban/migrate_roadmap_to_kanban.py only when bulk-importing;
+  day-to-day status moves happen in the Kanban board. Migrate legacy columns via
+  scripts/kanban/migrate_kanban_columns_v2.py.

@@ -8,7 +8,7 @@ from typing import Any
 
 from app.bridge_contract import ApplyFailedError, RepairApplyError
 from app.preview_apply_guard import PreviewApplyGuard
-from app.quality_repair_guard import QualityRepairGuard
+from app.quality_repair_guard import PendingQualityRepair, QualityRepairGuard
 from application.audit_log import AuditLog
 from application.encoding_detect import decode_bytes
 from application.issue_selection_fingerprint import (
@@ -46,15 +46,46 @@ class ApplyQualityRepairUseCase:
         repair_preview_token: str,
         library_revision_at_validate: int,
     ) -> None:
+        token = self._validate_repair_request(repair_preview_token)
+        pending, operations = self._load_validated_repair_plan(
+            token=token,
+            issue_ids=issue_ids,
+            library_revision_at_validate=library_revision_at_validate,
+        )
+
+        root = self._session.library_root_path()
+        if root is None or not operations:
+            self._finish_empty(token)
+            return
+
+        self._session.set_apply_in_progress(True)
+        try:
+            self._apply_repair_operations(
+                root=root,
+                pending=pending,
+                token=token,
+                operations=operations,
+            )
+        finally:
+            self._session.set_apply_in_progress(False)
+
+    def _validate_repair_request(self, repair_preview_token: str) -> str:
         if self._session.is_apply_or_scan_busy():
             raise RepairApplyError("LIBRARY_BUSY")
         if self._move_guard.get() is not None:
             raise RepairApplyError("MOVE_PREVIEW_ACTIVE")
-
         token = repair_preview_token.strip()
         if not token:
             raise RepairApplyError("MISSING_REPAIR_PREVIEW_TOKEN")
+        return token
 
+    def _load_validated_repair_plan(
+        self,
+        *,
+        token: str,
+        issue_ids: list[str],
+        library_revision_at_validate: int,
+    ) -> tuple[PendingQualityRepair, list[RepairOperation]]:
         pending = self._repair_guard.get_by_token(token)
         if not pending:
             raise RepairApplyError("NO_PENDING_REPAIR")
@@ -70,102 +101,99 @@ class ApplyQualityRepairUseCase:
             self._clear_repair_pending()
             raise RepairApplyError("PLAN_MISMATCH")
 
-        if self._session.library_revision() != library_revision_at_validate:
+        revision = self._session.library_revision()
+        if revision != library_revision_at_validate or revision != pending.library_revision:
             self._clear_repair_pending()
             raise RepairApplyError("STALE_REPAIR_PREVIEW")
 
-        if self._session.library_revision() != pending.library_revision:
-            self._clear_repair_pending()
-            raise RepairApplyError("STALE_REPAIR_PREVIEW")
+        return pending, operations
 
-        root = self._session.library_root_path()
-        if root is None or not operations:
-            self._finish_empty(token)
-            return
-
-        self._session.set_apply_in_progress(True)
+    def _apply_repair_operations(
+        self,
+        *,
+        root: Path,
+        pending: PendingQualityRepair,
+        token: str,
+        operations: list[RepairOperation],
+    ) -> None:
         succeeded = 0
         failed_issue_id: str | None = None
         error_message: str | None = None
         succeeded_file_ids: list[str] = []
 
-        try:
-            self._audit.append(
-                "repair_started",
-                repairPreviewToken=token,
-                sessionId=pending.session_id,
-                libraryRevision=pending.library_revision,
+        self._audit.append(
+            "repair_started",
+            repairPreviewToken=token,
+            sessionId=pending.session_id,
+            libraryRevision=pending.library_revision,
+        )
+
+        for op in operations:
+            if self._check_drift(root, op):
+                self._clear_repair_pending()
+                raise RepairApplyError("STALE_REPAIR_PREVIEW")
+
+            result = self._apply_operation(
+                root=root,
+                op=op,
+                session_id=pending.session_id,
+                token=token,
             )
-
-            for op in operations:
-                drift = self._check_drift(root, op)
-                if drift:
-                    self._clear_repair_pending()
-                    raise RepairApplyError("STALE_REPAIR_PREVIEW")
-
-                result = self._apply_operation(
-                    root=root,
-                    op=op,
-                    session_id=pending.session_id,
-                    token=token,
-                )
-                if result["outcome"] != "ok":
-                    failed_issue_id = op.issue_id
-                    error_message = result.get("error") or "repair failed"
-                    self._audit.append(
-                        "repair_failed",
-                        repairPreviewToken=token,
-                        issueId=op.issue_id,
-                        fileId=op.file_id,
-                        outcome="error",
-                        error=error_message,
-                    )
-                    break
-
-                succeeded += 1
-                succeeded_file_ids.append(op.file_id)
-                self._audit.append(
-                    "repair_applied",
-                    repairPreviewToken=token,
-                    issueId=op.issue_id,
-                    fileId=op.file_id,
-                    relativePath=op.relative_path,
-                    sourceEncoding=op.source_encoding,
-                    backupPath=str(result.get("backupPath", "")),
-                    outcome="ok",
-                )
-
-            if succeeded >= 1:
-                self._session.reanalyze_quality_for_file_ids(succeeded_file_ids)
-                self._session.increment_library_revision()
-
-            if failed_issue_id is not None:
+            if result["outcome"] != "ok":
+                failed_issue_id = op.issue_id
+                error_message = result.get("error") or "repair failed"
                 self._audit.append(
                     "repair_failed",
                     repairPreviewToken=token,
-                    failedIssueId=failed_issue_id,
-                    partialSuccess=succeeded > 0,
-                    succeededCount=succeeded,
+                    issueId=op.issue_id,
+                    fileId=op.file_id,
+                    outcome="error",
+                    error=error_message,
                 )
-                self._clear_repair_pending()
-                raise ApplyFailedError(
-                    "REPAIR_FAILED",
-                    error_message or "repair failed",
-                    details={
-                        "partialSuccess": succeeded > 0,
-                        "succeededCount": succeeded,
-                        "failedIssueId": failed_issue_id,
-                    },
-                )
+                break
 
+            succeeded += 1
+            succeeded_file_ids.append(op.file_id)
             self._audit.append(
-                "repair_completed",
+                "repair_applied",
                 repairPreviewToken=token,
-                operationCount=succeeded,
+                issueId=op.issue_id,
+                fileId=op.file_id,
+                relativePath=op.relative_path,
+                sourceEncoding=op.source_encoding,
+                backupPath=str(result.get("backupPath", "")),
+                outcome="ok",
+            )
+
+        if succeeded >= 1:
+            self._session.reanalyze_quality_for_file_ids(succeeded_file_ids)
+            self._session.increment_library_revision()
+
+        if failed_issue_id is not None:
+            self._audit.append(
+                "repair_failed",
+                repairPreviewToken=token,
+                failedIssueId=failed_issue_id,
+                partialSuccess=succeeded > 0,
+                succeededCount=succeeded,
             )
             self._clear_repair_pending()
-        finally:
-            self._session.set_apply_in_progress(False)
+            raise ApplyFailedError(
+                "REPAIR_FAILED",
+                error_message or "repair failed",
+                details={
+                    "partialSuccess": succeeded > 0,
+                    "succeededCount": succeeded,
+                    "failedIssueId": failed_issue_id,
+                },
+            )
+
+        self._audit.append(
+            "repair_completed",
+            repairPreviewToken=token,
+            operationCount=succeeded,
+        )
+        self._clear_repair_pending()
 
     def _apply_operation(
         self,

@@ -129,7 +129,12 @@ export function FinalizeSubflowContent({
     setBusy(true);
     setError(null);
     try {
-      const result: FinalizeResult = await bridge.runFinalizeVerification({ includeCleanup });
+      const qualityReverifyFileCount =
+        (summary?.quality.encodingIssueCount ?? 0) + (summary?.quality.integrityIssueCount ?? 0);
+      const result: FinalizeResult = await bridge.runFinalizeVerification({
+        includeCleanup,
+        qualityReverifyFileCount,
+      });
       setLastCleanup(result.cleanup);
       await refreshSnapshot();
       await loadSummary();

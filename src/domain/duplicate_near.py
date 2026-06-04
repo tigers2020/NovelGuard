@@ -268,6 +268,78 @@ class _UnionFind:
             self._parent[root_right] = root_left
 
 
+def _cap_bucket_items(items: Sequence[_PreparedFile], max_bucket_items: int) -> list[_PreparedFile]:
+    bucket_items = list(items)
+    if len(bucket_items) <= max_bucket_items:
+        return bucket_items
+    bucket_items.sort(key=lambda item: item.input.file_id)
+    return bucket_items[:max_bucket_items]
+
+
+def _fingerprint_index(
+    bucket_items: Sequence[_PreparedFile], max_band_fanout: int
+) -> dict[bytes, list[_PreparedFile]]:
+    fp_to_items: dict[bytes, list[_PreparedFile]] = defaultdict(list)
+    for item in bucket_items:
+        for fp in item.fingerprints:
+            fp_list = fp_to_items[fp]
+            if len(fp_list) < max_band_fanout:
+                fp_list.append(item)
+    return fp_to_items
+
+
+def _candidate_map_for_left(
+    left: _PreparedFile,
+    fp_to_items: dict[bytes, list[_PreparedFile]],
+    max_candidates_per_file: int,
+) -> dict[str, _PreparedFile]:
+    left_id = left.input.file_id
+    candidates: dict[str, _PreparedFile] = {}
+    for fp in left.fingerprints:
+        for other in fp_to_items.get(fp, ()):
+            right_id = other.input.file_id
+            if right_id <= left_id:
+                continue
+            if right_id not in candidates:
+                if len(candidates) >= max_candidates_per_file:
+                    break
+                candidates[right_id] = other
+        if len(candidates) >= max_candidates_per_file:
+            break
+    return candidates
+
+
+def _maybe_near_pair(
+    left: _PreparedFile,
+    right: _PreparedFile,
+    *,
+    exact_group_by_file_id: Mapping[str, str],
+    threshold: float,
+) -> NearDuplicatePair | None:
+    if not length_ratio_ok(left.norm_len, right.norm_len):
+        return None
+    if _should_skip_pair(left, right, exact_group_by_file_id=exact_group_by_file_id):
+        return None
+    left_size = left.fingerprint_count
+    right_size = right.fingerprint_count
+    smaller = min(left_size, right_size)
+    larger = max(left_size, right_size)
+    if smaller / larger < threshold:
+        return None
+    shared = _shared_fingerprint_count(left.fingerprints, right.fingerprints)
+    score = _jaccard_from_sizes(shared, left_size, right_size)
+    if score < threshold:
+        return None
+    return NearDuplicatePair(
+        left_file_id=left.input.file_id,
+        right_file_id=right.input.file_id,
+        similarity_score=score,
+        shared_fingerprint_count=shared,
+        left_fingerprint_count=left_size,
+        right_fingerprint_count=right_size,
+    )
+
+
 def _collect_pairs_in_items(
     items: Sequence[_PreparedFile],
     *,
@@ -281,72 +353,26 @@ def _collect_pairs_in_items(
     if len(items) < 2:
         return [], checks_so_far
 
-    bucket_items = list(items)
-    if len(bucket_items) > max_bucket_items:
-        bucket_items.sort(key=lambda item: item.input.file_id)
-        bucket_items = bucket_items[:max_bucket_items]
-
-    # Inverted index on fingerprints: O(n * fanout) candidates, not O(|band|²) per band.
-    fp_to_items: dict[bytes, list[_PreparedFile]] = defaultdict(list)
-    for item in bucket_items:
-        for fp in item.fingerprints:
-            fp_list = fp_to_items[fp]
-            if len(fp_list) < max_band_fanout:
-                fp_list.append(item)
-
+    bucket_items = _cap_bucket_items(items, max_bucket_items)
+    fp_to_items = _fingerprint_index(bucket_items, max_band_fanout)
     max_candidates_per_file = max(max_band_fanout * 3, 64)
     seen: set[tuple[str, str]] = set()
     accepted: list[NearDuplicatePair] = []
     for left in sorted(bucket_items, key=lambda item: item.input.file_id):
         left_id = left.input.file_id
-        left_fps = left.fingerprints
-        left_size = left.fingerprint_count
-        candidates: dict[str, _PreparedFile] = {}
-        for fp in left_fps:
-            for other in fp_to_items.get(fp, ()):
-                right_id = other.input.file_id
-                if right_id <= left_id:
-                    continue
-                if right_id not in candidates:
-                    if len(candidates) >= max_candidates_per_file:
-                        break
-                    candidates[right_id] = other
-            if len(candidates) >= max_candidates_per_file:
-                break
-
-        for right in candidates.values():
-            right_id = right.input.file_id
-            pair_key = (left_id, right_id)
+        for right in _candidate_map_for_left(left, fp_to_items, max_candidates_per_file).values():
+            pair_key = (left_id, right.input.file_id)
             if pair_key in seen:
                 continue
             seen.add(pair_key)
-            if not length_ratio_ok(left.norm_len, right.norm_len):
-                continue
             checks_so_far += 1
             if max_jaccard_checks is not None and checks_so_far > max_jaccard_checks:
                 return accepted, checks_so_far
-            if _should_skip_pair(left, right, exact_group_by_file_id=exact_group_by_file_id):
-                continue
-            right_fps = right.fingerprints
-            right_size = right.fingerprint_count
-            smaller = min(left_size, right_size)
-            larger = max(left_size, right_size)
-            if smaller / larger < threshold:
-                continue
-            shared = _shared_fingerprint_count(left_fps, right_fps)
-            score = _jaccard_from_sizes(shared, left_size, right_size)
-            if score < threshold:
-                continue
-            accepted.append(
-                NearDuplicatePair(
-                    left_file_id=left_id,
-                    right_file_id=right_id,
-                    similarity_score=score,
-                    shared_fingerprint_count=shared,
-                    left_fingerprint_count=left_size,
-                    right_fingerprint_count=right_size,
-                )
+            pair = _maybe_near_pair(
+                left, right, exact_group_by_file_id=exact_group_by_file_id, threshold=threshold
             )
+            if pair is not None:
+                accepted.append(pair)
     return accepted, checks_so_far
 
 
@@ -376,30 +402,40 @@ def find_near_duplicate_groups(
     )
 
 
-def find_near_duplicate_groups_from_prepared(
+def _group_prepared_by_family_bucket(
     prepared: Sequence[_PreparedFile],
-    *,
-    skipped: int,
-    exact_group_by_file_id: Mapping[str, str],
-    near_batch_id: str,
-    threshold: float,
-    large_library: bool,
-) -> NearDuplicateResult:
-    by_family_bucket: dict[str, dict[int, list[_PreparedFile]]] = defaultdict(
-        lambda: defaultdict(list)
-    )
+) -> dict[str, dict[int, list[_PreparedFile]]]:
+    by_family_bucket: dict[str, dict[int, list[_PreparedFile]]] = defaultdict(lambda: defaultdict(list))
     for prepared_file in prepared:
         by_family_bucket[prepared_file.family][prepared_file.length_bucket].append(prepared_file)
+    return by_family_bucket
 
-    max_bucket_items, max_band_fanout, max_jaccard_checks, bucket_adjacency = _near_dup_limits(
-        len(prepared),
-        large_library=large_library,
-    )
 
+def _bucket_items_for_pairing(
+    buckets: dict[int, list[_PreparedFile]],
+    left_bucket: int,
+    right_bucket: int,
+) -> list[_PreparedFile]:
+    if left_bucket == right_bucket:
+        return buckets[left_bucket]
+    left_items = buckets[left_bucket]
+    right_items = buckets[right_bucket]
+    return list({item.input.file_id: item for item in (*left_items, *right_items)}.values())
+
+
+def _collect_near_pairs(
+    by_family_bucket: dict[str, dict[int, list[_PreparedFile]]],
+    *,
+    exact_group_by_file_id: Mapping[str, str],
+    threshold: float,
+    max_bucket_items: int,
+    max_band_fanout: int,
+    max_jaccard_checks: int | None,
+    bucket_adjacency: int,
+) -> tuple[list[NearDuplicatePair], int]:
     candidate_pair_count = 0
     accepted_pairs: list[NearDuplicatePair] = []
     checks_so_far = 0
-
     for family in sorted(by_family_bucket.keys()):
         buckets = by_family_bucket[family]
         bucket_indices = sorted(buckets.keys())
@@ -407,14 +443,7 @@ def find_near_duplicate_groups_from_prepared(
             for right_bucket in bucket_indices:
                 if abs(left_bucket - right_bucket) > bucket_adjacency:
                     continue
-                if left_bucket == right_bucket:
-                    bucket_items = buckets[left_bucket]
-                else:
-                    left_items = buckets[left_bucket]
-                    right_items = buckets[right_bucket]
-                    bucket_items = list(
-                        {item.input.file_id: item for item in (*left_items, *right_items)}.values()
-                    )
+                bucket_items = _bucket_items_for_pairing(buckets, left_bucket, right_bucket)
                 pairs, checks_so_far = _collect_pairs_in_items(
                     bucket_items,
                     exact_group_by_file_id=exact_group_by_file_id,
@@ -427,20 +456,17 @@ def find_near_duplicate_groups_from_prepared(
                 candidate_pair_count += len(pairs)
                 accepted_pairs.extend(pairs)
                 if max_jaccard_checks is not None and checks_so_far >= max_jaccard_checks:
-                    break
-            if max_jaccard_checks is not None and checks_so_far >= max_jaccard_checks:
-                break
-        if max_jaccard_checks is not None and checks_so_far >= max_jaccard_checks:
-            break
+                    return accepted_pairs, candidate_pair_count
+    return accepted_pairs, candidate_pair_count
 
-    bucket_map = {
-        (family, bucket): items
-        for family, bucket_dict in by_family_bucket.items()
-        for bucket, items in bucket_dict.items()
-    }
 
+def _build_near_duplicate_groups(
+    accepted_pairs: list[NearDuplicatePair],
+    prepared: Sequence[_PreparedFile],
+    *,
+    near_batch_id: str,
+) -> list[NearDuplicateGroup]:
     accepted_pairs.sort(key=lambda pair: (pair.left_file_id, pair.right_file_id))
-
     union = _UnionFind([prepared_file.input.file_id for prepared_file in prepared])
     for pair in accepted_pairs:
         union.union(pair.left_file_id, pair.right_file_id)
@@ -460,17 +486,48 @@ def find_near_duplicate_groups_from_prepared(
     for cluster_index, member_ids in enumerate(component_lists):
         cluster_pairs = pairs_by_root.get(union.find(member_ids[0]), [])
         max_similarity = max((pair.similarity_score for pair in cluster_pairs), default=0.0)
-
-        group_id = f"near:{near_batch_id}:{cluster_index}"
         groups.append(
             NearDuplicateGroup(
-                group_id=group_id,
+                group_id=f"near:{near_batch_id}:{cluster_index}",
                 member_file_ids=tuple(member_ids),
                 pairs=tuple(cluster_pairs),
                 max_similarity=max_similarity,
             )
         )
+    return groups
 
+
+def find_near_duplicate_groups_from_prepared(
+    prepared: Sequence[_PreparedFile],
+    *,
+    skipped: int,
+    exact_group_by_file_id: Mapping[str, str],
+    near_batch_id: str,
+    threshold: float,
+    large_library: bool,
+) -> NearDuplicateResult:
+    by_family_bucket = _group_prepared_by_family_bucket(prepared)
+    max_bucket_items, max_band_fanout, max_jaccard_checks, bucket_adjacency = _near_dup_limits(
+        len(prepared),
+        large_library=large_library,
+    )
+    accepted_pairs, candidate_pair_count = _collect_near_pairs(
+        by_family_bucket,
+        exact_group_by_file_id=exact_group_by_file_id,
+        threshold=threshold,
+        max_bucket_items=max_bucket_items,
+        max_band_fanout=max_band_fanout,
+        max_jaccard_checks=max_jaccard_checks,
+        bucket_adjacency=bucket_adjacency,
+    )
+    bucket_map = {
+        (family, bucket): items
+        for family, bucket_dict in by_family_bucket.items()
+        for bucket, items in bucket_dict.items()
+    }
+    groups = _build_near_duplicate_groups(
+        accepted_pairs, prepared, near_batch_id=near_batch_id
+    )
     stats = NearDuplicateStats(
         eligible_file_count=len(prepared),
         skipped_file_count=skipped,

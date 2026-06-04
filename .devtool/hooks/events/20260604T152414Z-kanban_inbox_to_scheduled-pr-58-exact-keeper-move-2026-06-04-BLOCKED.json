@@ -1,0 +1,19 @@
+{
+  "at": "2026-06-04T15:24:14Z",
+  "blockers": [
+    "spec review mentions product paths; human approval recommended"
+  ],
+  "changed_paths": [
+    ".devtool/features/pr-58-exact-keeper-move-2026-06-04-inbox.md",
+    ".devtool/features/pr-58-exact-keeper-move-2026-06-04-spec-draft.md",
+    ".devtool/hooks/prompts/pr-58-exact-keeper-move-2026-06-04-brainstorming.md",
+    ".devtool/features/pr-58-exact-keeper-move-2026-06-04-spec-draft.md",
+    ".devtool/hooks/prompts/pr-58-exact-keeper-move-2026-06-04-grill-spec.md"
+  ],
+  "end_column": "spec-review",
+  "next_action": "resolve spec review gaps",
+  "script": "kanban_inbox_to_scheduled",
+  "start_column": "inbox",
+  "status": "BLOCKED",
+  "work_id": "pr-58-exact-keeper-move-2026-06-04"
+}

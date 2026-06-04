@@ -15,8 +15,7 @@ export function VirtualizedReviewGrid({
   someVisibleSelected,
   onToggleSelectAllVisible,
   isRowCheckEnabled,
-  onNearEnd,
-  loadingMore,
+  filteredCount,
   sorting,
   onSortingChange,
   columnSizing,
@@ -33,8 +32,7 @@ export function VirtualizedReviewGrid({
   someVisibleSelected?: boolean;
   onToggleSelectAllVisible?: () => void;
   isRowCheckEnabled?: (row: ReviewRow) => boolean;
-  onNearEnd?: () => void;
-  loadingMore?: boolean;
+  filteredCount?: number;
   sorting: SortingState;
   onSortingChange: OnChangeFn<SortingState>;
   columnSizing?: Record<string, number>;
@@ -82,13 +80,10 @@ export function VirtualizedReviewGrid({
       onColumnSizingChange={onColumnSizingChange}
       mergeColumnVisibility={mergeColumnVisibility}
       enableColumnResize={enableColumnResize}
-      onNearEnd={onNearEnd}
-      loadingMore={loadingMore}
       footer={
         <div className="flex items-center justify-between border-t border-outline bg-surface px-4 py-2 text-xs text-muted">
-          <span>
-            {rows.length.toLocaleString()} loaded rows
-            {loadingMore ? " · loading…" : ""}
+          <span data-testid="resolve-grid-row-count">
+            {(filteredCount ?? rows.length).toLocaleString()} rows
           </span>
         </div>
       }

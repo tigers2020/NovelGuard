@@ -3,7 +3,7 @@ import type { FileRowsQuery } from "../types/fileRows";
 import { validateFileRowsPage, clampFileRowsLimit } from "../contracts/fileRowsPageContract";
 import { queryMockFileRows } from "./mockFileRows";
 import type { AppSnapshot, FinalizeLastStatus, WorkMode } from "../types/snapshot";
-import type { ReviewRow, ReviewRowsQuery } from "../types/review";
+import type { DuplicateGroupDetail, ReviewRow, ReviewRowsQuery } from "../types/review";
 import { collectCanonicalApprovedMoveTargetRows } from "../features/work/resolve/canonicalMoveTargets";
 import { fileIdFromReviewRowId } from "../features/work/resolve/reviewRowSelectionPriority";
 import type { SelectionScope } from "../types/selection";
@@ -41,7 +41,6 @@ import {
   fileRowStatusCounts,
   seedMockAutoApprovedExactGroups,
 } from "./mockReviewState";
-import type { DuplicateGroupDetail, ReviewRow } from "../types/review";
 import { buildMockDuplicateGroupDetail } from "./mockDuplicateGroupDetail";
 import { buildMockQualityIssueDetail } from "./mockQualityIssueDetail";
 import type { UpdateReviewDecisionsRequest } from "../types/reviewDecisions";

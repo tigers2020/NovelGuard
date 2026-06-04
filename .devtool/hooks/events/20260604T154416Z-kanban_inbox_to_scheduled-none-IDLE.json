@@ -1,0 +1,11 @@
+{
+  "at": "2026-06-04T15:44:16Z",
+  "blockers": [],
+  "changed_paths": [],
+  "end_column": "inbox",
+  "next_action": "no inbox cards found",
+  "script": "kanban_inbox_to_scheduled",
+  "start_column": "inbox",
+  "status": "IDLE",
+  "work_id": "none"
+}

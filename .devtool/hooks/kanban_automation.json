@@ -1,0 +1,25 @@
+{
+  "poll_seconds": 2,
+  "inbox_empty_poll_seconds_min": 10,
+  "inbox_empty_poll_seconds_max": 15,
+  "board_root": ".devtool/features",
+  "state_file": ".devtool/hooks/state.json",
+  "events_dir": ".devtool/hooks/events",
+  "logs_dir": ".devtool/hooks/logs",
+  "locks_dir": ".devtool/hooks/locks",
+  "prompts_dir": ".devtool/hooks/prompts",
+  "oldest_scheduled_first": true,
+  "auto_rework": false,
+  "review_mode": "normal",
+  "cursor_planning": true,
+  "cursor_grill": false,
+  "grill_on_blocker_only": true,
+  "cursor_todo": false,
+  "cursor_cli": {
+    "enabled": true,
+    "commands": ["agent", "cursor-agent"],
+    "args": ["-p", "--trust", "--workspace", "{workspace}"],
+    "prompt_prefix": "/caveman",
+    "timeout_seconds": 7200
+  }
+}

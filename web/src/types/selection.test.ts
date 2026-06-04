@@ -1,3 +1,4 @@
+import { finalizeVerificationTimeoutMs } from "../constants/finalize";
 import {
   chunkExplicitRowIds,
   reviewDecisionsTimeoutMs,
@@ -93,5 +94,11 @@ describe("reviewBulk helpers", () => {
   it("scales review decision timeout with row count", () => {
     expect(reviewDecisionsTimeoutMs(100)).toBeGreaterThan(8_000);
     expect(reviewDecisionsTimeoutMs(100)).toBeLessThanOrEqual(120_000);
+  });
+
+  it("scales finalize verification timeout beyond default bridge limit", () => {
+    expect(finalizeVerificationTimeoutMs(0)).toBeGreaterThan(8_000);
+    expect(finalizeVerificationTimeoutMs(5854)).toBeGreaterThan(500_000);
+    expect(finalizeVerificationTimeoutMs(20_000)).toBeLessThanOrEqual(600_000);
   });
 });

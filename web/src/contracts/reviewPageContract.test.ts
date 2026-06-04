@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { validReviewRowsPage } from "./fixtures";
-import { PageContractError, clampQueryLimit, validateReviewRowsPage } from "./reviewPageContract";
+import { PageContractError, REVIEW_MAX_QUERY_LIMIT, clampQueryLimit, validateReviewRowsPage } from "./reviewPageContract";
 
 describe("validateReviewRowsPage", () => {
   it("accepts valid page", () => {
     expect(() => validateReviewRowsPage(validReviewRowsPage)).not.toThrow();
   });
 
-  it("rejects page with more than 200 rows", () => {
-    const rows = Array.from({ length: 201 }, (_, i) => ({
+  it("rejects page with more than review max rows", () => {
+    const rows = Array.from({ length: REVIEW_MAX_QUERY_LIMIT + 1 }, (_, i) => ({
       ...validReviewRowsPage.rows[0],
       id: `r${i}`,
     }));
@@ -22,7 +22,7 @@ describe("clampQueryLimit", () => {
     expect(clampQueryLimit({ viewMode: "action" })).toBe(100);
   });
 
-  it("clamps to 200 max", () => {
-    expect(clampQueryLimit({ viewMode: "action", limit: 999 })).toBe(200);
+  it("clamps to review max", () => {
+    expect(clampQueryLimit({ viewMode: "action", limit: 99999 })).toBe(REVIEW_MAX_QUERY_LIMIT);
   });
 });

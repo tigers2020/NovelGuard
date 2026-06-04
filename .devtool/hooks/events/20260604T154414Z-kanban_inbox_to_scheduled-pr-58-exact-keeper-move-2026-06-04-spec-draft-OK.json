@@ -1,0 +1,23 @@
+{
+  "at": "2026-06-04T15:44:14Z",
+  "blockers": [],
+  "changed_paths": [
+    ".devtool/features/pr-58-exact-keeper-move-2026-06-04-spec-draft.md",
+    ".devtool/features/pr-58-exact-keeper-move-2026-06-04-spec-draft.md",
+    ".devtool/hooks/prompts/pr-58-exact-keeper-move-2026-06-04-spec-draft-brainstorming.md",
+    ".devtool/features/pr-58-exact-keeper-move-2026-06-04-spec-draft.md",
+    ".devtool/features/pr-58-exact-keeper-move-2026-06-04-spec-draft-plan-draft.md",
+    ".devtool/hooks/prompts/pr-58-exact-keeper-move-2026-06-04-spec-draft-writing-plans.md",
+    ".devtool/features/pr-58-exact-keeper-move-2026-06-04-spec-draft-plan-draft.md",
+    ".devtool/hooks/prompts/pr-58-exact-keeper-move-2026-06-04-spec-draft-grill-plan.md",
+    ".devtool/features/pr-58-exact-keeper-move-2026-06-04-spec-draft-todo.md",
+    ".devtool/features/pr-58-exact-keeper-move-2026-06-04-spec-draft-scheduled.md",
+    ".devtool/features/done/pr-58-exact-keeper-move-2026-06-04-spec-draft.md"
+  ],
+  "end_column": "scheduled",
+  "next_action": "run scheduled-to-in-progress automation after human approval",
+  "script": "kanban_inbox_to_scheduled",
+  "start_column": "inbox",
+  "status": "OK",
+  "work_id": "pr-58-exact-keeper-move-2026-06-04-spec-draft"
+}

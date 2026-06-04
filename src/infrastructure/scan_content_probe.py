@@ -14,6 +14,7 @@ from application.scan_pipeline_constants import (
     SCAN_STEM_HASH_MAX_GROUP_SIZE,
     SCAN_STEM_HASH_MIN_GROUP_SIZE,
 )
+from domain.duplicate_archive import LIBRARY_OUTPUT_DIR_NAMES
 from domain.filename_relation import normalize_filename_for_relation, title_stem_key
 from domain.models import FileRecord, make_file_id
 from infrastructure.file_content_probe import FileContentProbe, probe_file
@@ -130,6 +131,64 @@ def _probe_batch(
     return [probe for chunk in nested for probe in chunk]
 
 
+def _probe_hash_plan(entries: list[_ScanPathEntry]) -> tuple[bool, set[int], set[str]]:
+    size_counts = Counter(entry.size_bytes for entry in entries)
+    hash_sizes = {size for size, count in size_counts.items() if count >= 2}
+    stem_counts: Counter[str] = Counter()
+    for entry in entries:
+        stem_key = _entry_stem_hash_key(entry.name, entry.relative_path)
+        if stem_key is not None:
+            stem_counts[stem_key] += 1
+    hash_stem_keys = {
+        key
+        for key, count in stem_counts.items()
+        if SCAN_STEM_HASH_MIN_GROUP_SIZE <= count <= SCAN_STEM_HASH_MAX_GROUP_SIZE
+    }
+    hash_all = len(entries) <= SCAN_FULL_HASH_MAX_FILE_COUNT
+    return hash_all, hash_sizes, hash_stem_keys
+
+
+def _probe_executor_settings(
+    total: int, max_workers: int
+) -> tuple[type[ProcessPoolExecutor] | type[ThreadPoolExecutor], int, bool]:
+    use_process_pool = total >= _PROBE_PROCESS_MIN_FILES
+    if use_process_pool:
+        workers = max(1, min(_PROBE_PROCESS_MAX_WORKERS, total))
+        return ProcessPoolExecutor, workers, True
+    workers = max(1, min(max_workers, total))
+    return ThreadPoolExecutor, workers, False
+
+
+def _emit_probed_records(
+    batch: list[_ScanPathEntry],
+    probes: list[FileContentProbe],
+    *,
+    out: RecordSink,
+    on_progress: ProgressCallback,
+    completed: int,
+    total: int,
+) -> int:
+    for entry, probe in zip(batch, probes, strict=True):
+        out(
+            FileRecord(
+                id=make_file_id(entry.relative_path, entry.size_bytes, entry.modified_at_ns),
+                relative_path=entry.relative_path,
+                name=entry.name,
+                size_bytes=entry.size_bytes,
+                modified_at_ns=entry.modified_at_ns,
+                extension=entry.extension,
+                content_sha256=probe.content_sha256,
+                encoding_status=probe.encoding_status,
+                near_text_preview=None,
+            )
+        )
+        completed += 1
+        if completed == total or completed % _PROGRESS_INTERVAL == 0:
+            pct = int(completed * 100 / total)
+            on_progress(pct, f"파일 확인 중… ({completed}/{total})")
+    return completed
+
+
 def enrich_scan_entries_with_content_probe(
     entries: list[_ScanPathEntry],
     *,
@@ -142,34 +201,10 @@ def enrich_scan_entries_with_content_probe(
         on_progress(100, "파일 확인 중… (0/0)")
         return
 
-    size_counts = Counter(entry.size_bytes for entry in entries)
-    hash_sizes = {size for size, count in size_counts.items() if count >= 2}
-
-    stem_counts: Counter[str] = Counter()
-    for entry in entries:
-        stem_key = _entry_stem_hash_key(entry.name, entry.relative_path)
-        if stem_key is not None:
-            stem_counts[stem_key] += 1
-    hash_stem_keys = {
-        key
-        for key, count in stem_counts.items()
-        if SCAN_STEM_HASH_MIN_GROUP_SIZE <= count <= SCAN_STEM_HASH_MAX_GROUP_SIZE
-    }
-    hash_all = len(entries) <= SCAN_FULL_HASH_MAX_FILE_COUNT
-
+    hash_all, hash_sizes, hash_stem_keys = _probe_hash_plan(entries)
     total = len(entries)
     completed = 0
-    use_process_pool = total >= _PROBE_PROCESS_MIN_FILES
-    if use_process_pool:
-        workers = max(1, min(_PROBE_PROCESS_MAX_WORKERS, total))
-    else:
-        workers = max(1, min(max_workers, total))
-
-    executor_cls: type[ProcessPoolExecutor] | type[ThreadPoolExecutor]
-    if use_process_pool:
-        executor_cls = ProcessPoolExecutor
-    else:
-        executor_cls = ThreadPoolExecutor
+    executor_cls, workers, use_process_pool = _probe_executor_settings(total, max_workers)
 
     with executor_cls(max_workers=workers) as pool:
         for batch_start in range(0, total, _PROBE_BATCH_SIZE):
@@ -185,26 +220,36 @@ def enrich_scan_entries_with_content_probe(
                 worker_count=workers,
                 use_process_pool=use_process_pool,
             )
-            for entry, probe in zip(batch, probes, strict=True):
-                record = FileRecord(
-                    id=make_file_id(entry.relative_path, entry.size_bytes, entry.modified_at_ns),
-                    relative_path=entry.relative_path,
-                    name=entry.name,
-                    size_bytes=entry.size_bytes,
-                    modified_at_ns=entry.modified_at_ns,
-                    extension=entry.extension,
-                    content_sha256=probe.content_sha256,
-                    encoding_status=probe.encoding_status,
-                    near_text_preview=None,
-                )
-                out(record)
-                completed += 1
-                if completed == total or completed % _PROGRESS_INTERVAL == 0:
-                    pct = int(completed * 100 / total)
-                    on_progress(pct, f"파일 확인 중… ({completed}/{total})")
+            completed = _emit_probed_records(
+                batch, probes, out=out, on_progress=on_progress, completed=completed, total=total
+            )
 
 
-from domain.duplicate_archive import LIBRARY_OUTPUT_DIR_NAMES
+def _filter_walk_dirnames(dirnames: list[str], *, include_hidden: bool) -> None:
+    if not include_hidden:
+        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+    dirnames[:] = [d for d in dirnames if d not in LIBRARY_OUTPUT_DIR_NAMES]
+
+
+def _scan_path_entry_from_file(
+    root: Path, dirpath: str, name: str, *, include_hidden: bool, allowed_extensions: set[str]
+) -> _ScanPathEntry | None:
+    if not include_hidden and name.startswith("."):
+        return None
+    path = Path(dirpath) / name
+    if path.suffix.lower() not in allowed_extensions:
+        return None
+    st = path.stat()
+    rel = path.relative_to(root).as_posix()
+    modified_at_ns = getattr(st, "st_mtime_ns", int(st.st_mtime * 1_000_000_000))
+    return _ScanPathEntry(
+        path=path,
+        relative_path=rel,
+        name=path.name,
+        size_bytes=st.st_size,
+        modified_at_ns=modified_at_ns,
+        extension=path.suffix.lower(),
+    )
 
 
 def collect_scan_path_entries(
@@ -220,28 +265,14 @@ def collect_scan_path_entries(
     for dirpath, dirnames, filenames in os.walk(root):
         if cancel_check():
             return entries
-        if not include_hidden:
-            dirnames[:] = [d for d in dirnames if not d.startswith(".")]
-        dirnames[:] = [d for d in dirnames if d not in LIBRARY_OUTPUT_DIR_NAMES]
+        _filter_walk_dirnames(dirnames, include_hidden=include_hidden)
         for name in filenames:
-            if not include_hidden and name.startswith("."):
-                continue
-            path = Path(dirpath) / name
-            if path.suffix.lower() not in allowed_extensions:
-                continue
-            st = path.stat()
-            rel = path.relative_to(root).as_posix()
-            modified_at_ns = getattr(st, "st_mtime_ns", int(st.st_mtime * 1_000_000_000))
-            entries.append(
-                _ScanPathEntry(
-                    path=path,
-                    relative_path=rel,
-                    name=path.name,
-                    size_bytes=st.st_size,
-                    modified_at_ns=modified_at_ns,
-                    extension=path.suffix.lower(),
-                )
+            entry = _scan_path_entry_from_file(
+                root, dirpath, name, include_hidden=include_hidden, allowed_extensions=allowed_extensions
             )
+            if entry is None:
+                continue
+            entries.append(entry)
             discovered += 1
             if on_progress is not None and (discovered % 400 == 0 or discovered == 1):
                 on_progress(0, f"파일 목록 수집 중 ({discovered})")

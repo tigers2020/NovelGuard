@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { REVIEW_MAX_QUERY_LIMIT } from "../../contracts/reviewPageContract";
 import type { SortingState } from "@tanstack/react-table";
 import { useBridge, useRefreshSnapshot, useSnapshot } from "../../app/providers/snapshotHooks";
 import type {
@@ -58,9 +59,7 @@ export function ResolveAndOrganizeWorkspace({
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [filteredCount, setFilteredCount] = useState(0);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [selectedRow, setSelectedRow] = useState<ReviewRow | null>(null);
   const [explicitIds, setExplicitIds] = useState<string[]>([]);
   const [queryError, setQueryError] = useState<string | null>(null);
@@ -77,22 +76,7 @@ export function ResolveAndOrganizeWorkspace({
   }>({ open: false, command: "approve" });
   const [bulkMutating, setBulkMutating] = useState(false);
   const [batchMutating, setBatchMutating] = useState(false);
-  const [isWideLayout, setIsWideLayout] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches,
-  );
   const detailSeqRef = useRef(0);
-
-  useEffect(() => {
-    const media = window.matchMedia("(min-width: 1024px)");
-    const onChange = () => {
-      setIsWideLayout(media.matches);
-      if (media.matches) {
-        setDetailSheetOpen(false);
-      }
-    };
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
-  }, []);
 
   const explicitRowIdSet = useMemo(() => new Set(explicitIds), [explicitIds]);
   const primaryRowIdByFileId = useMemo(() => buildPrimaryRowIdByFileId(rows), [rows]);
@@ -106,7 +90,7 @@ export function ResolveAndOrganizeWorkspace({
         types: ["exact", "near", "relation"],
       },
       cursor: null,
-      limit: 100,
+      limit: REVIEW_MAX_QUERY_LIMIT,
       sort: primary
         ? { field: primary.id, direction: primary.desc ? "desc" : "asc" }
         : undefined,
@@ -142,42 +126,37 @@ export function ResolveAndOrganizeWorkspace({
     [bridge],
   );
 
-  const loadPage = useCallback(
-    async (cursor: string | null, append: boolean, preserveRowId?: string | null) => {
-      if (!append) {
-        setExplicitIds([]);
-      }
-      if (append) setLoadingMore(true);
-      else setLoading(true);
+  const loadRows = useCallback(
+    async (preserveRowId?: string | null) => {
+      setExplicitIds([]);
+      setLoading(true);
       try {
         setQueryError(null);
-        const page = await bridge.queryReviewRows({
-          ...currentQuery,
-          cursor,
-        });
+        const page = await bridge.queryReviewRows(currentQuery);
         setFilteredCount(page.pageInfo.totalFiltered);
-        setNextCursor(page.pageInfo.nextCursor);
-        setRows((prev) => (append ? [...prev, ...page.rows] : page.rows));
-        if (!append && page.rows.length > 0) {
-          const next =
-            preserveRowId != null
-              ? (page.rows.find((r) => r.id === preserveRowId) ?? page.rows[0])
-              : page.rows[0];
-          setSelectedRow(next);
-          void loadDetail(next);
-        } else if (!append) {
-          setSelectedRow(null);
-          setDetail(null);
+        setRows(page.rows);
+
+        if (preserveRowId != null) {
+          const next = page.rows.find((r) => r.id === preserveRowId) ?? null;
+          if (next) {
+            setSelectedRow(next);
+            void loadDetail(next);
+            return;
+          }
         }
+
+        setSelectedRow(null);
+        setDetail(null);
+        setDetailSheetOpen(false);
       } catch (err) {
         setQueryError(err instanceof Error ? err.message : "Failed to load rows");
-        if (!append) {
-          setRows([]);
-          setFilteredCount(0);
-        }
+        setRows([]);
+        setFilteredCount(0);
+        setSelectedRow(null);
+        setDetail(null);
+        setDetailSheetOpen(false);
       } finally {
         setLoading(false);
-        setLoadingMore(false);
       }
     },
     [bridge, currentQuery, loadDetail],
@@ -185,25 +164,22 @@ export function ResolveAndOrganizeWorkspace({
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
-      void loadPage(null, false);
+      void loadRows();
     });
     return () => cancelAnimationFrame(frame);
-  }, [loadPage]);
+  }, [loadRows]);
 
-  const loadingMoreRef = useRef(false);
-  const handleNearEnd = () => {
-    if (!nextCursor || loadingMore || loadingMoreRef.current) return;
-    loadingMoreRef.current = true;
-    void loadPage(nextCursor, true).finally(() => {
-      loadingMoreRef.current = false;
-    });
-  };
+  const closeDetailSheet = useCallback(() => {
+    setDetailSheetOpen(false);
+  }, []);
 
   const selectMasterRow = (row: ReviewRow) => {
-    setSelectedRow(row);
-    if (!isWideLayout) {
-      setDetailSheetOpen(true);
+    if (selectedRow?.id === row.id && detailSheetOpen) {
+      closeDetailSheet();
+      return;
     }
+    setSelectedRow(row);
+    setDetailSheetOpen(true);
     void loadDetail(row);
   };
 
@@ -283,14 +259,14 @@ export function ResolveAndOrganizeWorkspace({
         setQueryError(null);
         await bridge.updateReviewDecisions({ selection, command, keeperFileId });
         await refreshSnapshot();
-        await loadPage(null, false, preserveRowId);
+        await loadRows(preserveRowId);
       } catch (err) {
         setQueryError(err instanceof Error ? err.message : "Review update failed");
       } finally {
         setDetailMutating(false);
       }
     },
-    [bridge, loadPage, refreshSnapshot, selectedRow?.id],
+    [bridge, loadRows, refreshSnapshot, selectedRow?.id],
   );
 
   const runBatchCommand = useCallback(
@@ -314,14 +290,15 @@ export function ResolveAndOrganizeWorkspace({
           return;
         }
         await refreshSnapshot();
-        await loadPage(null, false);
+        await loadRows();
+        closeDetailSheet();
       } catch (err) {
         setQueryError(err instanceof Error ? err.message : "Review update failed");
       } finally {
         setBatchMutating(false);
       }
     },
-    [bridge, explicitIds, loadPage, refreshSnapshot],
+    [bridge, closeDetailSheet, explicitIds, loadRows, refreshSnapshot],
   );
 
   const runBulkQueryCommand = useCallback(
@@ -343,8 +320,9 @@ export function ResolveAndOrganizeWorkspace({
           });
         }
         await refreshSnapshot();
-        await loadPage(null, false);
+        await loadRows();
         setExplicitIds([]);
+        closeDetailSheet();
       } catch (err) {
         setQueryError(err instanceof Error ? err.message : "Review update failed");
       } finally {
@@ -352,7 +330,7 @@ export function ResolveAndOrganizeWorkspace({
         setBulkConfirm((prev) => ({ ...prev, open: false }));
       }
     },
-    [bridge, currentQuery, filteredCount, loadPage, refreshSnapshot],
+    [bridge, closeDetailSheet, currentQuery, filteredCount, loadRows, refreshSnapshot],
   );
 
   const selectionLabel =
@@ -385,6 +363,14 @@ export function ResolveAndOrganizeWorkspace({
     });
   };
 
+  const refreshDetail = () => {
+    if (detail?.status === "not_found") {
+      void loadRows(selectedRow?.id ?? null);
+    } else {
+      void loadDetail(selectedRow);
+    }
+  };
+
   return (
     <main
       className="flex h-full min-h-0 flex-col overflow-hidden bg-background"
@@ -392,21 +378,6 @@ export function ResolveAndOrganizeWorkspace({
     >
       <div className="relative z-0 flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          {!isWideLayout && selectedRow && (
-            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-outline bg-surface px-3 py-2">
-              <p className="truncate text-xs text-on-surface-variant">
-                선택: <span className="font-semibold text-on-surface">{selectedRow.name}</span>
-              </p>
-              <button
-                type="button"
-                data-testid="resolve-detail-sheet-open"
-                className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-background"
-                onClick={() => setDetailSheetOpen(true)}
-              >
-                상세 보기
-              </button>
-            </div>
-          )}
           <ResolveGridToolbar
             viewMode={viewMode}
             onViewModeChange={setViewMode}
@@ -418,7 +389,7 @@ export function ResolveAndOrganizeWorkspace({
             onSearchChange={setSearch}
             loading={loading}
             queryError={queryError}
-            onRetry={() => void loadPage(null, false)}
+            onRetry={() => void loadRows()}
             onOpenFinalize={onOpenFinalize}
           />
           <VirtualizedReviewGrid
@@ -433,8 +404,7 @@ export function ResolveAndOrganizeWorkspace({
             isRowCheckEnabled={(row) =>
               isRowSelectableForBatch(row, isPrimaryReviewRowForFile(row, primaryRowIdByFileId))
             }
-            onNearEnd={handleNearEnd}
-            loadingMore={loadingMore}
+            filteredCount={filteredCount}
             sorting={sorting}
             onSortingChange={setSorting}
             columnSizing={columnSizing}
@@ -446,55 +416,39 @@ export function ResolveAndOrganizeWorkspace({
             enableColumnResize
           />
         </div>
-        {isWideLayout && (
-          <DetailPanel
-            className="w-[min(360px,36%)] shrink-0 border-l border-outline"
-            selectedRow={selectedRow}
-            detail={detail}
-            loading={detailLoading}
-            error={detailError}
-            mutating={detailMutating}
-            onSetKeeper={handleSetKeeper}
-            onMarkConflict={handleMarkConflict}
-            onReset={handleReset}
-            onRefreshDetail={() => {
-              if (detail?.status === "not_found") {
-                void loadPage(null, false, selectedRow?.id ?? null);
-              } else {
-                void loadDetail(selectedRow);
-              }
-            }}
-          />
-        )}
       </div>
 
-      {!isWideLayout && detailSheetOpen && (
-        <div
-          className="fixed inset-0 z-40 flex flex-col bg-background/95 backdrop-blur-sm"
-          data-testid="resolve-detail-sheet"
-          role="dialog"
-          aria-modal="true"
-        >
-          <DetailPanel
-            className="h-full"
-            selectedRow={selectedRow}
-            detail={detail}
-            loading={detailLoading}
-            error={detailError}
-            mutating={detailMutating}
-            onSetKeeper={handleSetKeeper}
-            onMarkConflict={handleMarkConflict}
-            onReset={handleReset}
-            onRefreshDetail={() => {
-              if (detail?.status === "not_found") {
-                void loadPage(null, false, selectedRow?.id ?? null);
-              } else {
-                void loadDetail(selectedRow);
-              }
-            }}
-            onClose={() => setDetailSheetOpen(false)}
+      {detailSheetOpen && (
+        <>
+          <button
+            type="button"
+            aria-label="Close detail panel"
+            className="fixed inset-0 z-40 bg-background/50 backdrop-blur-[2px]"
+            data-testid="resolve-detail-backdrop"
+            onClick={closeDetailSheet}
           />
-        </div>
+          <div
+            className="fixed inset-y-0 right-0 z-50 flex w-[min(400px,92vw)] flex-col border-l border-outline bg-background shadow-2xl transition-transform duration-300 ease-out motion-reduce:transition-none"
+            data-testid="resolve-detail-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Evidence and move detail"
+          >
+            <DetailPanel
+              className="h-full"
+              selectedRow={selectedRow}
+              detail={detail}
+              loading={detailLoading}
+              error={detailError}
+              mutating={detailMutating}
+              onSetKeeper={handleSetKeeper}
+              onMarkConflict={handleMarkConflict}
+              onReset={handleReset}
+              onRefreshDetail={refreshDetail}
+              onClose={closeDetailSheet}
+            />
+          </div>
+        </>
       )}
 
       <BatchActionBar

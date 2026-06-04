@@ -94,10 +94,7 @@ def prepare_branch(
 
     _git(repo, "fetch", check=False)
 
-    if repos_cfg.get("use_current_branch_as_base"):
-        current = _git(repo, "branch", "--show-current", check=True)
-        base = (current.stdout or "main").strip()
-    else:
+    if not repos_cfg.get("use_current_branch_as_base"):
         base = str(payload.get("base_branch") or repos_cfg.get("default_branch") or "main")
         _git(repo, "checkout", base)
         _git(repo, "pull", "--ff-only", check=False)

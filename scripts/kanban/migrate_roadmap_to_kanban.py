@@ -1,0 +1,229 @@
+#!/usr/bin/env python3
+"""Migrate docs/agent/KANBAN.yml cards to Kanban Markdown (.devtool/features/)."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+import yaml
+
+_KANBAN_DIR = Path(__file__).resolve().parent
+if str(_KANBAN_DIR) not in sys.path:
+    sys.path.insert(0, str(_KANBAN_DIR))
+
+from kanban_common import (  # noqa: E402
+    FEATURES_DIR,
+    ROOT,
+    normalize_doc_link,
+    slugify,
+    utc_date,
+    utc_now,
+)
+
+KANBAN_YML = ROOT / "docs" / "agent" / "KANBAN.yml"
+NOW_ISO = utc_now()
+TODAY = utc_date()
+
+# Legacy KANBAN.full.yml column -> NovelGuard board status (see .vscode/settings.json)
+COLUMN_TO_STATUS = {
+    "proposed": "todo",
+    "ready": "ready",
+    "in_progress": "in-progress",
+    "done": "done",
+    "cancelled": "blocked",
+}
+
+COLUMN_ORDER = ["proposed", "ready", "in_progress", "done", "cancelled"]
+
+
+def card_priority(column: str) -> str:
+    if column == "in_progress":
+        return "high"
+    if column == "proposed":
+        return "medium"
+    if column == "ready":
+        return "medium"
+    if column == "cancelled":
+        return "low"
+    return "low"
+
+
+def build_labels(card: dict) -> list[str]:
+    labels: list[str] = ["roadmap-pr"]
+    track = card.get("track")
+    if track:
+        labels.append(f"track-{track}")
+    wave = card.get("wave")
+    if wave:
+        labels.append(f"wave-{slugify(str(wave))}")
+    mutation = card.get("mutation")
+    if mutation:
+        labels.append("mutation")
+    return labels
+
+
+def format_links(card: dict) -> str:
+    rows: list[str] = []
+    for key in ("track", "wave", "spec", "plan", "branch", "mutation", "note"):
+        val = card.get(key)
+        if val:
+            if key in ("spec", "plan"):
+                val = normalize_doc_link(str(val))
+            rows.append(f"| **{key.replace('_', ' ').title()}** | {val} |")
+    if not rows:
+        return ""
+    header = "| Field | Value |\n|-------|-------|\n"
+    return header + "\n".join(rows) + "\n"
+
+
+def card_filename(card_id: str, title: str) -> str:
+    base = slugify(f"{card_id}-{title}", max_len=60)
+    return f"{base}-{TODAY}.md"
+
+
+def render_card(card: dict, *, status: str, order: int) -> str:
+    card_id = str(card["id"])
+    title = str(card.get("title", card_id))
+    priority = card_priority(card.get("column", ""))
+    labels = build_labels(card)
+    body_links = format_links(card)
+
+    frontmatter = {
+        "id": slugify(f"{card_id}-{TODAY}", max_len=60),
+        "status": status,
+        "priority": priority,
+        "assignee": "",
+        "dueDate": "",
+        "created": NOW_ISO,
+        "modified": NOW_ISO,
+        "labels": labels,
+        "order": order,
+    }
+    yaml_block = yaml.safe_dump(
+        frontmatter, sort_keys=False, allow_unicode=True
+    ).strip()
+
+    lines = [
+        "---",
+        yaml_block,
+        "---",
+        "",
+        f"# {card_id} — {title}",
+        "",
+    ]
+    if body_links:
+        lines.append(body_links)
+    return "\n".join(lines)
+
+
+def load_kanban(path: Path) -> dict:
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"Expected mapping in {path}")
+    return data
+
+
+def group_cards_by_column(cards: list[dict]) -> dict[str, list[dict]]:
+    grouped: dict[str, list[dict]] = {c: [] for c in COLUMN_ORDER}
+    for card in cards:
+        column = str(card.get("column", "proposed"))
+        if column not in grouped:
+            grouped[column] = []
+        grouped[column].append(card)
+    return grouped
+
+
+def write_features(cards: list[dict], *, dry_run: bool) -> list[Path]:
+    written: list[Path] = []
+    grouped = group_cards_by_column(cards)
+
+    for column in COLUMN_ORDER:
+        status = COLUMN_TO_STATUS[column]
+        status_dir = FEATURES_DIR / status
+        if not dry_run:
+            status_dir.mkdir(parents=True, exist_ok=True)
+
+        for order, card in enumerate(grouped.get(column, [])):
+            content = render_card(card, status=status, order=order)
+            path = status_dir / card_filename(str(card["id"]), str(card.get("title", "")))
+            written.append(path)
+            if dry_run:
+                print(f"would write {path.relative_to(ROOT)}")
+            else:
+                path.write_text(content, encoding="utf-8")
+    return written
+
+
+def write_meta_stub(data: dict, *, dry_run: bool) -> None:
+    meta = data.get("meta") or {}
+    stub = {
+        "meta": {
+            **meta,
+            "board": ".devtool/features",
+            "board_format": "kanban-markdown",
+            "migrated": TODAY,
+            "open_board": 'Cmd/Ctrl+Shift+P → "Open Kanban Board"',
+        },
+        "columns": data.get("columns") or list(COLUMN_TO_STATUS.keys()),
+        "note": (
+            "PR cards live as markdown under .devtool/features/<status>/. "
+            "Regenerate from KANBAN.full.yml via scripts/kanban/migrate_roadmap_to_kanban.py "
+            "only when bulk-importing; day-to-day status moves happen in the Kanban board."
+        ),
+    }
+    out = ROOT / "docs" / "agent" / "KANBAN.yml"
+    text = (
+        "# Roadmap PR kanban — Kanban Markdown (source of truth for card status).\n"
+        "# Cards: .devtool/features/<status>/*.md — open with Kanban Markdown extension.\n"
+        "# Scope / narrative: docs/superpowers/roadmap/<track>-*.md\n"
+        "# Non-roadmap tickets: docs/agent/BACKLOG.yml\n"
+        "# Full YAML card export (archive): docs/agent/KANBAN.full.yml\n\n"
+        + yaml.safe_dump(stub, sort_keys=False, allow_unicode=True)
+    )
+    if dry_run:
+        print(f"would write {out.relative_to(ROOT)} (meta stub)")
+    else:
+        out.write_text(text, encoding="utf-8")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--dry-run", action="store_true", help="Print paths only, do not write files"
+    )
+    parser.add_argument(
+        "--keep-full",
+        action="store_true",
+        help="Skip archiving KANBAN.yml to KANBAN.full.yml (already archived)",
+    )
+    args = parser.parse_args()
+
+    if not KANBAN_YML.exists():
+        raise SystemExit(f"Missing {KANBAN_YML}")
+
+    data = load_kanban(KANBAN_YML)
+    cards = data.get("cards") or []
+    if not cards:
+        raise SystemExit(
+            "No cards in KANBAN.yml — if already migrated, edit .devtool/features/ directly."
+        )
+
+    full_archive = ROOT / "docs" / "agent" / "KANBAN.full.yml"
+    if not args.keep_full and not args.dry_run and not full_archive.exists():
+        full_archive.write_text(KANBAN_YML.read_text(encoding="utf-8"), encoding="utf-8")
+        print(f"archived → {full_archive.relative_to(ROOT)}")
+
+    if not args.dry_run and FEATURES_DIR.exists():
+        import shutil
+
+        shutil.rmtree(FEATURES_DIR)
+
+    paths = write_features(cards, dry_run=args.dry_run)
+    write_meta_stub(data, dry_run=args.dry_run)
+    print(f"{'would migrate' if args.dry_run else 'migrated'} {len(paths)} cards → .devtool/features/")
+
+
+if __name__ == "__main__":
+    main()

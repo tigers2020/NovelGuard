@@ -1,0 +1,23 @@
+{
+  "at": "2026-06-04T15:02:19Z",
+  "blockers": [],
+  "changed_paths": [
+    ".devtool/features/pr-52-legacy-novelguard-migration-2026-06-04-inbox.md",
+    ".devtool/features/spec-draft/pr-52-2026-06-04-spec-draft.md",
+    ".devtool/hooks/prompts/pr-52-2026-06-04-brainstorming.md",
+    ".devtool/features/spec-review/pr-52-2026-06-04-spec-draft.md",
+    ".devtool/hooks/prompts/pr-52-2026-06-04-grill-spec.md",
+    ".devtool/features/plan-draft/pr-52-2026-06-04-plan-draft.md",
+    ".devtool/hooks/prompts/pr-52-2026-06-04-writing-plans.md",
+    ".devtool/features/plan-review/pr-52-2026-06-04-plan-draft.md",
+    ".devtool/hooks/prompts/pr-52-2026-06-04-grill-plan.md",
+    ".devtool/features/todo/pr-52-2026-06-04-todo.md",
+    ".devtool/features/scheduled/pr-52-2026-06-04-scheduled.md"
+  ],
+  "end_column": "scheduled",
+  "next_action": "run scheduled-to-in-progress automation after human approval (5 more inbox card(s) after this)",
+  "script": "kanban_inbox_to_scheduled",
+  "start_column": "inbox",
+  "status": "OK",
+  "work_id": "pr-52-2026-06-04"
+}

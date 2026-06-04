@@ -73,7 +73,7 @@ export function DetailPanel({
             )}
           </div>
           <p className="mt-2 truncate text-sm text-on-surface-variant">
-            {selectedRow ? selectedRow.name : "왼쪽 grid에서 그룹 또는 파일을 선택하세요."}
+            {selectedRow ? selectedRow.name : "목록에서 그룹 또는 파일을 선택하세요."}
           </p>
         </div>
         {onClose && (

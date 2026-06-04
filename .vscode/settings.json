@@ -1,17 +1,19 @@
 {
   "kanban-markdown.featuresDirectory": ".devtool/features",
-  "kanban-markdown.defaultStatus": "triage",
+  "kanban-markdown.defaultStatus": "inbox",
   "kanban-markdown.columns": [
-    { "id": "triage", "name": "Triage", "color": "#94a3b8" },
-    { "id": "spec", "name": "Spec", "color": "#a78bfa" },
-    { "id": "plan", "name": "Plan", "color": "#818cf8" },
+    { "id": "inbox", "name": "Inbox", "color": "#94a3b8" },
+    { "id": "spec-draft", "name": "Spec Draft", "color": "#c4b5fd" },
+    { "id": "spec-review", "name": "Spec Review", "color": "#a78bfa" },
+    { "id": "plan-draft", "name": "Plan Draft", "color": "#a5b4fc" },
+    { "id": "plan-review", "name": "Plan Review", "color": "#818cf8" },
     { "id": "todo", "name": "Todo", "color": "#60a5fa" },
     { "id": "scheduled", "name": "Scheduled", "color": "#38bdf8" },
-    { "id": "ready", "name": "Ready", "color": "#3b82f6" },
+    { "id": "ready-gate", "name": "Ready Gate", "color": "#3b82f6" },
     { "id": "in-progress", "name": "In Progress", "color": "#f59e0b" },
-    { "id": "blocked", "name": "Blocked", "color": "#ef4444" },
-    { "id": "review", "name": "Review", "color": "#8b5cf6" },
-    { "id": "done", "name": "Done", "color": "#22c55e" }
+    { "id": "verify", "name": "Verify", "color": "#8b5cf6" },
+    { "id": "done", "name": "Done", "color": "#22c55e" },
+    { "id": "blocked", "name": "Blocked", "color": "#ef4444" }
   ],
   "kanban-markdown.showBuildWithAI": true,
   "kanban-markdown.compactMode": false,

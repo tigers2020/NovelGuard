@@ -56,3 +56,5 @@ automation/
 ```
 
 Policy: [AGENTS.md](../AGENTS.md), [docs/agent-automation.md](../docs/agent-automation.md).
+
+All Cursor CLI prompts are prefixed with `/caveman` (`cursor.prompt_prefix` in `config.yaml`; shared helper: `scripts/cursor_cli_common.py`).

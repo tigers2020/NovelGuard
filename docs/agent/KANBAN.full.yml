@@ -1,7 +1,8 @@
-# Roadmap PR kanban — status truth for program slices.
-# column: proposed | ready | in_progress | done | cancelled
+# Archive/export only — NOT current status truth. Do not use for agent phase decisions.
+# Legacy columns: proposed | ready | in_progress | done | cancelled
+# Current pipeline: triage/spec/plan/todo/scheduled/ready/in-progress/blocked/review/done
+#   — see KANBAN.yml + .devtool/features/<status>/*.md
 # Scope / narrative: docs/superpowers/roadmap/<track>-*.md
-# Non-roadmap tickets: docs/agent/BACKLOG.yml
 
 meta:
   updated: 2026-06-04

@@ -1,0 +1,11 @@
+{
+  "at": "2026-06-04T14:25:45Z",
+  "blockers": [],
+  "changed_paths": [],
+  "end_column": "scheduled",
+  "next_action": "already scheduled; run scheduled-to-in-progress automation after human approval",
+  "script": "kanban_inbox_to_scheduled",
+  "start_column": "inbox",
+  "status": "IDLE",
+  "work_id": "pr-51-2026-06-04"
+}

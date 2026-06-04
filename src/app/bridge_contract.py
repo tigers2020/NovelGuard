@@ -14,6 +14,7 @@ FORBIDDEN_SNAPSHOT_ARRAY_KEYS = (
 )
 
 MAX_QUERY_LIMIT = 200
+REVIEW_MAX_QUERY_LIMIT = 5000
 DEFAULT_QUERY_LIMIT = 100
 FILE_ROW_MAX_QUERY_LIMIT = 500
 FILE_ROW_DEFAULT_QUERY_LIMIT = 100
@@ -107,19 +108,60 @@ class ApplyFailedError(ValueError):
         return json.dumps({"reason": self.reason, "details": self.details}, ensure_ascii=False)
 
 
+_SNAPSHOT_REQUIRED_KEYS = (
+    "route",
+    "theme",
+    "locale",
+    "connection",
+    "library",
+    "pipeline",
+    "work",
+    "fileListSummary",
+)
+_SCAN_REQUIRED_KEYS = (
+    "state",
+    "lastRun",
+    "indexReady",
+    "deepAnalysisComplete",
+    "deepAnalysisStatus",
+    "deepAnalysisError",
+)
+_PIPELINE_BACKGROUND_KEYS = ("phase", "label", "step", "stepTotal", "percent")
+
+
+def _validate_snapshot_work_scan(scan: Any) -> None:
+    if not isinstance(scan, dict):
+        raise SnapshotContractError("AppSnapshot.work.scan must be a dict")
+    for key in _SCAN_REQUIRED_KEYS:
+        if key not in scan:
+            raise SnapshotContractError(f"AppSnapshot.work.scan missing {key}")
+    status = scan.get("deepAnalysisStatus")
+    if status not in ("idle", "running", "complete", "error"):
+        raise SnapshotContractError(f"invalid work.scan.deepAnalysisStatus: {status!r}")
+
+
+def _validate_snapshot_pipeline(pipeline: Any) -> None:
+    if not isinstance(pipeline, dict):
+        raise SnapshotContractError("AppSnapshot.pipeline must be a dict")
+    phase = pipeline.get("phase")
+    if not isinstance(phase, str) or phase not in _PIPELINE_PHASES:
+        raise SnapshotContractError(f"invalid pipeline.phase: {phase!r}")
+    background = pipeline.get("background")
+    if background is None:
+        return
+    if not isinstance(background, dict):
+        raise SnapshotContractError("AppSnapshot.pipeline.background must be a dict or null")
+    if not background.get("active"):
+        return
+    for key in _PIPELINE_BACKGROUND_KEYS:
+        if key not in background:
+            raise SnapshotContractError(f"AppSnapshot.pipeline.background missing {key}")
+
+
 def validate_app_snapshot(snapshot: Any) -> None:
     if not isinstance(snapshot, dict):
         raise SnapshotContractError("AppSnapshot must be a dict")
-    for key in (
-        "route",
-        "theme",
-        "locale",
-        "connection",
-        "library",
-        "pipeline",
-        "work",
-        "fileListSummary",
-    ):
+    for key in _SNAPSHOT_REQUIRED_KEYS:
         if key not in snapshot:
             raise SnapshotContractError(f"AppSnapshot missing required field: {key}")
     for forbidden in FORBIDDEN_SNAPSHOT_ARRAY_KEYS:
@@ -128,36 +170,8 @@ def validate_app_snapshot(snapshot: Any) -> None:
     work = snapshot.get("work")
     if not isinstance(work, dict):
         raise SnapshotContractError("AppSnapshot.work must be a dict")
-    scan = work.get("scan")
-    if not isinstance(scan, dict):
-        raise SnapshotContractError("AppSnapshot.work.scan must be a dict")
-    for key in (
-        "state",
-        "lastRun",
-        "indexReady",
-        "deepAnalysisComplete",
-        "deepAnalysisStatus",
-        "deepAnalysisError",
-    ):
-        if key not in scan:
-            raise SnapshotContractError(f"AppSnapshot.work.scan missing {key}")
-    status = scan.get("deepAnalysisStatus")
-    if status not in ("idle", "running", "complete", "error"):
-        raise SnapshotContractError(f"invalid work.scan.deepAnalysisStatus: {status!r}")
-    pipeline = snapshot.get("pipeline")
-    if not isinstance(pipeline, dict):
-        raise SnapshotContractError("AppSnapshot.pipeline must be a dict")
-    phase = pipeline.get("phase")
-    if not isinstance(phase, str) or phase not in _PIPELINE_PHASES:
-        raise SnapshotContractError(f"invalid pipeline.phase: {phase!r}")
-    background = pipeline.get("background")
-    if background is not None:
-        if not isinstance(background, dict):
-            raise SnapshotContractError("AppSnapshot.pipeline.background must be a dict or null")
-        if background.get("active"):
-            for key in ("phase", "label", "step", "stepTotal", "percent"):
-                if key not in background:
-                    raise SnapshotContractError(f"AppSnapshot.pipeline.background missing {key}")
+    _validate_snapshot_work_scan(work.get("scan"))
+    _validate_snapshot_pipeline(snapshot.get("pipeline"))
     resolve = work.get("resolve")
     if not isinstance(resolve, dict) or not isinstance(resolve.get("libraryRevision"), int):
         raise SnapshotContractError("ResolveSnapshot.libraryRevision must be a number")
@@ -168,11 +182,16 @@ def clamp_query_limit(query: dict[str, Any]) -> int:
     return min(max(1, raw), MAX_QUERY_LIMIT)
 
 
+def clamp_review_query_limit(query: dict[str, Any]) -> int:
+    raw = int(query.get("limit") or DEFAULT_QUERY_LIMIT)
+    return min(max(1, raw), REVIEW_MAX_QUERY_LIMIT)
+
+
 def validate_review_rows_page(page: Any) -> None:
     if not isinstance(page, dict):
         raise PageContractError("ReviewRowsPage must be a dict")
     rows = page.get("rows")
-    if not isinstance(rows, list) or len(rows) > MAX_QUERY_LIMIT:
+    if not isinstance(rows, list) or len(rows) > REVIEW_MAX_QUERY_LIMIT:
         raise PageContractError("ReviewRowsPage.rows invalid or exceeds limit")
     if not isinstance(page.get("pageInfo"), dict) or not isinstance(page.get("summary"), dict):
         raise PageContractError("ReviewRowsPage.pageInfo or summary invalid")
@@ -197,6 +216,17 @@ def validate_quality_rows_page(page: Any) -> None:
         raise PageContractError("QualityRowsPage.rows invalid or exceeds limit")
 
 
+def _validate_move_preview_row(row: Any, index: int) -> None:
+    if not isinstance(row, dict):
+        raise PageContractError(f"Move preview row {index} must be a dict")
+    if not isinstance(row.get("id"), str):
+        raise PageContractError(f"Move preview row {index} missing id")
+    if not isinstance(row.get("name"), str) or not row.get("name"):
+        raise PageContractError(f"Move preview row {index} missing name")
+    if not isinstance(row.get("action"), str):
+        raise PageContractError(f"Move preview row {index} missing action")
+
+
 def validate_move_preview(payload: Any) -> None:
     if not isinstance(payload, dict):
         raise PageContractError("Move preview must be a dict")
@@ -210,23 +240,98 @@ def validate_move_preview(payload: Any) -> None:
     ):
         if key not in payload:
             raise PageContractError(f"Move preview missing {key}")
-    if not isinstance(payload.get("rows"), list):
+    rows = payload.get("rows")
+    if not isinstance(rows, list):
         raise PageContractError("Move preview rows must be an array")
-    for index, row in enumerate(payload["rows"]):
-        if not isinstance(row, dict):
-            raise PageContractError(f"Move preview row {index} must be a dict")
-        if not isinstance(row.get("id"), str):
-            raise PageContractError(f"Move preview row {index} missing id")
-        if not isinstance(row.get("name"), str) or not row.get("name"):
-            raise PageContractError(f"Move preview row {index} missing name")
-        if not isinstance(row.get("action"), str):
-            raise PageContractError(f"Move preview row {index} missing action")
+    for index, row in enumerate(rows):
+        _validate_move_preview_row(row, index)
     if payload.get("hasPendingApply") is not True:
         raise PageContractError("Move preview hasPendingApply must be true")
 
 
 _REVIEW_STATUSES = frozenset({"unreviewed", "approved", "conflict", "excluded"})
 _PROPOSED_ACTIONS = frozenset({"keep", "move_duplicate", "move_organized", "ignore"})
+
+
+def _validate_duplicate_not_found(payload: dict[str, Any], members: list[Any]) -> None:
+    if payload.get("message") is None:
+        raise PageContractError("not_found detail requires message")
+    if members:
+        raise PageContractError("not_found detail members must be empty")
+
+
+def _validate_exact_duplicate_evidence(evidence: dict[str, Any], payload: dict[str, Any]) -> None:
+    if evidence.get("matchKind") != "exact_content_hash":
+        raise PageContractError("evidence.matchKind must be exact_content_hash")
+    move_plan = payload.get("movePlan")
+    if not isinstance(move_plan, dict):
+        raise PageContractError("DuplicateGroupDetail.movePlan must be a dict")
+
+
+def _validate_near_duplicate_evidence(evidence: dict[str, Any]) -> None:
+    if evidence.get("matchKind") != "near_ngram_v1":
+        raise PageContractError("evidence.matchKind must be near_ngram_v1")
+    if not isinstance(evidence.get("maxSimilarity"), (int, float)):
+        raise PageContractError("evidence.maxSimilarity must be a number")
+    if not isinstance(evidence.get("threshold"), (int, float)):
+        raise PageContractError("evidence.threshold must be a number")
+
+
+def _validate_relation_duplicate_evidence(evidence: dict[str, Any]) -> None:
+    if evidence.get("matchKind") != "relation_filename_v1":
+        raise PageContractError("evidence.matchKind must be relation_filename_v1")
+    if evidence.get("relationKind") not in (
+        "same_title_series",
+        "chapter_sequence",
+        "version_variant",
+        "title_prefix_overlap",
+    ):
+        raise PageContractError("evidence.relationKind invalid")
+    if evidence.get("confidenceLabel") not in ("low", "medium", "high"):
+        raise PageContractError("evidence.confidenceLabel invalid")
+    for list_key in ("normalizedNames", "matchedTokens", "differingTokens"):
+        if not isinstance(evidence.get(list_key), list):
+            raise PageContractError(f"evidence.{list_key} must be a list")
+
+
+def _validate_duplicate_evidence(detail_type: str, evidence: dict[str, Any], payload: dict[str, Any]) -> None:
+    if detail_type == "exact":
+        _validate_exact_duplicate_evidence(evidence, payload)
+    elif detail_type == "near":
+        _validate_near_duplicate_evidence(evidence)
+    else:
+        _validate_relation_duplicate_evidence(evidence)
+
+
+def _validate_duplicate_member(member: Any) -> None:
+    if not isinstance(member, dict):
+        raise PageContractError("DuplicateGroupDetail member must be a dict")
+    for key in (
+        "rowId",
+        "fileId",
+        "name",
+        "path",
+        "sizeBytes",
+        "status",
+        "isKeeper",
+        "proposedAction",
+        "integrity",
+    ):
+        if key not in member:
+            raise PageContractError(f"DuplicateGroupDetail member missing {key}")
+    if member.get("status") not in _REVIEW_STATUSES:
+        raise PageContractError("member status invalid")
+    if member.get("proposedAction") not in _PROPOSED_ACTIONS:
+        raise PageContractError("member proposedAction invalid")
+    integrity = member.get("integrity")
+    if not isinstance(integrity, dict):
+        raise PageContractError("member integrity must be a dict")
+    if integrity.get("status") not in ("ok", "issue"):
+        raise PageContractError("member integrity.status invalid")
+    if not isinstance(integrity.get("label"), str):
+        raise PageContractError("member integrity.label must be string")
+    if not isinstance(integrity.get("issueCount"), int):
+        raise PageContractError("member integrity.issueCount must be int")
 
 
 def validate_duplicate_group_detail(payload: Any) -> None:
@@ -241,12 +346,8 @@ def validate_duplicate_group_detail(payload: Any) -> None:
         raise PageContractError("DuplicateGroupDetail.members must be a list")
 
     if status == "not_found":
-        if payload.get("message") is None:
-            raise PageContractError("not_found detail requires message")
-        if members:
-            raise PageContractError("not_found detail members must be empty")
+        _validate_duplicate_not_found(payload, members)
         return
-
     if status != "ok":
         raise PageContractError("DuplicateGroupDetail.status must be ok or not_found")
 
@@ -263,67 +364,11 @@ def validate_duplicate_group_detail(payload: Any) -> None:
     evidence = payload.get("evidence")
     if not isinstance(evidence, dict):
         raise PageContractError("DuplicateGroupDetail.evidence must be a dict")
-    if detail_type == "exact":
-        if evidence.get("matchKind") != "exact_content_hash":
-            raise PageContractError("evidence.matchKind must be exact_content_hash")
-        move_plan = payload.get("movePlan")
-        if not isinstance(move_plan, dict):
-            raise PageContractError("DuplicateGroupDetail.movePlan must be a dict")
-    elif detail_type == "near":
-        if evidence.get("matchKind") != "near_ngram_v1":
-            raise PageContractError("evidence.matchKind must be near_ngram_v1")
-        if not isinstance(evidence.get("maxSimilarity"), (int, float)):
-            raise PageContractError("evidence.maxSimilarity must be a number")
-        if not isinstance(evidence.get("threshold"), (int, float)):
-            raise PageContractError("evidence.threshold must be a number")
-    else:
-        if evidence.get("matchKind") != "relation_filename_v1":
-            raise PageContractError("evidence.matchKind must be relation_filename_v1")
-        if evidence.get("relationKind") not in (
-            "same_title_series",
-            "chapter_sequence",
-            "version_variant",
-            "title_prefix_overlap",
-        ):
-            raise PageContractError("evidence.relationKind invalid")
-        if evidence.get("confidenceLabel") not in ("low", "medium", "high"):
-            raise PageContractError("evidence.confidenceLabel invalid")
-        for list_key in ("normalizedNames", "matchedTokens", "differingTokens"):
-            if not isinstance(evidence.get(list_key), list):
-                raise PageContractError(f"evidence.{list_key} must be a list")
-
+    _validate_duplicate_evidence(detail_type, evidence, payload)
     if not isinstance(evidence.get("memberCount"), int):
         raise PageContractError("evidence.memberCount must be int")
-
     for member in members:
-        if not isinstance(member, dict):
-            raise PageContractError("DuplicateGroupDetail member must be a dict")
-        for key in (
-            "rowId",
-            "fileId",
-            "name",
-            "path",
-            "sizeBytes",
-            "status",
-            "isKeeper",
-            "proposedAction",
-            "integrity",
-        ):
-            if key not in member:
-                raise PageContractError(f"DuplicateGroupDetail member missing {key}")
-        if member.get("status") not in _REVIEW_STATUSES:
-            raise PageContractError("member status invalid")
-        if member.get("proposedAction") not in _PROPOSED_ACTIONS:
-            raise PageContractError("member proposedAction invalid")
-        integrity = member.get("integrity")
-        if not isinstance(integrity, dict):
-            raise PageContractError("member integrity must be a dict")
-        if integrity.get("status") not in ("ok", "issue"):
-            raise PageContractError("member integrity.status invalid")
-        if not isinstance(integrity.get("label"), str):
-            raise PageContractError("member integrity.label must be string")
-        if not isinstance(integrity.get("issueCount"), int):
-            raise PageContractError("member integrity.issueCount must be int")
+        _validate_duplicate_member(member)
 
 
 _QUALITY_KINDS = frozenset({"empty_file", "tiny_file", "invalid_utf8", "read_error"})
@@ -331,6 +376,75 @@ _REPAIR_REASONS = frozenset(
     {"repair_not_implemented", "issue_not_repairable", "read_error", "ready"}
 )
 _ENCODING_CONFIDENCE = frozenset({"high", "low"})
+
+
+_QUALITY_DETAIL_KEYS = (
+    "id",
+    "libraryRevision",
+    "issueType",
+    "name",
+    "path",
+    "encoding",
+    "integrity",
+    "severity",
+    "suggestedAction",
+    "file",
+    "evidence",
+    "repairEligibility",
+)
+_QUALITY_FILE_KEYS = ("fileId", "sizeBytes", "modifiedAtNs", "extension", "contentSha256")
+_QUALITY_EVIDENCE_KEYS = ("message", "severity", "sizeBytes")
+
+
+def _validate_quality_detail_scalars(detail: dict[str, Any]) -> None:
+    for key in _QUALITY_DETAIL_KEYS:
+        if key not in detail:
+            raise PageContractError(f"QualityIssueDetail.detail missing {key}")
+    if detail.get("issueType") not in ("integrity", "encoding", "small_file"):
+        raise PageContractError("detail.issueType invalid")
+    if detail.get("severity") not in ("warning", "error"):
+        raise PageContractError("detail.severity invalid")
+    if not isinstance(detail.get("libraryRevision"), int):
+        raise PageContractError("detail.libraryRevision must be int")
+
+
+def _validate_quality_detail_file(file_block: Any) -> None:
+    if not isinstance(file_block, dict):
+        raise PageContractError("detail.file must be a dict")
+    for key in _QUALITY_FILE_KEYS:
+        if key not in file_block:
+            raise PageContractError(f"detail.file missing {key}")
+
+
+def _validate_quality_detail_evidence(evidence: Any) -> None:
+    if not isinstance(evidence, dict):
+        raise PageContractError("detail.evidence must be a dict")
+    kind = evidence.get("kind")
+    if kind not in _QUALITY_KINDS:
+        raise PageContractError("detail.evidence.kind invalid")
+    for key in _QUALITY_EVIDENCE_KEYS:
+        if key not in evidence:
+            raise PageContractError(f"detail.evidence missing {key}")
+    if kind == "tiny_file" and "thresholdBytes" not in evidence:
+        raise PageContractError("tiny_file evidence requires thresholdBytes")
+
+
+def _validate_quality_detail_repair(repair: Any) -> None:
+    if not isinstance(repair, dict):
+        raise PageContractError("detail.repairEligibility must be a dict")
+    if not isinstance(repair.get("eligible"), bool):
+        raise PageContractError("detail.repairEligibility.eligible must be bool")
+    if repair.get("reason") not in _REPAIR_REASONS:
+        raise PageContractError("detail.repairEligibility.reason invalid")
+    if not isinstance(repair.get("label"), str):
+        raise PageContractError("detail.repairEligibility.label must be string")
+
+
+def _validate_quality_detail_block(detail: dict[str, Any]) -> None:
+    _validate_quality_detail_scalars(detail)
+    _validate_quality_detail_file(detail.get("file"))
+    _validate_quality_detail_evidence(detail.get("evidence"))
+    _validate_quality_detail_repair(detail.get("repairEligibility"))
 
 
 def validate_quality_issue_detail(payload: Any) -> None:
@@ -351,59 +465,21 @@ def validate_quality_issue_detail(payload: Any) -> None:
     detail = payload.get("detail")
     if not isinstance(detail, dict):
         raise PageContractError("ok response requires detail object")
+    _validate_quality_detail_block(detail)
 
-    for key in (
-        "id",
-        "libraryRevision",
-        "issueType",
-        "name",
-        "path",
-        "encoding",
-        "integrity",
-        "severity",
-        "suggestedAction",
-        "file",
-        "evidence",
-        "repairEligibility",
-    ):
-        if key not in detail:
-            raise PageContractError(f"QualityIssueDetail.detail missing {key}")
 
-    if detail.get("issueType") not in ("integrity", "encoding", "small_file"):
-        raise PageContractError("detail.issueType invalid")
-    if detail.get("severity") not in ("warning", "error"):
-        raise PageContractError("detail.severity invalid")
-    if not isinstance(detail.get("libraryRevision"), int):
-        raise PageContractError("detail.libraryRevision must be int")
-
-    file_block = detail.get("file")
-    if not isinstance(file_block, dict):
-        raise PageContractError("detail.file must be a dict")
-    for key in ("fileId", "sizeBytes", "modifiedAtNs", "extension", "contentSha256"):
-        if key not in file_block:
-            raise PageContractError(f"detail.file missing {key}")
-
-    evidence = detail.get("evidence")
-    if not isinstance(evidence, dict):
-        raise PageContractError("detail.evidence must be a dict")
-    kind = evidence.get("kind")
-    if kind not in _QUALITY_KINDS:
-        raise PageContractError("detail.evidence.kind invalid")
-    for key in ("message", "severity", "sizeBytes"):
-        if key not in evidence:
-            raise PageContractError(f"detail.evidence missing {key}")
-    if kind == "tiny_file" and "thresholdBytes" not in evidence:
-        raise PageContractError("tiny_file evidence requires thresholdBytes")
-
-    repair = detail.get("repairEligibility")
-    if not isinstance(repair, dict):
-        raise PageContractError("detail.repairEligibility must be a dict")
-    if not isinstance(repair.get("eligible"), bool):
-        raise PageContractError("detail.repairEligibility.eligible must be bool")
-    if repair.get("reason") not in _REPAIR_REASONS:
-        raise PageContractError("detail.repairEligibility.reason invalid")
-    if not isinstance(repair.get("label"), str):
-        raise PageContractError("detail.repairEligibility.label must be string")
+def _validate_quality_repair_preview_row(row: Any) -> None:
+    if not isinstance(row, dict):
+        raise PageContractError("preview row must be a dict")
+    for key in ("issueId", "action", "relativePath", "sourceEncoding", "encodingConfidence"):
+        if key not in row:
+            raise PageContractError(f"preview row missing {key}")
+    if row.get("action") != "utf8_convert":
+        raise PageContractError("preview row action must be utf8_convert")
+    if row.get("encodingConfidence") not in _ENCODING_CONFIDENCE:
+        raise PageContractError("encodingConfidence invalid")
+    if row.get("encodingConfidence") == "low" and not isinstance(row.get("encodingWarning"), str):
+        raise PageContractError("low confidence row requires encodingWarning")
 
 
 def validate_quality_repair_preview(payload: Any) -> None:
@@ -433,19 +509,7 @@ def validate_quality_repair_preview(payload: Any) -> None:
     if not isinstance(rows, list):
         raise PageContractError("rows must be a list")
     for row in rows:
-        if not isinstance(row, dict):
-            raise PageContractError("preview row must be a dict")
-        for key in ("issueId", "action", "relativePath", "sourceEncoding", "encodingConfidence"):
-            if key not in row:
-                raise PageContractError(f"preview row missing {key}")
-        if row.get("action") != "utf8_convert":
-            raise PageContractError("preview row action must be utf8_convert")
-        if row.get("encodingConfidence") not in _ENCODING_CONFIDENCE:
-            raise PageContractError("encodingConfidence invalid")
-        if row.get("encodingConfidence") == "low" and not isinstance(
-            row.get("encodingWarning"), str
-        ):
-            raise PageContractError("low confidence row requires encodingWarning")
+        _validate_quality_repair_preview_row(row)
 
 
 class FinalizeError(Exception):

@@ -16,6 +16,6 @@ Stack: Python 3.12+ (`src/`), React+TS (`web/`), Tailwind v4.
 | Architecture | [docs/current_architecture.md](../current_architecture.md) (if present) or layer note in AGENTS.md |
 | Design tokens | [DESIGN.md](../../DESIGN.md) |
 | Superpowers program | [docs/superpowers/README.md](../superpowers/README.md) |
-| PR kanban (all work) | [KANBAN.md](./KANBAN.md) · `.devtool/features/` · rule `20-kanban-workflow.mdc` |
+| PR kanban | [KANBAN.md](./KANBAN.md) · [detail](./KANBAN-detail.md) · [ops](./KANBAN-ops.md) · `.devtool/features/` |
 | Active PR slice | [current_query.md](../superpowers/roadmap/current_query.md) |
 | Agent run procedure | [RUNBOOK.md](./RUNBOOK.md) |

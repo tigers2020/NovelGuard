@@ -1,0 +1,24 @@
+{
+  "at": "2026-06-04T15:11:12Z",
+  "blockers": [],
+  "changed_paths": [
+    ".devtool/features/pr-54-headless-packaged-e2e-2026-06-04-inbox.md",
+    ".devtool/features/pr-54-2026-06-04-spec-draft.md",
+    ".devtool/hooks/prompts/pr-54-2026-06-04-brainstorming.md",
+    ".devtool/features/pr-54-2026-06-04-spec-draft.md",
+    ".devtool/hooks/prompts/pr-54-2026-06-04-grill-spec.md",
+    ".devtool/features/pr-54-2026-06-04-plan-draft.md",
+    ".devtool/hooks/prompts/pr-54-2026-06-04-writing-plans.md",
+    ".devtool/features/pr-54-2026-06-04-plan-draft.md",
+    ".devtool/hooks/prompts/pr-54-2026-06-04-grill-plan.md",
+    ".devtool/features/pr-54-2026-06-04-todo.md",
+    ".devtool/features/pr-54-2026-06-04-scheduled.md",
+    ".devtool/features/done/pr-54-headless-packaged-e2e-2026-06-04-inbox.md"
+  ],
+  "end_column": "scheduled",
+  "next_action": "run scheduled-to-in-progress automation after human approval (3 more inbox card(s) after this)",
+  "script": "kanban_inbox_to_scheduled",
+  "start_column": "inbox",
+  "status": "OK",
+  "work_id": "pr-54-2026-06-04"
+}

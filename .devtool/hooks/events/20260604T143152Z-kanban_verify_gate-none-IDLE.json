@@ -1,0 +1,12 @@
+{
+  "at": "2026-06-04T14:31:52Z",
+  "blockers": [],
+  "changed_paths": [],
+  "end_column": "verify",
+  "next_action": "no verify cards found",
+  "script": "kanban_verify_gate",
+  "start_column": "verify",
+  "status": "IDLE",
+  "verification": [],
+  "work_id": "none"
+}
