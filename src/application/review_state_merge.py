@@ -159,8 +159,9 @@ def rebuild_rows_with_review_state(
     *,
     library_root: str | None = None,
 ) -> list[dict[str, Any]]:
-    from application.review_rows_builder import build_review_rows
     from pathlib import Path
+
+    from application.review_rows_builder import build_review_rows
 
     files_by_id = {f.id: f for f in files}
     root = Path(library_root) if library_root else None

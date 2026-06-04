@@ -24,8 +24,8 @@ from domain.apply_path_policy import (
     resolve_destination_path,
     validate_move_operation,
 )
-from domain.models import FileRecord
 from domain.duplicate_content_variant import is_head_tail_variant_group_id
+from domain.models import FileRecord
 from infrastructure.content_hasher import head_tail_apply_hash, library_content_hash
 
 
