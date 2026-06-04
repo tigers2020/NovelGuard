@@ -8,8 +8,8 @@ from app.selection_resolve import resolve_selection_rows
 from application.library_session import LibrarySession
 from application.ports.library_index import LibraryIndexPort
 from application.review_errors import ReviewDecisionError
-from application.review_state_merge import group_id_from_row
-from domain.duplicate_exact import find_exact_duplicate_groups
+from application.review_state_merge import _file_id_from_row_id, group_id_from_row
+from domain.duplicate_groups import find_duplicate_groups
 
 MAX_REVIEW_MUTATIONS = 500
 
@@ -18,6 +18,22 @@ _COMMAND_STATUS = {
     "exclude": "excluded",
     "markConflict": "conflict",
 }
+
+
+def _review_group_scope(
+    row: dict[str, Any],
+    group_id: str | None,
+    members_by_group: dict[str, set[str]],
+) -> str | None:
+    if not group_id:
+        return None
+    if group_id in members_by_group:
+        return "exact"
+    if group_id.startswith("near:") or row.get("type") == "near":
+        return "near"
+    if group_id.startswith("relation:") or row.get("type") == "relation":
+        return "relation"
+    return None
 
 
 class UpdateReviewDecisionsUseCase:
@@ -48,13 +64,20 @@ class UpdateReviewDecisionsUseCase:
             )
 
         files = self._index.files()
-        groups = find_exact_duplicate_groups(files)
+        folder = self._index.folder_path
+        from pathlib import Path
+
+        groups = find_duplicate_groups(
+            files,
+            library_root=Path(folder) if folder else None,
+        )
         members_by_group = {g.group_id: set(g.member_ids) for g in groups}
 
         updated = 0
         for row in rows:
             group_id = group_id_from_row(row)
-            if not group_id or group_id not in members_by_group:
+            scope = _review_group_scope(row, group_id, members_by_group)
+            if scope is None:
                 continue
 
             if command == "reset":
@@ -62,6 +85,8 @@ class UpdateReviewDecisionsUseCase:
                 continue
 
             if command == "setKeeper":
+                if scope != "exact":
+                    continue
                 updated += self._apply_set_keeper(
                     folder,
                     row,
@@ -152,11 +177,9 @@ class UpdateReviewDecisionsUseCase:
 
 def _require_file_id(row: dict[str, Any]) -> str:
     row_id = str(row.get("id", ""))
-    if not row_id.startswith("file:"):
-        raise ReviewDecisionError(
-            "INVALID_REVIEW_COMMAND", "setKeeper requires a file row or keeperFileId"
-        )
-    parts = row_id.split(":", 2)
-    if len(parts) != 3:
-        raise ReviewDecisionError("INVALID_REVIEW_COMMAND", "Invalid file row id")
-    return parts[2]
+    file_id = _file_id_from_row_id(row_id)
+    if file_id:
+        return file_id
+    raise ReviewDecisionError(
+        "INVALID_REVIEW_COMMAND", "setKeeper requires a file row or keeperFileId"
+    )

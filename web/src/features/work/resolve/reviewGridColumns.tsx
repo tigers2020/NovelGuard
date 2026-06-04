@@ -37,7 +37,8 @@ export function buildReviewGridColumns(options?: {
           header: () => (
             <input
               type="checkbox"
-              aria-label="현재 로드된 행 전체 선택"
+              aria-label="전체 선택"
+              title="현재 로드된 행 전체 선택"
               data-testid="resolve-select-all-visible"
               checked={Boolean(options.allVisibleSelected)}
               ref={(el) => {

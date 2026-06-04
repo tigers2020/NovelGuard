@@ -31,7 +31,7 @@ from application.review_rows_builder import build_review_rows
 from application.review_snapshot_counts import file_row_status_counts
 from application.review_state_merge import rebuild_rows_with_review_state
 from application.scan_settings import build_scan_options_labels, parse_extension_filter
-from domain.duplicate_exact import find_exact_duplicate_groups
+from domain.duplicate_groups import find_duplicate_groups
 from domain.duplicate_near import NearDuplicateGroup
 from domain.filename_relation import RelationGroup
 from domain.models import FileRecord
@@ -581,15 +581,11 @@ class LibrarySession:
                 keeper_file_id=keeper_file_id,
             )
             if updated > 0:
-                self._rebuild_review_index(list(self._files_by_id.values()))
                 folder = self._index.folder_path
+                files = list(self._files_by_id.values())
+                self._rebuild_review_index(files)
                 if folder:
-                    try:
-                        self._run_post_scan_detection_phases(
-                            folder, list(self._files_by_id.values())
-                        )
-                    except Exception:
-                        _LOGGER.exception("post-scan detection failed after review update")
+                    self._refresh_ancillary_review_rows(folder, files)
                 self._library_revision += 1
             return {
                 "updatedCount": updated,
@@ -827,20 +823,74 @@ class LibrarySession:
         self, files: list[FileRecord], *, sync_projection: bool = True
     ) -> None:
         self._files_by_id = {f.id: f for f in files}
-        groups = find_exact_duplicate_groups(files)
         folder = self._index.folder_path
+        groups = find_duplicate_groups(files, library_root=Path(folder) if folder else None)
         if folder:
-            valid_group_ids = {g.group_id for g in groups}
+            valid_group_ids = self._all_review_group_ids(groups)
             valid_file_ids = {f.id for f in files}
             self._index.prune_review_state(folder, valid_group_ids, valid_file_ids)
             stored = self._index.load_review_state(folder)
-            self._review_rows_cache = rebuild_rows_with_review_state(files, stored)
+            self._review_rows_cache = rebuild_rows_with_review_state(
+                files, stored, library_root=folder
+            )
         else:
             self._review_rows_cache = build_review_rows(groups, self._files_by_id)
         self._refresh_duplicate_group_count()
         self._refresh_resolve_counts()
         if sync_projection:
             self._sync_file_review_projection()
+
+    def _all_review_group_ids(self, exact_groups: list[Any]) -> set[str]:
+        return (
+            {group.group_id for group in exact_groups}
+            | set(self._near_groups_by_id.keys())
+            | set(self._relation_groups_by_id.keys())
+        )
+
+    def _refresh_ancillary_review_rows(self, folder: str, files: list[FileRecord]) -> None:
+        """Re-merge near/relation rows without re-running detection (keeps stable group ids)."""
+        from application.near_review_rows_builder import build_near_review_rows
+        from application.relation_review_rows_builder import build_relation_review_rows
+        from application.review_state_merge import merge_review_state
+        from domain.duplicate_exact import find_exact_duplicate_groups
+
+        self._strip_near_rows()
+        self._strip_relation_rows()
+        stored = self._index.load_review_state(folder)
+        exact_groups = find_exact_duplicate_groups(files)
+
+        if self._near_groups_by_id:
+            near_skeleton = build_near_review_rows(
+                list(self._near_groups_by_id.values()), self._files_by_id
+            )
+            self._review_rows_cache.extend(
+                merge_review_state(
+                    near_skeleton,
+                    stored,
+                    groups=exact_groups,
+                    files_by_id=self._files_by_id,
+                )
+            )
+
+        if self._relation_groups_by_id:
+            relation_skeleton = build_relation_review_rows(
+                list(self._relation_groups_by_id.values()), self._files_by_id
+            )
+            self._review_rows_cache.extend(
+                merge_review_state(
+                    relation_skeleton,
+                    stored,
+                    groups=exact_groups,
+                    files_by_id=self._files_by_id,
+                )
+            )
+
+        valid_group_ids = self._all_review_group_ids(exact_groups)
+        valid_file_ids = {file_record.id for file_record in files}
+        self._index.prune_review_state(folder, valid_group_ids, valid_file_ids)
+        self._refresh_duplicate_group_count()
+        self._refresh_resolve_counts()
+        self._sync_file_review_projection()
 
     def _sync_file_review_projection(self) -> None:
         folder = self._index.folder_path
@@ -1192,14 +1242,18 @@ class LibrarySession:
                 step_total = 3 if defer_projection else 2
 
                 self._set_exact_index_progress("정확 중복 그룹 계산 중…", 88)
-                review_groups = find_exact_duplicate_groups(files)
+                review_groups = find_duplicate_groups(
+                    files, library_root=Path(folder) if folder else None
+                )
                 if folder:
                     valid_group_ids = {group.group_id for group in review_groups}
                     valid_file_ids = {file_record.id for file_record in files}
                     self._index.prune_review_state(folder, valid_group_ids, valid_file_ids)
                     stored = self._index.load_review_state(folder)
                     self._set_exact_index_progress("검토 행 구성 중…", 91)
-                    review_rows = rebuild_rows_with_review_state(files, stored)
+                    review_rows = rebuild_rows_with_review_state(
+                        files, stored, library_root=folder
+                    )
                 else:
                     files_by_id = {file_record.id: file_record for file_record in files}
                     review_rows = build_review_rows(review_groups, files_by_id)

@@ -982,7 +982,7 @@ def test_index_ready_before_scan_success(
 ) -> None:
     import application.library_session as library_session_module
     import application.scan_pipeline_constants as scan_constants
-    from domain.duplicate_exact import find_exact_duplicate_groups as real_find_groups
+    from domain.duplicate_groups import find_duplicate_groups as real_find_groups
 
     monkeypatch.setattr(scan_constants, "SCAN_PERSIST_BATCH_SIZE", 1)
     (tmp_path / "a.txt").write_text("a\n", encoding="utf-8")
@@ -991,14 +991,14 @@ def test_index_ready_before_scan_success(
     exact_index_reached = threading.Event()
     release_exact_index = threading.Event()
 
-    def gated_exact_groups(files: list[FileRecord]) -> list:
+    def gated_exact_groups(files: list[FileRecord], *, library_root=None) -> list:
         exact_index_reached.set()
         release_exact_index.wait(timeout=5.0)
-        return real_find_groups(files)
+        return real_find_groups(files, library_root=library_root)
 
     monkeypatch.setattr(
         library_session_module,
-        "find_exact_duplicate_groups",
+        "find_duplicate_groups",
         gated_exact_groups,
     )
 
@@ -1072,6 +1072,74 @@ def test_scan_observes_scan_persist_phase(tmp_path: Path) -> None:
     finally:
         release_tail_persist.set()
         index.append_files_batch = original_append  # type: ignore[method-assign]
+
+
+def test_update_review_decisions_relation_approve_persists(tmp_path: Path) -> None:
+    series = tmp_path / "series"
+    series.mkdir()
+    (series / "Chapter 01.txt").write_text("chapter one", encoding="utf-8")
+    (series / "Chapter 02.txt").write_text("chapter two", encoding="utf-8")
+    folder = tmp_path
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(folder))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _wait_deep_analysis_complete(api)
+    page = api.query_review_rows(
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["relation"]}}
+    )
+    relation_row = next(
+        (row for row in page["rows"] if row.get("type") == "relation"),
+        None,
+    )
+    if relation_row is None:
+        pytest.skip("relation detection not enabled for fixture")
+
+    result = api.update_review_decisions(
+        {
+            "selection": {"type": "explicit_rows", "rowIds": [relation_row["id"]]},
+            "command": "approve",
+        }
+    )
+    assert result["updatedCount"] == 1
+
+    page_after = api.query_review_rows(
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["relation"]}}
+    )
+    approved = next(row for row in page_after["rows"] if row["id"] == relation_row["id"])
+    assert approved["status"] == "approved"
+
+
+def test_head_tail_variant_detects_large_novel_pair(tmp_path: Path) -> None:
+    """Large files with identical head/tail samples but different middle/size."""
+    from domain.duplicate_groups import find_duplicate_groups
+
+    payload = "x" * (2 * 1024 * 1024)
+    middle_a = "A" * 500
+    middle_b = "B" * 800
+    tail = "y" * (64 * 1024)
+    (tmp_path / "novel_a.txt").write_text(payload + middle_a + tail, encoding="utf-8")
+    (tmp_path / "novel_b.txt").write_text(payload + middle_b + tail, encoding="utf-8")
+
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+
+    page = api.query_review_rows({"viewMode": "all", "limit": 50, "filters": {"types": ["exact"]}})
+    exact_rows = [row for row in page["rows"] if row.get("type") == "exact"]
+    assert any(row.get("rowKind") == "group" for row in exact_rows)
+    move_rows = [row for row in exact_rows if row.get("proposedAction") == "move_duplicate"]
+    assert len(move_rows) >= 1
+
+    from pathlib import Path as PathLib
+
+    files = session.index.files()
+    groups = find_duplicate_groups(files, library_root=PathLib(tmp_path))
+    variant = [g for g in groups if g.group_id.startswith("dup-ht-")]
+    assert len(variant) == 1
+    assert len(variant[0].member_ids) == 2
 
 
 def test_update_review_decisions_approve_persists(tmp_path: Path) -> None:
@@ -1653,6 +1721,17 @@ def test_real_move_preview_lists_duplicate_member(tmp_path: Path) -> None:
     assert preview["summary"]["operationCount"] >= 1
     assert preview["rows"][0]["id"].startswith("file:")
     assert preview["rows"][0]["action"] == "move_duplicate"
+
+
+def test_real_move_preview_includes_approved_rows(tmp_path: Path) -> None:
+    api = _duplicate_api(tmp_path)
+    page = api.query_review_rows({"viewMode": "all", "limit": 50})
+    move_row = next(row for row in page["rows"] if row.get("proposedAction") == "move_duplicate")
+    sel = {"type": "explicit_rows", "rowIds": [move_row["id"]]}
+    api.update_review_decisions({"selection": sel, "command": "approve"})
+    preview = api.get_move_preview(sel)
+    validate_move_preview(preview)
+    assert preview["summary"]["operationCount"] >= 1
 
 
 def test_real_apply_moves_duplicate_file(
@@ -2616,10 +2695,10 @@ def test_post_scan_exception_is_exposed_in_snapshot(
     session.select_folder(str(tmp_path))
     api = create_bridge_api(session)
 
-    def boom(files: list[FileRecord]) -> list:
+    def boom(files: list[FileRecord], *, library_root=None) -> list:
         raise RuntimeError("post-scan boom")
 
-    monkeypatch.setattr(library_session_module, "find_exact_duplicate_groups", boom)
+    monkeypatch.setattr(library_session_module, "find_duplicate_groups", boom)
     api.start_scan()
     snap = _scan_until_idle(api)
     assert snap["work"]["scan"]["deepAnalysisStatus"] == "error"

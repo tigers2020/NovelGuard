@@ -6,8 +6,9 @@ const memberState = new Map<string, string>();
 
 function fileIdFromRowId(rowId: string): string | null {
   if (rowId.startsWith("file:")) {
-    const parts = rowId.split(":");
-    return parts.length === 3 ? parts[2] : null;
+    const rest = rowId.slice(5);
+    const match = rest.match(/([0-9a-f]{64})$/i);
+    return match ? match[1] : null;
   }
   if (rowId.startsWith("row-")) {
     return rowId;

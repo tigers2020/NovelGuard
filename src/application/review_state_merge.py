@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from application.ports.library_index import LoadedReviewState
-from domain.duplicate_exact import find_exact_duplicate_groups
+from domain.duplicate_groups import find_duplicate_groups
 from domain.models import DuplicateGroup, FileRecord
 
 
@@ -156,11 +156,15 @@ def group_id_from_row(row: dict[str, Any]) -> str | None:
 def rebuild_rows_with_review_state(
     files: list[FileRecord],
     stored: LoadedReviewState,
+    *,
+    library_root: str | None = None,
 ) -> list[dict[str, Any]]:
     from application.review_rows_builder import build_review_rows
+    from pathlib import Path
 
     files_by_id = {f.id: f for f in files}
-    groups = find_exact_duplicate_groups(files)
+    root = Path(library_root) if library_root else None
+    groups = find_duplicate_groups(files, library_root=root)
     skeleton = build_review_rows(groups, files_by_id)
     return merge_review_state(
         skeleton,

@@ -180,18 +180,31 @@ export function VirtualizedDataGrid<T>({
                 const canSort = header.column.getCanSort();
                 const sorted = header.column.getIsSorted();
                 const resizable = isColumnResizable(header.column.id);
+                const headerLabel = (
+                  <>
+                    {flexRender(header.column.columnDef.header, header.getContext())}
+                    {sorted === "asc" ? " ▲" : sorted === "desc" ? " ▼" : null}
+                  </>
+                );
                 return (
                   <div key={header.id} className="relative flex min-w-0 items-stretch">
-                    <button
-                      type="button"
-                      data-testid={`${headerTestIdPrefix}-${header.column.id}`}
-                      disabled={!canSort}
-                      onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
-                      className={`min-w-0 flex-1 truncate pr-2 text-left ${canSort ? "cursor-pointer hover:text-on-surface" : "cursor-default"}`}
-                    >
-                      {flexRender(header.column.columnDef.header, header.getContext())}
-                      {sorted === "asc" ? " ▲" : sorted === "desc" ? " ▼" : null}
-                    </button>
+                    {canSort ? (
+                      <button
+                        type="button"
+                        data-testid={`${headerTestIdPrefix}-${header.column.id}`}
+                        onClick={header.column.getToggleSortingHandler()}
+                        className="min-w-0 flex-1 cursor-pointer truncate pr-2 text-left hover:text-on-surface"
+                      >
+                        {headerLabel}
+                      </button>
+                    ) : (
+                      <div
+                        data-testid={`${headerTestIdPrefix}-${header.column.id}`}
+                        className="flex min-w-0 flex-1 items-center pr-2"
+                      >
+                        {headerLabel}
+                      </div>
+                    )}
                     {resizable ? (
                       <div
                         role="separator"

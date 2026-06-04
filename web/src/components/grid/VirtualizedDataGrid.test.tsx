@@ -1,6 +1,6 @@
-import { render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { createColumnHelper, type ColumnDef } from "@tanstack/react-table";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mergeReviewColumnVisibility } from "../../features/work/resolve/reviewGridLayout";
 import { buildReviewGridColumns } from "../../features/work/resolve/reviewGridColumns";
 import type { QualityRow } from "../../types/quality";
@@ -84,6 +84,46 @@ describe("VirtualizedDataGrid review columns", () => {
     expect(
       container.querySelector('[data-testid="resolve-grid-header-proposedAction"]'),
     ).not.toBeNull();
+  });
+
+  it("keeps batch select-all checkbox interactive in a non-sortable header", () => {
+    const row: ReviewRow = {
+      id: "r1",
+      rowKind: "file",
+      hasChildren: false,
+      status: "unreviewed",
+      type: "exact",
+      name: "sample.txt",
+      keeperLabel: "keeper",
+      proposedAction: "keep",
+    };
+    const explicitRowIds = new Set<string>();
+    const onToggleSelectAllVisible = vi.fn();
+    const onToggleExplicit = vi.fn();
+
+    render(
+      <div style={{ height: 400, width: 900, display: "flex" }}>
+        <VirtualizedDataGrid
+          testId="review-grid"
+          headerTestIdPrefix="resolve-grid-header"
+          data={[row]}
+          columns={buildReviewGridColumns({
+            explicitRowIds,
+            onToggleExplicit,
+            allVisibleSelected: false,
+            someVisibleSelected: false,
+            onToggleSelectAllVisible,
+          })}
+          getRowId={(r) => r.id}
+          mergeColumnVisibility={() => mergeReviewColumnVisibility(900)}
+        />
+      </div>,
+    );
+
+    const selectAll = screen.getByTestId("resolve-select-all-visible") as HTMLInputElement;
+    expect(selectAll.disabled).toBe(false);
+    fireEvent.click(selectAll);
+    expect(onToggleSelectAllVisible).toHaveBeenCalledTimes(1);
   });
 });
 

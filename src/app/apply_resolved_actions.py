@@ -12,7 +12,8 @@ from application.library_session import LibrarySession
 from application.plan_fingerprint import plan_fingerprint
 from application.ports.filesystem_apply import FilesystemApplyPort
 from domain.apply_path_policy import resolve_destination_path, resolve_under_library_root
-from infrastructure.content_hasher import hash_file
+from domain.duplicate_content_variant import is_head_tail_variant_group_id
+from infrastructure.content_hasher import head_tail_apply_hash, library_content_hash
 
 
 class ApplyResolvedActionsUseCase:
@@ -79,7 +80,8 @@ class ApplyResolvedActionsUseCase:
             )
 
             for op in operations:
-                drift = self._check_drift(root, op)
+                row = rows_by_id.get(op.row_id)
+                drift = self._check_drift(root, op, row)
                 if drift:
                     self._guard.clear()
                     self._session.set_has_pending_apply(False)
@@ -204,12 +206,17 @@ class ApplyResolvedActionsUseCase:
         self._guard.clear()
         self._session.set_has_pending_apply(False)
 
-    def _check_drift(self, root: Path, op: Any) -> bool:
+    def _check_drift(self, root: Path, op: Any, row: dict[str, Any] | None) -> bool:
         src, reason = resolve_under_library_root(root, op.source_path)
         if reason or src is None or not src.is_file():
             return True
         try:
-            current_hash = hash_file(src)
+            size = src.stat().st_size
+            group_id = row.get("groupId") if row else None
+            if isinstance(group_id, str) and is_head_tail_variant_group_id(group_id):
+                current_hash = head_tail_apply_hash(src, size_bytes=size)
+            else:
+                current_hash = library_content_hash(src, size_bytes=size)
         except OSError:
             return True
         if current_hash != op.source_content_hash:

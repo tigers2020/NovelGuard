@@ -19,7 +19,15 @@ import type { WorkMode } from "../types/snapshot";
 import type { FileRowsPage, FileRowsQuery } from "../types/fileRows";
 import { validateFileRowsPage } from "../contracts/fileRowsPageContract";
 import { BridgeCallError } from "./bridgeErrors";
+import { reviewDecisionsTimeoutMs, SELECTION_RESOLVE_ROW_CAP } from "../constants/reviewBulk";
 import { callBridge } from "./callBridge";
+
+function reviewMutationTimeoutMs(selection: SelectionScope): number {
+  if (selection.type === "explicit_rows") {
+    return reviewDecisionsTimeoutMs(selection.rowIds.length);
+  }
+  return reviewDecisionsTimeoutMs(SELECTION_RESOLVE_ROW_CAP);
+}
 
 type PyApi = Record<string, (...args: unknown[]) => Promise<unknown>>;
 
@@ -130,6 +138,7 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
     updateReviewDecisions: (request: UpdateReviewDecisionsRequest) =>
       callBridge(() => call<UpdateReviewDecisionsResult>(api, "update_review_decisions", request), {
         method: "update_review_decisions",
+        timeoutMs: reviewMutationTimeoutMs(request.selection),
       }),
     getAppSetting: (key) =>
       callBridge(() => call(api, "get_app_setting", key), { method: "get_app_setting" }),

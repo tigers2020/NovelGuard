@@ -25,7 +25,8 @@ from domain.apply_path_policy import (
     validate_move_operation,
 )
 from domain.models import FileRecord
-from infrastructure.content_hasher import hash_file
+from domain.duplicate_content_variant import is_head_tail_variant_group_id
+from infrastructure.content_hasher import head_tail_apply_hash, library_content_hash
 
 
 class BuildPreviewPlanUseCase:
@@ -63,7 +64,7 @@ class BuildPreviewPlanUseCase:
         for row in selected_rows:
             if row.get("rowKind") != "file":
                 continue
-            if row.get("status") in ("approved", "excluded", "conflict"):
+            if row.get("status") in ("excluded", "conflict"):
                 continue
             action = row.get("proposedAction")
             if action in ("keep", "ignore", "delete"):
@@ -92,7 +93,7 @@ class BuildPreviewPlanUseCase:
                 dest_path=dest_rel,
                 source_file_id=file_record.id,
                 source_size=file_record.size_bytes,
-                source_content_hash=self._content_hash(root, file_record),
+                source_content_hash=self._content_hash(root, file_record, row),
                 source_mtime_ns=file_record.modified_at_ns,
             )
             policy = validate_move_operation(root, op, destination_exists=dest_exists)
@@ -169,7 +170,11 @@ class BuildPreviewPlanUseCase:
             "summary": {"rowCount": 0, "operationCount": 0},
         }
 
-    def _content_hash(self, root: Path, file_record: FileRecord) -> str:
+    def _content_hash(self, root: Path, file_record: FileRecord, row: dict[str, Any]) -> str:
+        path = root / file_record.relative_path
+        group_id = row.get("groupId")
+        if isinstance(group_id, str) and is_head_tail_variant_group_id(group_id):
+            return head_tail_apply_hash(path, size_bytes=file_record.size_bytes)
         if file_record.content_sha256:
             return file_record.content_sha256
-        return hash_file(root / file_record.relative_path)
+        return library_content_hash(path, size_bytes=file_record.size_bytes)

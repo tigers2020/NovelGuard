@@ -31,6 +31,14 @@ Opt-in unless requested: `persona/`, legacy `protocols/`, Superpowers ceremony.
 
 ---
 
+## Agent runtime control
+
+For Superpowers PR work, read `docs/superpowers/roadmap/current_query.md`.
+For non-roadmap tickets, read `docs/agent/BACKLOG.yml` and process exactly one pending ticket.
+Always follow `docs/agent/RUNBOOK.md`; stop on failed tests, blockers, missing approval, or rule conflicts.
+
+---
+
 ## Current PR (`current_query`)
 
 Resolve the active PR slice before spec/plan/implementation:
@@ -103,6 +111,7 @@ Testing policy: [docs/agent-testing-policy.md](docs/agent-testing-policy.md) —
 | Architecture | `docs/current_architecture.md` |
 | Release / smoke | `docs/release/` |
 | Automation | `automation/`, `docs/agent-automation.md` |
+| Agent runtime (non-PR tickets) | `docs/agent/` (`RUNBOOK.md`, `BACKLOG.yml`) |
 
 ---
 

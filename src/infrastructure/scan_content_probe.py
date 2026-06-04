@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from application.scan_pipeline_constants import (
+    SCAN_FULL_HASH_MAX_FILE_COUNT,
     SCAN_STEM_HASH_MAX_GROUP_SIZE,
     SCAN_STEM_HASH_MIN_GROUP_SIZE,
 )
@@ -46,9 +47,12 @@ def _entry_stem_hash_key(name: str, relative_path: str) -> str | None:
 def _entry_need_hash(
     entry: _ScanPathEntry,
     *,
+    hash_all: bool,
     hash_sizes: set[int],
     hash_stem_keys: set[str],
 ) -> bool:
+    if hash_all:
+        return True
     stem_key = _entry_stem_hash_key(entry.name, entry.relative_path)
     return entry.size_bytes in hash_sizes or (stem_key is not None and stem_key in hash_stem_keys)
 
@@ -56,27 +60,37 @@ def _entry_need_hash(
 def _probe_entry(
     entry: _ScanPathEntry,
     *,
+    hash_all: bool,
     hash_sizes: set[int],
     hash_stem_keys: set[str],
 ) -> FileContentProbe:
     return probe_file(
         entry.path,
         size_bytes=entry.size_bytes,
-        need_hash=_entry_need_hash(entry, hash_sizes=hash_sizes, hash_stem_keys=hash_stem_keys),
+        need_hash=_entry_need_hash(
+            entry, hash_all=hash_all, hash_sizes=hash_sizes, hash_stem_keys=hash_stem_keys
+        ),
         need_near_text=False,
     )
 
 
 def _probe_entries_chunk(
-    args: tuple[list[tuple[str, str, str, int]], frozenset[int], frozenset[str]],
+    args: tuple[list[tuple[str, str, str, int]], bool, frozenset[int], frozenset[str]],
 ) -> list[FileContentProbe]:
     """Process-pool worker: probe a chunk of files (reduces IPC vs one task per file)."""
-    packed_entries, hash_sizes, hash_stem_keys = args
+    packed_entries, hash_all, hash_sizes, hash_stem_keys = args
     results: list[FileContentProbe] = []
     for path_str, name, relative_path, size_bytes in packed_entries:
-        stem_key = _entry_stem_hash_key(name, relative_path)
-        need_hash = size_bytes in hash_sizes or (
-            stem_key is not None and stem_key in hash_stem_keys
+        entry = _ScanPathEntry(
+            path=Path(path_str),
+            relative_path=relative_path,
+            name=name,
+            size_bytes=size_bytes,
+            modified_at_ns=0,
+            extension=Path(name).suffix.lower(),
+        )
+        need_hash = _entry_need_hash(
+            entry, hash_all=hash_all, hash_sizes=set(hash_sizes), hash_stem_keys=set(hash_stem_keys)
         )
         results.append(
             probe_file(
@@ -92,6 +106,7 @@ def _probe_entries_chunk(
 def _probe_batch(
     batch: list[_ScanPathEntry],
     *,
+    hash_all: bool,
     hash_sizes: set[int],
     hash_stem_keys: set[str],
     pool: ProcessPoolExecutor | ThreadPoolExecutor,
@@ -105,7 +120,7 @@ def _probe_batch(
     ]
     worker_chunk = max(32, min(256, len(packed) // max(1, worker_count) or 1))
     tasks = [
-        (packed[i : i + worker_chunk], frozen_sizes, frozen_stems)
+        (packed[i : i + worker_chunk], hash_all, frozen_sizes, frozen_stems)
         for i in range(0, len(packed), worker_chunk)
     ]
     if use_process_pool:
@@ -140,6 +155,7 @@ def enrich_scan_entries_with_content_probe(
         for key, count in stem_counts.items()
         if SCAN_STEM_HASH_MIN_GROUP_SIZE <= count <= SCAN_STEM_HASH_MAX_GROUP_SIZE
     }
+    hash_all = len(entries) <= SCAN_FULL_HASH_MAX_FILE_COUNT
 
     total = len(entries)
     completed = 0
@@ -162,6 +178,7 @@ def enrich_scan_entries_with_content_probe(
             batch = entries[batch_start : batch_start + _PROBE_BATCH_SIZE]
             probes = _probe_batch(
                 batch,
+                hash_all=hash_all,
                 hash_sizes=hash_sizes,
                 hash_stem_keys=hash_stem_keys,
                 pool=pool,

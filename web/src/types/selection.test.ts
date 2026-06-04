@@ -1,3 +1,8 @@
+import {
+  chunkExplicitRowIds,
+  reviewDecisionsTimeoutMs,
+  SELECTION_RESOLVE_ROW_CAP,
+} from "../constants/reviewBulk";
 import { describe, expect, it } from "vitest";
 import { selectionFingerprint } from "../bridge/selectionFingerprint";
 import {
@@ -73,5 +78,20 @@ describe("validateSelectionScope", () => {
         return 1;
       }),
     ).not.toThrow();
+  });
+});
+
+describe("reviewBulk helpers", () => {
+  it("chunks explicit row ids at the selection resolve cap", () => {
+    const ids = Array.from({ length: 250 }, (_, i) => `row-${i}`);
+    const chunks = chunkExplicitRowIds(ids);
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0]).toHaveLength(SELECTION_RESOLVE_ROW_CAP);
+    expect(chunks[1]).toHaveLength(50);
+  });
+
+  it("scales review decision timeout with row count", () => {
+    expect(reviewDecisionsTimeoutMs(100)).toBeGreaterThan(8_000);
+    expect(reviewDecisionsTimeoutMs(100)).toBeLessThanOrEqual(120_000);
   });
 });

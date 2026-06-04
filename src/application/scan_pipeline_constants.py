@@ -11,6 +11,8 @@ SCAN_PROBE_ENCODING_ONLY_SAMPLE_MIN_BYTES = 0
 # Stem-hash only for small duplicate-name clusters (avoids hashing thousands in one title bucket).
 SCAN_STEM_HASH_MIN_GROUP_SIZE = 2
 SCAN_STEM_HASH_MAX_GROUP_SIZE = 32
+# Small libraries: hash every file so exact duplicate detection is not skipped.
+SCAN_FULL_HASH_MAX_FILE_COUNT = 64
 # Large-library near/relation: bounded comparisons + head-only reads.
 SCAN_NEAR_FAST_LIBRARY_THRESHOLD = 500
 SCAN_NEAR_MAX_BUCKET_ITEMS = 200

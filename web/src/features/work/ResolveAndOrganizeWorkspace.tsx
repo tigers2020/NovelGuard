@@ -23,6 +23,7 @@ import { BulkFilterConfirmDialog } from "./resolve/BulkFilterConfirmDialog";
 import {
   bulkMutationChunkCursors,
   bulkMutationTargetCount,
+  chunkExplicitRowIds,
 } from "../../constants/reviewBulk";
 
 function loadColumnSizing(): Record<string, number> {
@@ -69,6 +70,7 @@ export function ResolveAndOrganizeWorkspace({
     command: "approve" | "exclude";
   }>({ open: false, command: "approve" });
   const [bulkMutating, setBulkMutating] = useState(false);
+  const [batchMutating, setBatchMutating] = useState(false);
   const [isWideLayout, setIsWideLayout] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches,
   );
@@ -295,16 +297,32 @@ export function ResolveAndOrganizeWorkspace({
   const runBatchCommand = useCallback(
     async (command: "approve" | "exclude") => {
       if (explicitIds.length === 0) return;
+      setBatchMutating(true);
       try {
         setQueryError(null);
-        await bridge.updateReviewDecisions({ selection: explicitSelection, command });
+        let totalUpdated = 0;
+        for (const rowIds of chunkExplicitRowIds(explicitIds)) {
+          const result = await bridge.updateReviewDecisions({
+            selection: { type: "explicit_rows", rowIds },
+            command,
+          });
+          totalUpdated += result.updatedCount;
+        }
+        if (totalUpdated === 0) {
+          setQueryError(
+            "선택한 행에 승인·제외가 적용되지 않았습니다. Exact·Near·Relation 그룹 행인지 확인하세요.",
+          );
+          return;
+        }
         await refreshSnapshot();
         await loadPage(null, false);
       } catch (err) {
         setQueryError(err instanceof Error ? err.message : "Review update failed");
+      } finally {
+        setBatchMutating(false);
       }
     },
-    [bridge, explicitIds, explicitSelection, loadPage, refreshSnapshot],
+    [bridge, explicitIds, loadPage, refreshSnapshot],
   );
 
   const runBulkQueryCommand = useCallback(
@@ -483,6 +501,7 @@ export function ResolveAndOrganizeWorkspace({
         filteredCount={filteredCount}
         loadedCount={rows.length}
         explicitCount={explicitIds.length}
+        batchBusy={batchMutating || bulkMutating}
         onSelectAllVisible={selectAllVisible}
         onSelectExactGroupHeaders={selectExactGroupHeaders}
         onClearSelection={clearExplicitSelection}
