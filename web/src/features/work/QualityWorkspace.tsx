@@ -94,13 +94,13 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
     return () => media.removeEventListener("change", onChange);
   }, []);
 
-  useEffect(() => {
+  const resetDetailForTabSwitch = useCallback(() => {
     detailSeqRef.current += 1;
     setSelected(null);
     setDetail(null);
     setDetailError(null);
     setDetailLoading(false);
-  }, [issueType]);
+  }, []);
 
   const loadDetail = useCallback(
     async (row: QualityRow | null) => {
@@ -258,7 +258,11 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
               key={tab.id}
               type="button"
               data-testid={`quality-tab-${tab.id}`}
-              onClick={() => setIssueType(tab.id)}
+              onClick={() => {
+                if (tab.id === issueType) return;
+                resetDetailForTabSwitch();
+                setIssueType(tab.id);
+              }}
               className={`rounded-md px-3 py-2 text-sm font-semibold ${
                 issueType === tab.id
                   ? "bg-primary text-background"
