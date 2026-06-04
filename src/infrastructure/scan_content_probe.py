@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from collections import Counter
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -22,6 +22,8 @@ CancelCheck = Callable[[], bool]
 RecordSink = Callable[[FileRecord], None]
 
 _DEFAULT_MAX_WORKERS = min(32, (os.cpu_count() or 4) + 4)
+_PROBE_PROCESS_MIN_FILES = 256
+_PROBE_PROCESS_MAX_WORKERS = min(8, (os.cpu_count() or 4))
 _PROBE_BATCH_SIZE = 512
 _PROGRESS_INTERVAL = 48
 
@@ -41,22 +43,76 @@ def _entry_stem_hash_key(name: str, relative_path: str) -> str | None:
     return title_stem_key(parse.normalized_stem)
 
 
+def _entry_need_hash(
+    entry: _ScanPathEntry,
+    *,
+    hash_sizes: set[int],
+    hash_stem_keys: set[str],
+) -> bool:
+    stem_key = _entry_stem_hash_key(entry.name, entry.relative_path)
+    return entry.size_bytes in hash_sizes or (stem_key is not None and stem_key in hash_stem_keys)
+
+
 def _probe_entry(
     entry: _ScanPathEntry,
     *,
     hash_sizes: set[int],
     hash_stem_keys: set[str],
 ) -> FileContentProbe:
-    stem_key = _entry_stem_hash_key(entry.name, entry.relative_path)
-    need_hash = entry.size_bytes in hash_sizes or (
-        stem_key is not None and stem_key in hash_stem_keys
-    )
     return probe_file(
         entry.path,
         size_bytes=entry.size_bytes,
-        need_hash=need_hash,
+        need_hash=_entry_need_hash(entry, hash_sizes=hash_sizes, hash_stem_keys=hash_stem_keys),
         need_near_text=False,
     )
+
+
+def _probe_entries_chunk(
+    args: tuple[list[tuple[str, str, str, int]], frozenset[int], frozenset[str]],
+) -> list[FileContentProbe]:
+    """Process-pool worker: probe a chunk of files (reduces IPC vs one task per file)."""
+    packed_entries, hash_sizes, hash_stem_keys = args
+    results: list[FileContentProbe] = []
+    for path_str, name, relative_path, size_bytes in packed_entries:
+        stem_key = _entry_stem_hash_key(name, relative_path)
+        need_hash = size_bytes in hash_sizes or (
+            stem_key is not None and stem_key in hash_stem_keys
+        )
+        results.append(
+            probe_file(
+                Path(path_str),
+                size_bytes=size_bytes,
+                need_hash=need_hash,
+                need_near_text=False,
+            )
+        )
+    return results
+
+
+def _probe_batch(
+    batch: list[_ScanPathEntry],
+    *,
+    hash_sizes: set[int],
+    hash_stem_keys: set[str],
+    pool: ProcessPoolExecutor | ThreadPoolExecutor,
+    worker_count: int,
+    use_process_pool: bool,
+) -> list[FileContentProbe]:
+    frozen_sizes = frozenset(hash_sizes)
+    frozen_stems = frozenset(hash_stem_keys)
+    packed = [
+        (str(entry.path), entry.name, entry.relative_path, entry.size_bytes) for entry in batch
+    ]
+    worker_chunk = max(32, min(256, len(packed) // max(1, worker_count) or 1))
+    tasks = [
+        (packed[i : i + worker_chunk], frozen_sizes, frozen_stems)
+        for i in range(0, len(packed), worker_chunk)
+    ]
+    if use_process_pool:
+        nested = pool.map(_probe_entries_chunk, tasks, chunksize=1)
+    else:
+        nested = pool.map(_probe_entries_chunk, tasks)
+    return [probe for chunk in nested for probe in chunk]
 
 
 def enrich_scan_entries_with_content_probe(
@@ -87,22 +143,30 @@ def enrich_scan_entries_with_content_probe(
 
     total = len(entries)
     completed = 0
-    workers = max(1, min(max_workers, total))
+    use_process_pool = total >= _PROBE_PROCESS_MIN_FILES
+    if use_process_pool:
+        workers = max(1, min(_PROBE_PROCESS_MAX_WORKERS, total))
+    else:
+        workers = max(1, min(max_workers, total))
 
-    chunksize = max(1, min(64, total // (workers * 8) or 1))
-    with ThreadPoolExecutor(max_workers=workers) as pool:
+    executor_cls: type[ProcessPoolExecutor] | type[ThreadPoolExecutor]
+    if use_process_pool:
+        executor_cls = ProcessPoolExecutor
+    else:
+        executor_cls = ThreadPoolExecutor
+
+    with executor_cls(max_workers=workers) as pool:
         for batch_start in range(0, total, _PROBE_BATCH_SIZE):
             if cancel_check():
                 return
             batch = entries[batch_start : batch_start + _PROBE_BATCH_SIZE]
-            probes = pool.map(
-                lambda entry: _probe_entry(
-                    entry,
-                    hash_sizes=hash_sizes,
-                    hash_stem_keys=hash_stem_keys,
-                ),
+            probes = _probe_batch(
                 batch,
-                chunksize=chunksize,
+                hash_sizes=hash_sizes,
+                hash_stem_keys=hash_stem_keys,
+                pool=pool,
+                worker_count=workers,
+                use_process_pool=use_process_pool,
             )
             for entry, probe in zip(batch, probes, strict=True):
                 record = FileRecord(
