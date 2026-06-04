@@ -1,6 +1,9 @@
 import type { FileRowColumnPreset, FileRowDensity } from "../../types/fileRows";
+import type { WorkMode } from "../../types/snapshot";
 
 const PREFIX = "novelguard.shellFileDock.v1";
+
+export type FileDockExpandMode = "scan" | "resolve" | "quality";
 
 export type ShellFileDockPersisted = {
   expanded: boolean;
@@ -8,6 +11,11 @@ export type ShellFileDockPersisted = {
   density: FileRowDensity;
   columnPreset: FileRowColumnPreset;
 };
+
+export type ShellFileDockLayout = Pick<
+  ShellFileDockPersisted,
+  "heightPx" | "density" | "columnPreset"
+>;
 
 const DEFAULT_HEIGHT_PX = Math.round(
   typeof window !== "undefined" ? window.innerHeight * 0.28 : 240,
@@ -57,6 +65,17 @@ function parsePreset(raw: string | null): FileRowColumnPreset {
   return "basic";
 }
 
+function normalizeExpandMode(mode: WorkMode): FileDockExpandMode {
+  if (mode === "resolve" || mode === "quality") {
+    return mode;
+  }
+  return "scan";
+}
+
+function expandedKeyForMode(mode: WorkMode): string {
+  return `expanded.${normalizeExpandMode(mode)}`;
+}
+
 export function clampHeightPx(px: number): number {
   if (typeof window === "undefined") {
     return Math.min(Math.max(180, px), 480);
@@ -65,18 +84,48 @@ export function clampHeightPx(px: number): number {
   return Math.min(Math.max(180, px), max);
 }
 
-export function loadShellFileDockState(): ShellFileDockPersisted {
+export function loadShellFileDockLayout(): ShellFileDockLayout {
   return {
-    expanded: parseExpanded(read("expanded")),
     heightPx: parseHeightPx(read("heightPx")),
     density: parseDensity(read("density")),
     columnPreset: parsePreset(read("columnPreset")),
   };
 }
 
-export function persistShellFileDockState(state: ShellFileDockPersisted): void {
-  write("expanded", state.expanded ? "true" : "false");
-  write("heightPx", String(clampHeightPx(state.heightPx)));
-  write("density", state.density);
-  write("columnPreset", state.columnPreset);
+export function persistShellFileDockLayout(layout: ShellFileDockLayout): void {
+  write("heightPx", String(clampHeightPx(layout.heightPx)));
+  write("density", layout.density);
+  write("columnPreset", layout.columnPreset);
+}
+
+/** @deprecated Use loadFileDockExpandedForMode — expanded field reflects scan slot only. */
+export function loadShellFileDockState(): ShellFileDockPersisted {
+  return {
+    expanded: loadFileDockExpandedForMode("scan"),
+    ...loadShellFileDockLayout(),
+  };
+}
+
+export function loadFileDockExpandedForMode(mode: WorkMode): boolean {
+  const perMode = read(expandedKeyForMode(mode));
+  if (perMode !== null) {
+    return parseExpanded(perMode);
+  }
+  if (normalizeExpandMode(mode) === "scan") {
+    const legacy = read("expanded");
+    if (legacy !== null) {
+      return parseExpanded(legacy);
+    }
+  }
+  return SHELL_FILE_DOCK_DEFAULTS.expanded;
+}
+
+export function persistFileDockExpandedForMode(mode: WorkMode, expanded: boolean): void {
+  write(expandedKeyForMode(mode), expanded ? "true" : "false");
+}
+
+export function persistShellFileDockState(state: ShellFileDockPersisted, activeMode?: WorkMode): void {
+  persistShellFileDockLayout(state);
+  const mode = activeMode ?? "scan";
+  persistFileDockExpandedForMode(mode, state.expanded);
 }

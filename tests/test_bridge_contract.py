@@ -1037,6 +1037,43 @@ def test_scan_emits_probe_not_legacy_scan_phase(tmp_path: Path) -> None:
     assert "probe" in phases or "persist" in phases
 
 
+def test_scan_observes_scan_persist_phase(tmp_path: Path) -> None:
+    for i in range(4):
+        (tmp_path / f"f{i}.txt").write_text("x\n", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    index = session.index
+    original_append = index.append_files_batch
+    release_tail_persist = threading.Event()
+
+    def hold_tail_persist(folder_path: str, files: list, *, reset: bool = False) -> None:
+        with session._lock:
+            in_tail = session._pipeline_phase == "scan_persist"
+        if in_tail and files:
+            release_tail_persist.wait(timeout=2.0)
+        original_append(folder_path, files, reset=reset)
+
+    index.append_files_batch = hold_tail_persist  # type: ignore[method-assign]
+    try:
+        api.start_scan()
+        deadline = time.monotonic() + 10.0
+        saw_scan_persist = False
+        while time.monotonic() < deadline:
+            snap = api.get_snapshot()
+            if snap["pipeline"]["phase"] == "scan_persist":
+                saw_scan_persist = True
+                assert "인덱스 저장" in snap["pipeline"]["label"]
+                release_tail_persist.set()
+                break
+            time.sleep(0.005)
+        _scan_until_idle(api)
+        assert saw_scan_persist
+    finally:
+        release_tail_persist.set()
+        index.append_files_batch = original_append  # type: ignore[method-assign]
+
+
 def test_update_review_decisions_approve_persists(tmp_path: Path) -> None:
     payload = "same story content\n"
     (tmp_path / "copy_a.txt").write_text(payload, encoding="utf-8")

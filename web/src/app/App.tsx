@@ -10,13 +10,10 @@ import { AppShell } from "../components/layout/AppShell";
 import { AppHeader } from "../components/layout/AppHeader";
 import { AppSidebar } from "../components/layout/AppSidebar";
 import { ShellFileDock } from "../components/layout/ShellFileDock";
+import { persistFileDockExpandedForMode } from "../components/layout/shellFileDockStorage";
 import {
-  loadShellFileDockState,
-  persistShellFileDockState,
-} from "../components/layout/shellFileDockStorage";
-import {
+  fileDockExpandedForModeEntry,
   persistFileDockCollapseForWorkMode,
-  persistFileDockExpandForWorkMode,
   resolveInitialFileDockExpanded,
 } from "../components/layout/shellFileDockModePolicy";
 import { GlobalCommandBar } from "../components/layout/GlobalCommandBar";
@@ -41,7 +38,7 @@ function AppContent() {
   const [finalizeOpen, setFinalizeOpen] = useState(false);
   const [applySelection, setApplySelection] = useState<SelectionScope | null>(null);
   const [fileDockExpanded, setFileDockExpanded] = useState(() =>
-    resolveInitialFileDockExpanded(snapshot.work.activeMode, snapshot.library.fileCount),
+    resolveInitialFileDockExpanded(snapshot.work.activeMode),
   );
   const requestWorkModeRef = useRef<((mode: WorkMode) => Promise<void>) | null>(null);
 
@@ -54,20 +51,12 @@ function AppContent() {
     await requestWorkModeRef.current?.(mode);
   }, []);
 
-  const applyFileDockPolicyForMode = useCallback(
-    (mode: WorkMode) => {
-      if (mode === "resolve" || mode === "quality") {
-        persistFileDockCollapseForWorkMode(mode);
-        setFileDockExpanded(false);
-        return;
-      }
-      if (mode === "scan" && snapshot.library.fileCount > 0) {
-        persistFileDockExpandForWorkMode(mode, snapshot.library.fileCount);
-        setFileDockExpanded(true);
-      }
-    },
-    [snapshot.library.fileCount],
-  );
+  const applyFileDockPolicyForMode = useCallback((mode: WorkMode) => {
+    if (mode === "resolve" || mode === "quality") {
+      persistFileDockCollapseForWorkMode(mode);
+    }
+    setFileDockExpanded(fileDockExpandedForModeEntry(mode));
+  }, []);
 
   const handleFullPipeline = () => {
     if (snapshot.work.resolve.hasPendingApply || snapshot.work.resolve.conflictCount > 0) {
@@ -83,12 +72,12 @@ function AppContent() {
 
   const handleRevealFileDock = () => {
     setFileDockExpanded(true);
-    persistShellFileDockState({ ...loadShellFileDockState(), expanded: true });
+    persistFileDockExpandedForMode("scan", true);
   };
 
   const handleFileDockExpandedChange = (next: boolean) => {
     setFileDockExpanded(next);
-    persistShellFileDockState({ ...loadShellFileDockState(), expanded: next });
+    persistFileDockExpandedForMode(snapshot.work.activeMode, next);
   };
 
   const handleOpenPreview = (selection: SelectionScope) => {

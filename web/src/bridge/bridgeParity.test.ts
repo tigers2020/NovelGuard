@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createInvalidationScheduler } from "./snapshotInvalidationSchedule";
 import {
   BRIDGE_ERROR_CODES,
@@ -12,7 +12,18 @@ import { PYWEBVIEW_READY_EVENT } from "./waitForPywebviewApi";
 import { bumpLibraryRevisionForTest, mockBridge } from "./mockBridge";
 import { textSortKey } from "./mockFileRows";
 import { deriveShellFileDockState } from "../components/layout/shellFileDockState";
-import { shouldCollapseFileDockForWorkMode, shouldExpandFileDockForWorkMode } from "../components/layout/shellFileDockModePolicy";
+import {
+  fileDockExpandedForModeEntry,
+  persistFileDockCollapseForWorkMode,
+  resolveInitialFileDockExpanded,
+  shouldCollapseFileDockForWorkMode,
+  shouldExpandFileDockForWorkMode,
+} from "../components/layout/shellFileDockModePolicy";
+import {
+  loadFileDockExpandedForMode,
+  persistFileDockExpandedForMode,
+} from "../components/layout/shellFileDockStorage";
+import { derivePipelineTracks } from "../features/work/pipelineTracks";
 import { deriveScanSectionState } from "../features/work/scanSectionState";
 import { buildQualityRows, getAllReviewRows, sortQualityRows } from "./mockData";
 import { reviewRowGroupId } from "../types/review";
@@ -503,6 +514,50 @@ describe("snapshot invalidation", () => {
   });
 });
 
+describe("shell file dock per-mode persistence (PR-49)", () => {
+  const storage = new Map<string, string>();
+
+  beforeEach(() => {
+    storage.clear();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        storage.set(key, value);
+      },
+      removeItem: (key: string) => {
+        storage.delete(key);
+      },
+      clear: () => {
+        storage.clear();
+      },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("collapse for resolve does not clear scan expanded preference", () => {
+    persistFileDockExpandedForMode("scan", true);
+    persistFileDockCollapseForWorkMode("resolve");
+    expect(loadFileDockExpandedForMode("scan")).toBe(true);
+    expect(loadFileDockExpandedForMode("resolve")).toBe(false);
+  });
+
+  it("scan return restores scan preference after resolve visit", () => {
+    persistFileDockExpandedForMode("scan", true);
+    persistFileDockCollapseForWorkMode("resolve");
+    expect(resolveInitialFileDockExpanded("scan")).toBe(true);
+    expect(fileDockExpandedForModeEntry("scan")).toBe(true);
+  });
+
+  it("migrates legacy expanded key to scan slot", () => {
+    localStorage.setItem("novelguard.shellFileDock.v1.expanded", "true");
+    expect(loadFileDockExpandedForMode("scan")).toBe(true);
+    expect(loadFileDockExpandedForMode("resolve")).toBe(false);
+  });
+});
+
 describe("shell file dock mode policy (029)", () => {
   it("shouldCollapseFileDockForWorkMode returns true for resolve and quality", () => {
     expect(shouldCollapseFileDockForWorkMode("resolve")).toBe(true);
@@ -594,6 +649,31 @@ describe("scan section state (PR-35)", () => {
         },
       }),
     ).toBe("success");
+  });
+});
+
+describe("pipeline tracks (PR-48 scan_persist)", () => {
+  it("derivePipelineTracks treats scan_persist as foreground busy", () => {
+    const model = derivePipelineTracks(
+      {
+        phase: "scan_persist",
+        label: "인덱스 저장 중… (400/7392)",
+        percent: 55,
+        cancellable: false,
+        background: null,
+      },
+      {
+        state: "running",
+        lastRun: null,
+        indexReady: true,
+        deepAnalysisComplete: false,
+        deepAnalysisStatus: "idle",
+        deepAnalysisError: null,
+      },
+    );
+    expect(model.tracks[0]?.id).toBe("foreground");
+    expect(model.tracks[0]?.complete).toBe(false);
+    expect(model.tracks[0]?.label).toContain("인덱스 저장");
   });
 });
 

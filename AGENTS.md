@@ -1,8 +1,9 @@
 # AGENTS.md
 
-Canonical entry for **humans, Cursor IDE, Cursor CLI runners, and Cloud Automations** working on NovelGuard.
+Canonical entry for **humans, Cursor IDE, Cursor CLI runners, and Cloud Automations** on NovelGuard.
 
-Activation: `.cursor/rules/` (automation-first). Deep runner/Hermes design: [docs/agent-automation.md](docs/agent-automation.md).
+**Deep automation:** [docs/agent-automation.md](docs/agent-automation.md)  
+**Superpowers workflow (large work):** [docs/superpowers/agent-workflow.md](docs/superpowers/agent-workflow.md)
 
 ---
 
@@ -10,129 +11,101 @@ Activation: `.cursor/rules/` (automation-first). Deep runner/Hermes design: [doc
 
 NovelGuard — local-first novel scan, duplicate detection, review, and cleanup.
 
-Flow: scan → parse filenames → exact/near duplicate detection → group → dry-run preview → apply only after approval.
+Stack: Python 3.12+ (`src/`), React+TS (`web/`), Tailwind v4 ([DESIGN.md](DESIGN.md)).  
+Layers: `domain` → `application` → `infrastructure` → `web` → `app` ([docs/current_architecture.md](docs/current_architecture.md)).
 
-Stack: Python 3.12+ (`src/`), React+TS (`web/`), Tailwind v4 ([DESIGN.md](DESIGN.md)). Versions in `pyproject.toml`, `web/package.json`.
-
-Layers ([docs/current_architecture.md](docs/current_architecture.md)): `domain` → `application` → `infrastructure` → `web` → `app`. No layer violations.
-
----
-
-## Automation stack (how work arrives)
-
-```text
-Telegram / Discord / GitHub / cron / webhook
-        ↓
-Hermes gateway + dispatcher (single queue writer)
-        ↓
-job queue (e.g. queue.sqlite) + per-repo lock
-        ↓
-Cursor CLI runner | Cursor Automations | IDE session
-        ↓
-branch → edit → verify → diff summary → PR or patch
-        ↓
-notifier (e.g. Telegram)
-```
-
-**Prefer when stable:** Cursor Automations / Cloud Agent (schedule, PR, issue, webhook).
-
-**Default for Hermes:** one local **Cursor CLI runner** per repo, sequential jobs, branch isolation.
-
-**IDE chat:** same rules; user is the approver.
+**Safety:** No destructive file moves without dry-run preview + user approval. Logs/reports are not duplicate-detection inputs unless a spec says so.
 
 ---
 
 ## Instruction priority
 
-On conflict, stop and report. Do not guess.
+On conflict, stop and report.
 
-1. Explicit job payload / user message for this run.
-2. This `AGENTS.md`.
-3. Applicable `.cursor/rules/*.mdc` (see [00-automation-core.mdc](.cursor/rules/00-automation-core.mdc) index).
-4. Task-local spec under `docs/` (if the job names one).
-5. General model knowledge.
+1. Explicit user / job message for this run  
+2. This `AGENTS.md`  
+3. Task spec under `docs/superpowers/specs/` (when named)  
+4. General model knowledge  
 
-Opt-in only unless the job requests it: `persona/`, Superpowers skills, long workflow docs.
-
----
-
-## Runner contract (CLI / cloud / queued jobs)
-
-Every automated job MUST:
-
-1. Work on a **dedicated branch** (`ai/job-<id>` or job naming convention). Never commit directly to `main`/`master`.
-2. Treat the agent as **proposer**; human (or explicit job flag) is **approver**.
-3. Run the **smallest relevant verification**; report exact commands and pass/fail. Never claim tests passed without running them.
-4. Return a structured result:
-   - changed files
-   - implementation summary
-   - tests/commands run
-   - risks
-   - recommended next step
-5. **Do not commit** unless the job explicitly allows it; **never merge** to protected branches without approval.
-
-Allowed without extra approval (unless repo policy says otherwise): branch create, edit, test, commit, open PR.
-
-Requires explicit approval: push to `main`, merge, destructive migrations, mass delete, secrets changes, major dependency bumps.
-
-NovelGuard-specific: no destructive file moves without dry-run + approval; logs/reports are not duplicate-detection inputs unless a spec says so.
+Opt-in unless requested: `persona/`, legacy `protocols/`, Superpowers ceremony.
 
 ---
 
-## Task scale
+## Current PR (`current_query`)
 
-| Scale | When | Do |
-| ----- | ---- | -- |
-| **Small** | Single area, obvious fix | Minimal diff; skip new specs/plans; smallest verification |
-| **Large** | Multi-file, contract, safety, unclear | Read named spec/plan under `docs/` first; full gate at end |
+Resolve the active PR slice before spec/plan/implementation:
 
-No grill-me phases, scope-lock phrases, or persona roleplay by default.
+1. Read [docs/superpowers/roadmap/README.md](docs/superpowers/roadmap/README.md) for the **active** roadmap file.  
+2. Open that roadmap (today: [007 PR-48..57](docs/superpowers/roadmap/007-2026-06-03-pr48-pr57-post-beta-roadmap.md)).  
+3. **`current_query`** = first PR row in the phase table whose status is not **Done** (top-to-bottom program order).  
+4. Optional tracker: [docs/superpowers/roadmap/current_query.md](docs/superpowers/roadmap/current_query.md) — update when a PR merges.
+
+Do not implement from roadmap rows alone; require an **approved spec** and **approved plan** per PR.
 
 ---
 
-## Verification
+## Program loop (PR-48..57 and future tracks)
 
-Smallest useful check first, then widen if needed.
+Run steps **1 → 15** for each `current_query` until the active roadmap has no remaining PRs.
+
+| Step | Skill / action | Output |
+|------|----------------|--------|
+| 1 | Read roadmap | `current_query` PR id + links |
+| 2 | `brainstorming` | PR intent, constraints, success criteria |
+| 3 | `brainstorming` | Spec draft → `docs/superpowers/specs/NNN-…-design.md` |
+| 4 | `/grill-me` (self) | Lock decisions in spec; no user Q&A unless blocked |
+| 5 | `brainstorming` | Spec self-review; status **approved** |
+| 6 | `writing-plans` | Plan → `docs/superpowers/plans/NNN-…-prNN-….md` |
+| 7 | Plan vs spec review | Fix gaps before code |
+| 8 | `subagent-driven-development` or `executing-plans` | Implement on `feat/prNN-*` or `ai/job-*` branch |
+| 9 | `requesting-code-review` | Spec compliance review (subagent) |
+| 10 | `receiving-code-review` | Triage feedback; verify before fixing |
+| 11 | Fix review findings | Minimal diffs + re-review |
+| 12 | `/try-and-error-fix` | Full matrix green (evidence required) |
+| 13 | `finishing-a-development-branch` + `/babysit` | PR open; CI/comments until merge-ready |
+| 14 | Read roadmap | Confirm PR **Done**; advance `current_query` |
+| 15 | Repeat | Until active roadmap phase table is complete |
+
+**Branch rules:** Never commit to `main`/`master` without approval. Never claim tests passed without running them.
+
+---
+
+## Verification (default matrix)
 
 ```bash
-# Python (typical)
-ruff check .
-mypy src
-pytest path::test          # prefer targeted
-python scripts/verify_phase_completion.py   # 9/9 full gate (fixture smoke; exe launch if dist/ built)
-python scripts/beta_gate.py               # packaging + fixture + launch smokes only
-
-# Web (when touched)
-cd web && npm run lint
+python scripts/verify_phase_completion.py
+cd web && npm run lint          # when web touched
+cd web && npm run test:contracts
+cd web && npm run test:e2e      # when UI/E2E affected
 ```
 
-Run app: `python src/main.py`
-
-Testing policy: [docs/agent-testing-policy.md](docs/agent-testing-policy.md). New test **files** need explicit approval (`scripts/guard_new_tests.py`).
+Targeted first: `pytest tests/path::test -v`  
+Testing policy: [docs/agent-testing-policy.md](docs/agent-testing-policy.md) — no new test **files** without explicit approval.
 
 ---
 
-## Rules index
+## Runner contract (headless / queued)
 
-Attach with `@` from the table in [00-automation-core.mdc](.cursor/rules/00-automation-core.mdc).
-
-Always-on: `00-automation-core`, `10-runner-safety`, `20-novelguard-project`, `30-verify-gates`.
+1. Dedicated branch per job  
+2. Agent = proposer; human or job flag = approver  
+3. Smallest relevant verification; report commands + exit codes  
+4. Structured result: files, summary, verification, risks, next step  
+5. **No commit** unless job allows; **no merge** to protected branches without approval  
 
 ---
 
 ## Where to look
 
 | Need | Location |
-| ---- | -------- |
-| Automation / Hermes / runner | [automation/README.md](automation/README.md), [docs/agent-automation.md](docs/agent-automation.md) |
-| Architecture | [docs/current_architecture.md](docs/current_architecture.md) |
-| Entry points | [docs/entry_points.md](docs/entry_points.md) |
-| UI / tokens | [DESIGN.md](DESIGN.md) |
-| Testing | [docs/agent-testing-policy.md](docs/agent-testing-policy.md) |
-| Historical docs | `documents/` (read-only for new specs) |
+|------|----------|
+| Active roadmap | `docs/superpowers/roadmap/` |
+| Specs / plans | `docs/superpowers/specs/`, `plans/` |
+| Architecture | `docs/current_architecture.md` |
+| Release / smoke | `docs/release/` |
+| Automation | `automation/`, `docs/agent-automation.md` |
 
 ---
 
 ## Communication
 
-Terse and technical. For runner jobs, end with: status, changed paths, verification, blockers, next action.
+Terse and technical. End automated jobs with: **status**, **changed paths**, **verification**, **blockers**, **next action**.
