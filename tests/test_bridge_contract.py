@@ -1037,6 +1037,43 @@ def test_scan_emits_probe_not_legacy_scan_phase(tmp_path: Path) -> None:
     assert "probe" in phases or "persist" in phases
 
 
+def test_scan_observes_scan_persist_phase(tmp_path: Path) -> None:
+    for i in range(4):
+        (tmp_path / f"f{i}.txt").write_text("x\n", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    index = session.index
+    original_append = index.append_files_batch
+    release_tail_persist = threading.Event()
+
+    def hold_tail_persist(folder_path: str, files: list, *, reset: bool = False) -> None:
+        with session._lock:
+            in_tail = session._pipeline_phase == "scan_persist"
+        if in_tail and files:
+            release_tail_persist.wait(timeout=2.0)
+        original_append(folder_path, files, reset=reset)
+
+    index.append_files_batch = hold_tail_persist  # type: ignore[method-assign]
+    try:
+        api.start_scan()
+        deadline = time.monotonic() + 10.0
+        saw_scan_persist = False
+        while time.monotonic() < deadline:
+            snap = api.get_snapshot()
+            if snap["pipeline"]["phase"] == "scan_persist":
+                saw_scan_persist = True
+                assert "인덱스 저장" in snap["pipeline"]["label"]
+                release_tail_persist.set()
+                break
+            time.sleep(0.005)
+        _scan_until_idle(api)
+        assert saw_scan_persist
+    finally:
+        release_tail_persist.set()
+        index.append_files_batch = original_append  # type: ignore[method-assign]
+
+
 def test_update_review_decisions_approve_persists(tmp_path: Path) -> None:
     payload = "same story content\n"
     (tmp_path / "copy_a.txt").write_text(payload, encoding="utf-8")
@@ -2056,6 +2093,101 @@ def test_relation_groups_generic_chapter_in_same_parent() -> None:
     assert result.groups[0].relation_kind in RELATION_KINDS_V1
 
 
+def test_relation_title_prefix_overlap_same_folder() -> None:
+    from domain.filename_relation import detect_filename_relations
+    from domain.models import FileRecord
+
+    files = [
+        FileRecord(
+            id="a" * 64,
+            relative_path="Series/Alpha Chronicle.txt",
+            name="Alpha Chronicle.txt",
+            size_bytes=100,
+            modified_at_ns=1,
+            extension=".txt",
+        ),
+        FileRecord(
+            id="b" * 64,
+            relative_path="Series/Alpha Chronicle Side Story.txt",
+            name="Alpha Chronicle Side Story.txt",
+            size_bytes=100,
+            modified_at_ns=2,
+            extension=".txt",
+        ),
+    ]
+    result = detect_filename_relations(
+        files,
+        exact_membership_by_file_id={},
+        near_membership_by_file_id={},
+        relation_batch_id="batch-prefix",
+    )
+    assert len(result.groups) == 1
+    assert result.groups[0].relation_kind == "title_prefix_overlap"
+    assert result.groups[0].confidence_label == "low"
+
+
+def test_relation_no_prefix_overlap_unrelated_titles() -> None:
+    from domain.filename_relation import detect_filename_relations
+    from domain.models import FileRecord
+
+    files = [
+        FileRecord(
+            id="a" * 64,
+            relative_path="FolderA/Completely Different Alpha.txt",
+            name="Completely Different Alpha.txt",
+            size_bytes=100,
+            modified_at_ns=1,
+            extension=".txt",
+        ),
+        FileRecord(
+            id="b" * 64,
+            relative_path="FolderB/Another Story Entirely Beta.txt",
+            name="Another Story Entirely Beta.txt",
+            size_bytes=100,
+            modified_at_ns=2,
+            extension=".txt",
+        ),
+    ]
+    result = detect_filename_relations(
+        files,
+        exact_membership_by_file_id={},
+        near_membership_by_file_id={},
+        relation_batch_id="batch-prefix-neg",
+    )
+    assert result.groups == ()
+
+
+def test_relation_no_prefix_overlap_when_prefix_too_short() -> None:
+    from domain.filename_relation import detect_filename_relations
+    from domain.models import FileRecord
+
+    files = [
+        FileRecord(
+            id="a" * 64,
+            relative_path="Series/Short Title.txt",
+            name="Short Title.txt",
+            size_bytes=100,
+            modified_at_ns=1,
+            extension=".txt",
+        ),
+        FileRecord(
+            id="b" * 64,
+            relative_path="Series/Short Title Bonus.txt",
+            name="Short Title Bonus.txt",
+            size_bytes=100,
+            modified_at_ns=2,
+            extension=".txt",
+        ),
+    ]
+    result = detect_filename_relations(
+        files,
+        exact_membership_by_file_id={},
+        near_membership_by_file_id={},
+        relation_batch_id="batch-prefix-short",
+    )
+    assert result.groups == ()
+
+
 def test_include_relation_false_skips_relation_rows(tmp_path: Path) -> None:
     (tmp_path / "Novel 01.txt").write_text("x", encoding="utf-8")
     (tmp_path / "Novel 02.txt").write_text("y", encoding="utf-8")
@@ -2090,7 +2222,13 @@ def test_query_review_rows_relation_after_enabled_scan(tmp_path: Path) -> None:
     if relation_page["rows"]:
         assert all(row["type"] == "relation" for row in relation_page["rows"])
         assert all(
-            row.get("relationKind") in ("same_title_series", "chapter_sequence", "version_variant")
+            row.get("relationKind")
+            in (
+                "same_title_series",
+                "chapter_sequence",
+                "version_variant",
+                "title_prefix_overlap",
+            )
             for row in relation_page["rows"]
             if row.get("relationKind")
         )

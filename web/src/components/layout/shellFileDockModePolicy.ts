@@ -1,7 +1,7 @@
 import type { WorkMode } from "../../types/snapshot";
 import {
-  loadShellFileDockState,
-  persistShellFileDockState,
+  loadFileDockExpandedForMode,
+  persistFileDockExpandedForMode,
 } from "./shellFileDockStorage";
 
 /** LOCK-LAYOUT-2: collapse dock when entering Resolve or Quality. */
@@ -9,39 +9,28 @@ export function shouldCollapseFileDockForWorkMode(mode: WorkMode): boolean {
   return mode === "resolve" || mode === "quality";
 }
 
-/** Scan primary surface is FileDock — expand when library has indexed files. */
+/** Scan may auto-expand via explicit CTA (scan-open-file-dock), not on every mode entry. */
 export function shouldExpandFileDockForWorkMode(mode: WorkMode, fileCount: number): boolean {
   return mode === "scan" && fileCount > 0;
 }
 
-export function resolveInitialFileDockExpanded(activeMode: WorkMode, fileCount = 0): boolean {
-  const state = loadShellFileDockState();
+export function resolveInitialFileDockExpanded(activeMode: WorkMode): boolean {
   if (shouldCollapseFileDockForWorkMode(activeMode)) {
-    if (state.expanded) {
-      persistShellFileDockState({ ...state, expanded: false });
-    }
     return false;
   }
-  if (shouldExpandFileDockForWorkMode(activeMode, fileCount)) {
-    persistShellFileDockState({ ...state, expanded: true });
-    return true;
-  }
-  return state.expanded;
+  return loadFileDockExpandedForMode(activeMode);
 }
 
 export function persistFileDockCollapseForWorkMode(mode: WorkMode): void {
   if (!shouldCollapseFileDockForWorkMode(mode)) {
     return;
   }
-  const state = loadShellFileDockState();
-  if (state.expanded) {
-    persistShellFileDockState({ ...state, expanded: false });
-  }
+  persistFileDockExpandedForMode(mode, false);
 }
 
-export function persistFileDockExpandForWorkMode(mode: WorkMode, fileCount: number): void {
-  if (!shouldExpandFileDockForWorkMode(mode, fileCount)) {
-    return;
+export function fileDockExpandedForModeEntry(mode: WorkMode): boolean {
+  if (shouldCollapseFileDockForWorkMode(mode)) {
+    return false;
   }
-  persistShellFileDockState({ ...loadShellFileDockState(), expanded: true });
+  return loadFileDockExpandedForMode(mode);
 }

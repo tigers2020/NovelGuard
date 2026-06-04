@@ -271,6 +271,12 @@ export function DetailPanel({
                   <p className="mt-1 text-sm text-on-surface">
                     Confidence: {detail.evidence.confidenceLabel}
                   </p>
+                  {detail.evidence.relationKind === "title_prefix_overlap" ? (
+                    <p className="mt-1 text-xs text-on-surface-variant">
+                      파일명이 같은 제목 접두를 공유합니다. 신뢰도 낮음 — 검토 전용이며 이동·적용은
+                      Exact 그룹에서만 가능합니다.
+                    </p>
+                  ) : null}
                   <p className="mt-1 text-xs text-muted">
                     Matched: {detail.evidence.matchedTokens.join(", ") || "—"}
                   </p>

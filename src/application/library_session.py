@@ -1085,7 +1085,8 @@ class LibrarySession:
             reset = first_batch
             first_batch = False
             with self._lock:
-                self._pipeline_phase = "persist"
+                if self._pipeline_phase != "scan_persist":
+                    self._pipeline_phase = "persist"
             self._index.append_files_batch(folder, batch, reset=reset)
             committed = self._index.file_count()
             with self._lock:

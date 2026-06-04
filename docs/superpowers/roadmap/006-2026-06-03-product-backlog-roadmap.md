@@ -1,24 +1,23 @@
 ---
-title: Product Backlog (placeholder)
-status: draft
+title: Product Backlog (superseded)
+status: superseded
 date: 2026-06-03
+superseded_by: docs/superpowers/roadmap/007-2026-06-03-pr48-pr57-post-beta-roadmap.md
 parent_roadmap: docs/superpowers/roadmap/000-2026-06-01-novelguard-master-roadmap.md
 ---
 
 # Product Backlog Roadmap
 
-**Draft placeholder.** All release/automation tracks through **005** are closed on `main`.
+**Superseded** by [007 PR-48..57 post-beta roadmap](./007-2026-06-03-pr48-pr57-post-beta-roadmap.md) (2026-06-03).
 
-When starting new work: rename this file (`006-YYYY-MM-DD-<area>-<topic>-roadmap.md`), set `status: active`, add spec → plan → implement per [agent-workflow.md](../agent-workflow.md).
+Use **007** for active sequencing. Candidate themes below are folded into 007 unless noted.
 
-## Candidate themes (not approved)
-
-| Theme | Notes |
-|-------|--------|
-| Wave F polish | PR-26..29 items from [000 master](./000-2026-06-01-novelguard-master-roadmap.md) if still desired |
-| i18n / expert settings | P2 in UI spec — deferred |
-| Signed installer / auto-update | Out of beta scope — [known-limitations.md](../../release/known-limitations.md) |
-| Hermes production | Point dispatcher at `hermes_job_stdin.py` + `run-worker-loop.ps1` on WSL |
+| Former theme | 007 mapping |
+|--------------|-------------|
+| Wave F polish (column chooser) | PR-51 |
+| i18n / expert settings | PR-53 (expert slice only); full i18n out of track |
+| Signed installer / auto-update | PR-55 → PR-56 → PR-57 |
+| Hermes production | Parallel ops — [005](./005-2026-06-03-ops-automation-roadmap.md) |
 
 ## Gate before any PR
 

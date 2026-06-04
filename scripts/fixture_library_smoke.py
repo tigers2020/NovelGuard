@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import gc
 import json
 import sys
 import tempfile
@@ -106,7 +107,10 @@ def main() -> int:
             return 1
         results["app_info"] = "PASS"
 
-    print(json.dumps({"status": "PASS", "checks": results}, indent=2))
+        print(json.dumps({"status": "PASS", "checks": results}, indent=2))
+        del api, session, index, settings
+        gc.collect()
+        time.sleep(0.05)
     return 0
 
 

@@ -979,7 +979,7 @@ Report pass/fail in PR description.
 
 - [ ] **Step 5: Manual 7k checklist** (human)
 
-Record in PR or `docs/release/smoke-record-template.md`:
+Record in PR or [smoke-record-large-library.md](../../release/smoke-record-large-library.md) (PR-48 template):
 
 1. Folder `F:\kiwi\text\소설\정리` (or staging copy).
 2. First ~400 files appear in ShellFileDock before scan success.

@@ -14,9 +14,9 @@ import { StatChip } from "../ui/StatChip";
 import { columnsForPreset } from "./shellFileDockColumns";
 import {
   clampHeightPx,
-  loadShellFileDockState,
-  persistShellFileDockState,
-  SHELL_FILE_DOCK_DEFAULTS,
+  loadShellFileDockLayout,
+  persistFileDockExpandedForMode,
+  persistShellFileDockLayout,
 } from "./shellFileDockStorage";
 import { deriveShellFileDockState } from "./shellFileDockState";
 
@@ -44,13 +44,14 @@ export function ShellFileDock({
   const refreshSnapshot = useRefreshSnapshot();
   const snapshot = useSnapshot();
   const library = snapshot.library;
+  const activeMode = snapshot.work.activeMode;
   const pipeline = snapshot.pipeline;
   const summary = snapshot.fileListSummary;
   const libraryRevision = snapshot.work.resolve.libraryRevision;
-  const [heightPx, setHeightPx] = useState(() => loadShellFileDockState().heightPx);
-  const [density, setDensity] = useState<FileRowDensity>(() => loadShellFileDockState().density);
+  const [heightPx, setHeightPx] = useState(() => loadShellFileDockLayout().heightPx);
+  const [density, setDensity] = useState<FileRowDensity>(() => loadShellFileDockLayout().density);
   const [columnPreset, setColumnPreset] = useState<FileRowColumnPreset>(
-    () => loadShellFileDockState().columnPreset,
+    () => loadShellFileDockLayout().columnPreset,
   );
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -76,15 +77,14 @@ export function ShellFileDock({
   }, [search]);
 
   const persistLayout = useCallback(
-    (patch: Partial<typeof SHELL_FILE_DOCK_DEFAULTS>) => {
-      persistShellFileDockState({
-        expanded,
+    (patch: Partial<{ heightPx: number; density: FileRowDensity; columnPreset: FileRowColumnPreset }>) => {
+      persistShellFileDockLayout({
         heightPx: patch.heightPx ?? heightPx,
         density: patch.density ?? density,
         columnPreset: patch.columnPreset ?? columnPreset,
       });
     },
-    [columnPreset, density, expanded, heightPx],
+    [columnPreset, density, heightPx],
   );
 
   const buildQuery = useCallback(
@@ -162,12 +162,7 @@ export function ShellFileDock({
   const toggleExpanded = () => {
     const next = !expanded;
     onExpandedChange(next);
-    persistShellFileDockState({
-      expanded: next,
-      heightPx,
-      density,
-      columnPreset,
-    });
+    persistFileDockExpandedForMode(activeMode, next);
   };
 
   const handleSortHeader = (field: FileRowSortField) => {

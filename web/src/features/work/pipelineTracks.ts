@@ -20,7 +20,13 @@ export type PipelineTracksModel = {
   cancellable: boolean;
 };
 
-const FOREGROUND_PHASES = new Set(["probe", "persist", "exact_index", "finalize"]);
+const FOREGROUND_PHASES = new Set([
+  "probe",
+  "persist",
+  "scan_persist",
+  "exact_index",
+  "finalize",
+]);
 
 function formatStepStatus(step: number, stepTotal: number, percent: number): string {
   if (stepTotal > 0) {

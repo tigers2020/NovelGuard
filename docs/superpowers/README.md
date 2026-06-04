@@ -40,7 +40,7 @@ Small/localized tasks should skip these docs and follow [AGENTS.md](../../AGENTS
 | 39 | [034](./plans/034-2026-06-02-feature-ui-shell-pr39-app-shell-polish.md) | App shell polish |
 | 40 | [035](./plans/035-2026-06-02-feature-ui-settings-pr40-logs-settings-v2.md) | Logs/Settings v2 |
 
-**Next:** New `roadmap/006-…` when a product program starts. Tracks **003** / **004** / **005** closed 2026-06-03.
+**Next (active):** [007 PR-48..57 post-beta roadmap](./roadmap/007-2026-06-03-pr48-pr57-post-beta-roadmap.md). Tracks **003** / **004** / **005** closed 2026-06-03; **006** superseded by 007.
 
 **Smoke scripts:** `launch_packaged_smoke.py`, `fixture_library_smoke.py` — [smoke-record-2026-06-03.md](../release/smoke-record-2026-06-03.md).
 
