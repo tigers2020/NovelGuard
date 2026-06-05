@@ -19,8 +19,6 @@ def main(argv: list[str] | None = None) -> int:
         clear_lock,
         clear_stale_file_lock,
         lock_holder_alive,
-        parse_pid_lock_file,
-        pid_alive,
     )
 
     parser = argparse.ArgumentParser(description="Automation queue admin")
@@ -61,14 +59,12 @@ def main(argv: list[str] | None = None) -> int:
 
         conn = sqlite3.connect(queue_path)
         conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            """
+        rows = conn.execute("""
             SELECT job_id, status, created_at, started_at, finished_at
             FROM jobs
             WHERE status IN ('queued', 'running')
             ORDER BY created_at ASC
-            """
-        ).fetchall()
+            """).fetchall()
         now = time.time()
         print(
             json.dumps(
@@ -77,7 +73,9 @@ def main(argv: list[str] | None = None) -> int:
                     "active": [
                         {
                             **dict(r),
-                            "age_seconds": round(now - float(r["started_at"] or r["created_at"]), 1),
+                            "age_seconds": round(
+                                now - float(r["started_at"] or r["created_at"]), 1
+                            ),
                         }
                         for r in rows
                     ],
@@ -99,14 +97,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "release-locks":
         cleared: list[str] = []
         repo_lock_name = str(
-            ((cfg.get("repos") or {}).get("novelguard") or {}).get("lock_name")
-            or "NovelGuard.lock"
+            ((cfg.get("repos") or {}).get("novelguard") or {}).get("lock_name") or "NovelGuard.lock"
         )
         for path in [locks_dir / repo_lock_name, locks_dir / "automation-worker.lock"]:
             if not path.is_file():
                 continue
             if args.force or path.name == "automation-worker.lock":
-                alive, _ = lock_holder_alive(locks_dir) if path.name == "automation-worker.lock" else (False, None)
+                alive, _ = (
+                    lock_holder_alive(locks_dir)
+                    if path.name == "automation-worker.lock"
+                    else (False, None)
+                )
                 if args.force or not alive:
                     if path.name == "automation-worker.lock":
                         clear_lock(locks_dir)
@@ -120,7 +121,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "reset":
         deleted = queue.reset_job(args.job_id)
-        print(json.dumps({"job_id": args.job_id, "deleted": deleted, "stats": queue.stats()}, indent=2))
+        print(
+            json.dumps(
+                {"job_id": args.job_id, "deleted": deleted, "stats": queue.stats()}, indent=2
+            )
+        )
         return 0 if deleted else 1
 
     return 1

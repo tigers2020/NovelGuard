@@ -1,0 +1,11 @@
+---
+description: Web UI and Tailwind v4 conventions
+globs: web/**
+alwaysApply: false
+---
+
+# Web
+
+- React+TS; Tailwind v4 per [DESIGN.md](../../DESIGN.md).
+- UI in `web/` only — no business rules in components.
+- After UI changes: `cd web && npm run lint` + relevant contract/e2e tests.

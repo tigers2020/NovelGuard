@@ -44,14 +44,15 @@ def main(argv: list[str] | None = None) -> int:
     port = int(linear.get("webhook_port") or 8765)
     path = str(linear.get("webhook_path") or "/linear/webhook")
     configured_public = str(linear.get("webhook_public_url") or "").rstrip("/")
-    local_url = f"http://{host}:{port}{path}"
     secret = linear.get("webhook_secret") or ""
 
     checks: list[dict[str, str]] = []
 
     health = _get_json(f"http://{host}:{port}/health")
     if health and health.get("ok"):
-        checks.append({"check": "webhook serve", "status": "ok", "detail": f"http://{host}:{port}/health"})
+        checks.append(
+            {"check": "webhook serve", "status": "ok", "detail": f"http://{host}:{port}/health"}
+        )
     else:
         checks.append(
             {
@@ -101,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
     print("Linear -> Settings -> Administration -> API -> Webhooks -> Create webhook")
     print(f"  URL:      {linear_url}")
     print("  Events:   Issues (Issue create + update)")
-    print(f"  Team:     NoverGuard (NovelGuard project)")
+    print("  Team:     NoverGuard (NovelGuard project)")
     if secret:
         print("  Secret:   matches automation/config.yaml linear.webhook_secret")
     else:
@@ -132,7 +133,9 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(result, indent=2, ensure_ascii=False))
         except urllib.error.HTTPError as exc:
             print()
-            print(f"smoke POST failed: HTTP {exc.code} {exc.read().decode('utf-8', errors='replace')}")
+            print(
+                f"smoke POST failed: HTTP {exc.code} {exc.read().decode('utf-8', errors='replace')}"
+            )
             return 1
 
     failed = [c for c in checks if c["status"] == "FAIL"]

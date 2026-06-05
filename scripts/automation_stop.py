@@ -115,7 +115,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[stop] pid={row['pid']} {row['cmd'][:120]}")
             if not args.dry_run:
                 subprocess.run(
-                    ["powershell", "-NoProfile", "-Command", f"Stop-Process -Id {row['pid']} -Force"],
+                    [
+                        "powershell",
+                        "-NoProfile",
+                        "-Command",
+                        f"Stop-Process -Id {row['pid']} -Force",
+                    ],
                     check=False,
                 )
 

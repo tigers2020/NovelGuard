@@ -26,18 +26,15 @@ async function clickApplyPreviewRun(page: import("@playwright/test").Page) {
     .evaluate((el) => (el as HTMLButtonElement).click());
 }
 
-/** Pick a mock row with executable move_duplicate so preview reaches confirm step. */
-async function selectExecutableMoveRow(page: import("@playwright/test").Page) {
+/** Open move facet + Exact filter so current_query preview is enabled. */
+async function prepareExecutableMoveFilter(page: import("@playwright/test").Page) {
+  await page.getByTestId("resolve-type-filter-exact").click();
   await page.getByTestId("resolve-facet-move").click();
-  const row = page.getByTestId("grid-row-row-2");
-  await expect(row).toBeVisible({ timeout: 15_000 });
-  await row.scrollIntoViewIfNeeded();
-  await row.click();
-  await page.getByTestId("resolve-row-check-row-2").check();
+  await expect(page.getByTestId("batch-preview-open")).toBeEnabled({ timeout: 15_000 });
 }
 
 async function runApplyPreview(page: import("@playwright/test").Page) {
-  await selectExecutableMoveRow(page);
+  await prepareExecutableMoveFilter(page);
   await openApplyDialog(page);
   await clickApplyPreviewRun(page);
 }
@@ -199,6 +196,55 @@ test.describe("NovelGuard smoke", () => {
     await openResolveWorkspace(page);
   });
 
+  test("NOV-19 resolve grid has no batch selection checkbox column", async ({ page }) => {
+    await openResolveWorkspace(page);
+    const resolveGrid = page.getByTestId("resolve-review-grid");
+    await expect(resolveGrid.locator('input[type="checkbox"]')).toHaveCount(0);
+    await expect(resolveGrid.getByTestId("grid-header-select-all")).toHaveCount(0);
+  });
+
+  test("NOV-19 batch bar keeps exclude and preview only", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await expect(page.getByTestId("batch-exclude-all-filtered")).toBeVisible();
+    await expect(page.getByTestId("batch-preview-open")).toBeVisible();
+    await expect(page.getByTestId("batch-approve-selected")).toHaveCount(0);
+    await expect(page.getByTestId("batch-exclude-selected")).toHaveCount(0);
+    await expect(page.getByTestId("batch-approve-all-filtered")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "보이는 행 전체 선택" })).toHaveCount(0);
+  });
+
+  test("NOV-19 bulk exclude confirm shows updated copy", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await page.getByTestId("resolve-type-filter-exact").click();
+    await expect(page.getByTestId("batch-exclude-all-filtered")).toBeEnabled({ timeout: 15_000 });
+    await page.getByTestId("batch-exclude-all-filtered").click();
+    const dialog = page.getByTestId("bulk-filter-confirm-dialog");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("heading")).toHaveText("현재 필터 결과 제외");
+    await expect(dialog).toContainText("현재 필터에 포함된 이동 후보");
+    await expect(dialog).toContainText("이 파일들은 미리보기와 적용 대상에서 빠집니다.");
+    await page.getByTestId("bulk-filter-confirm-cancel").click();
+    await expect(dialog).toHaveCount(0);
+  });
+
+  test("NOV-19 preview enables from current filter without checkbox selection", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await prepareExecutableMoveFilter(page);
+    await openApplyDialog(page);
+    await expect(page.getByTestId("apply-preview-run")).toBeVisible();
+  });
+
+  test("NOV-19 preview disabled when filter has no executable rows", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await page.getByTestId("resolve-type-filter-near").click();
+    const preview = page.getByTestId("batch-preview-open");
+    await expect(preview).toBeDisabled();
+    await expect(preview).toHaveAttribute(
+      "title",
+      /검토 전용이며 일괄 적용할 수 없습니다/,
+    );
+  });
+
   test("quality query failure shows error and retry", async ({ page }) => {
     await page.addInitScript(() => {
       (window as unknown as { __NOVELGUARD_TEST_BRIDGE_FAIL__?: string }).__NOVELGUARD_TEST_BRIDGE_FAIL__ =
@@ -240,7 +286,7 @@ test.describe("NovelGuard smoke", () => {
         "getMovePreview";
     });
     await openResolveWorkspace(page);
-    await selectExecutableMoveRow(page);
+    await prepareExecutableMoveFilter(page);
     await openApplyDialog(page);
     await clickApplyPreviewRun(page);
     await expect(page.getByTestId("apply-preview-error")).toBeVisible();

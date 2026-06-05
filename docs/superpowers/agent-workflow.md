@@ -5,7 +5,7 @@ Read it only when the task needs spec/plan gates, Superpowers skills, or naming 
 
 Canonical short guide: [AGENTS.md](../../AGENTS.md).
 Automation / runners: [docs/agent-automation.md](../agent-automation.md).
-Activation: `.cursor/rules/00-automation-core.mdc`.
+Routing: `.cursor/rules/00-automation-core.mdc` (short; loads deep docs on demand).
 
 ---
 
