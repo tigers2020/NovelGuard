@@ -98,6 +98,8 @@ export function applyMockReviewState(rows: ReviewRow[]): ReviewRow[] {
   });
 }
 
+const UNRESOLVED_STATUSES = new Set(["unreviewed", "conflict"]);
+
 export function resolveInsightCounts(rows: ReviewRow[]): {
   moveReadyCount: number;
   reviewSignalCount: number;
@@ -125,7 +127,7 @@ export function fileRowStatusCounts(rows: ReviewRow[]): {
     if (row.rowKind !== "file") continue;
     if (row.status === "approved") approvedCount += 1;
     else if (row.status === "conflict") conflictCount += 1;
-    if (row.status === "unreviewed" || row.status === "conflict") queueCount += 1;
+    if (UNRESOLVED_STATUSES.has(row.status)) queueCount += 1;
   }
   return { queueCount, approvedCount, conflictCount };
 }

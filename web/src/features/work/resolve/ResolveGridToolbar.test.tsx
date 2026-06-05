@@ -23,11 +23,23 @@ describe("ResolveGridToolbar", () => {
     cleanup();
   });
 
-  it("shows move-ready and review-signal chips instead of Queue", () => {
-    render(<ResolveGridToolbar {...baseProps} />);
+  it("shows move-ready and review-signal chips without Queue label", () => {
+    render(
+      <ResolveGridToolbar
+        {...baseProps}
+        rowTypeFilter="all"
+        reviewSignalCount={5}
+        groupCount={2}
+        conflictCount={1}
+      />,
+    );
+
     expect(screen.getByText("이동 대기")).toBeTruthy();
     expect(screen.getByText("참고 신호")).toBeTruthy();
     expect(screen.queryByText("Queue")).toBeNull();
+    expect(screen.getByText("Groups")).toBeTruthy();
+    expect(screen.getByText("Conflicts")).toBeTruthy();
+    expect(screen.getByText("Approved")).toBeTruthy();
   });
 
   it("renders primary preview CTA when enabled", () => {

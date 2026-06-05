@@ -25,4 +25,25 @@ describe("validateAppSnapshot", () => {
     };
     expect(() => validateAppSnapshot(bad)).toThrow(SnapshotContractError);
   });
+
+  it("rejects resolve snapshot missing moveReadyCount", () => {
+    const resolve = { ...validAppSnapshot.work.resolve };
+    delete (resolve as { moveReadyCount?: number }).moveReadyCount;
+    const bad = {
+      ...validAppSnapshot,
+      work: { ...validAppSnapshot.work, resolve },
+    };
+    expect(() => validateAppSnapshot(bad)).toThrow(SnapshotContractError);
+  });
+
+  it("rejects negative reviewSignalCount", () => {
+    const bad = {
+      ...validAppSnapshot,
+      work: {
+        ...validAppSnapshot.work,
+        resolve: { ...validAppSnapshot.work.resolve, reviewSignalCount: -1 },
+      },
+    };
+    expect(() => validateAppSnapshot(bad)).toThrow(SnapshotContractError);
+  });
 });
