@@ -84,9 +84,7 @@ def build_near_group_detail(
         }
 
     member_records = [
-        files_by_id[member["fileId"]]
-        for member in members
-        if member["fileId"] in files_by_id
+        files_by_id[member["fileId"]] for member in members if member["fileId"] in files_by_id
     ]
     keeper_file_id = pick_keeper_file_id(member_records) if member_records else members[0]["fileId"]
     for member in members:

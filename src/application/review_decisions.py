@@ -62,20 +62,20 @@ class UpdateReviewDecisionsUseCase:
             if command == "approve" and row.get("rowKind") != "file":
                 continue
 
-            group_id = group_id_from_row(row)
-            if not group_id or group_id not in members_by_group:
+            gid = group_id_from_row(row)
+            if not gid or gid not in members_by_group:
                 continue
 
             if command == "reset":
-                updated += self._apply_reset(folder, row, group_id)
+                updated += self._apply_reset(folder, row, gid)
                 continue
 
             if command == "setKeeper":
                 updated += self._apply_set_keeper(
                     folder,
                     row,
-                    group_id,
-                    members_by_group[group_id],
+                    gid,
+                    members_by_group[gid],
                     keeper_file_id=keeper_file_id,
                 )
                 continue
@@ -83,7 +83,7 @@ class UpdateReviewDecisionsUseCase:
             status = _COMMAND_STATUS.get(command)
             if status is None:
                 continue
-            updated += self._apply_status(folder, row, group_id, status)
+            updated += self._apply_status(folder, row, gid, status)
 
         return updated
 

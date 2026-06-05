@@ -2062,9 +2062,7 @@ def test_preview_allows_near_approved_move_duplicate(tmp_path: Path) -> None:
     ]
     if not move_rows:
         pytest.skip("no near move_duplicate rows after approve")
-    preview = api.get_move_preview(
-        {"type": "explicit_rows", "rowIds": [move_rows[0]["id"]]}
-    )
+    preview = api.get_move_preview({"type": "explicit_rows", "rowIds": [move_rows[0]["id"]]})
     validate_move_preview(preview)
     assert preview["summary"]["operationCount"] >= 0
 
