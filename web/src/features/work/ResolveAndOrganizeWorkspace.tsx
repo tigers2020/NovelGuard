@@ -387,7 +387,8 @@ export function ResolveAndOrganizeWorkspace({
             </div>
           )}
           <ResolveGridToolbar
-            queueCount={resolve.queueCount}
+            moveReadyCount={resolve.moveReadyCount}
+            reviewSignalCount={resolve.reviewSignalCount}
             groupCount={resolve.groupCount}
             conflictCount={resolve.conflictCount}
             approvedCount={resolve.approvedCount}

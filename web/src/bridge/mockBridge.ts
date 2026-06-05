@@ -37,6 +37,7 @@ import {
   applyMockReviewState,
   fileRowStatusCounts,
   persistMockExactNonKeeperApprovals,
+  resolveInsightCounts,
 } from "./mockReviewState";
 import type { DuplicateGroupDetail, ReviewRow } from "../types/review";
 import { buildMockDuplicateGroupDetail } from "./mockDuplicateGroupDetail";
@@ -239,6 +240,7 @@ function finalizeLastStatusFromReport(doc: FinalizeReportDocument | null): Final
 function buildSnapshot(): AppSnapshot {
   const merged = mergedReviewRows();
   const counts = fileRowStatusCounts(merged);
+  const insights = resolveInsightCounts(merged);
   const qualityRows = buildQualityRows();
 
   return {
@@ -274,6 +276,8 @@ function buildSnapshot(): AppSnapshot {
       },
       resolve: {
         queueCount: counts.queueCount,
+        moveReadyCount: insights.moveReadyCount,
+        reviewSignalCount: insights.reviewSignalCount,
         groupCount: 37,
         conflictCount: counts.conflictCount,
         approvedCount: counts.approvedCount,

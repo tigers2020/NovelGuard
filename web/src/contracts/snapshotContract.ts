@@ -43,8 +43,17 @@ function assertRequiredFields(snapshot: Record<string, unknown>): void {
   }
   const work = snapshot.work as Record<string, unknown>;
   const resolve = work.resolve;
-  if (!isRecord(resolve) || typeof resolve.libraryRevision !== "number") {
+  if (!isRecord(resolve)) {
+    throw new SnapshotContractError("ResolveSnapshot must be an object");
+  }
+  if (typeof resolve.libraryRevision !== "number") {
     throw new SnapshotContractError("ResolveSnapshot.libraryRevision must be a number");
+  }
+  for (const key of ["moveReadyCount", "reviewSignalCount"] as const) {
+    const value = resolve[key];
+    if (typeof value !== "number" || value < 0 || !Number.isInteger(value)) {
+      throw new SnapshotContractError(`ResolveSnapshot.${key} must be a non-negative int`);
+    }
   }
 }
 

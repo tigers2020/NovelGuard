@@ -28,6 +28,8 @@ export interface ScanSnapshot {
 
 export interface ResolveSnapshot {
   queueCount: number;
+  moveReadyCount: number;
+  reviewSignalCount: number;
   groupCount: number;
   conflictCount: number;
   approvedCount: number;

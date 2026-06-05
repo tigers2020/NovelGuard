@@ -74,6 +74,8 @@ def build_snapshot(
     has_pending_apply: bool,
     duplicate_group_count: int = 0,
     queue_count: int = 0,
+    move_ready_count: int = 0,
+    review_signal_count: int = 0,
     approved_count: int = 0,
     conflict_count: int = 0,
     integrity_issue_count: int = 0,
@@ -122,6 +124,8 @@ def build_snapshot(
             },
             "resolve": {
                 "queueCount": queue_count,
+                "moveReadyCount": move_ready_count,
+                "reviewSignalCount": review_signal_count,
                 "groupCount": duplicate_group_count,
                 "conflictCount": conflict_count,
                 "approvedCount": approved_count,

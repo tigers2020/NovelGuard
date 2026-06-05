@@ -10,7 +10,8 @@ const TYPE_FILTERS: { id: ResolveRowTypeFilter; label: string }[] = [
 ];
 
 export function ResolveGridToolbar({
-  queueCount,
+  moveReadyCount,
+  reviewSignalCount,
   groupCount,
   conflictCount,
   approvedCount,
@@ -23,7 +24,8 @@ export function ResolveGridToolbar({
   onRetry,
   onOpenFinalize,
 }: {
-  queueCount: number;
+  moveReadyCount: number;
+  reviewSignalCount: number;
   groupCount: number;
   conflictCount: number;
   approvedCount: number;
@@ -40,7 +42,8 @@ export function ResolveGridToolbar({
     <div className="shrink-0 border-b border-outline bg-surface px-3 py-2">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-xs font-semibold text-secondary">Resolve & Organize</p>
-        <StatChip label="Queue" value={queueCount} tone="warn" />
+        <StatChip label="이동 대기" value={moveReadyCount} tone="warn" />
+        <StatChip label="참고 신호" value={reviewSignalCount} />
         <StatChip label="Groups" value={groupCount} />
         <StatChip label="Conflicts" value={conflictCount} tone="danger" />
         <StatChip label="Approved" value={approvedCount} tone="good" />

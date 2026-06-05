@@ -116,6 +116,8 @@ class LibrarySession:
         self._review_rows_cache: list[dict[str, Any]] = []
         self._duplicate_group_count = 0
         self._queue_count = 0
+        self._move_ready_count = 0
+        self._review_signal_count = 0
         self._approved_count = 0
         self._conflict_count = 0
         self._files_by_id: dict[str, FileRecord] = {}
@@ -366,6 +368,8 @@ class LibrarySession:
                 has_pending_apply=self._has_pending_apply,
                 duplicate_group_count=self._duplicate_group_count,
                 queue_count=self._queue_count,
+                move_ready_count=self._move_ready_count,
+                review_signal_count=self._review_signal_count,
                 approved_count=self._approved_count,
                 conflict_count=self._conflict_count,
                 integrity_issue_count=self._integrity_issue_count,
@@ -812,6 +816,8 @@ class LibrarySession:
         self._relation_groups_by_id = {}
         self._duplicate_group_count = 0
         self._queue_count = 0
+        self._move_ready_count = 0
+        self._review_signal_count = 0
         self._approved_count = 0
         self._conflict_count = 0
         self._files_by_id = {}
@@ -858,8 +864,13 @@ class LibrarySession:
         )
 
     def _refresh_resolve_counts(self) -> None:
+        from application.review_snapshot_counts import resolve_insight_counts
+
         queue, approved, conflict = file_row_status_counts(self._review_rows_cache)
+        move_ready, review_signal = resolve_insight_counts(self._review_rows_cache)
         self._queue_count = queue
+        self._move_ready_count = move_ready
+        self._review_signal_count = review_signal
         self._approved_count = approved
         self._conflict_count = conflict
 

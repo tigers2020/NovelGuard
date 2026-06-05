@@ -1948,6 +1948,28 @@ def test_near_duplicate_skips_same_exact_group(tmp_path: Path) -> None:
     assert result.stats.accepted_pair_count == 0
 
 
+def test_resolve_snapshot_split_counts_with_near_rows(tmp_path: Path) -> None:
+    (tmp_path / "alpha.txt").write_text(_near_similar_body("alpha"), encoding="utf-8")
+    (tmp_path / "beta.txt").write_text(_near_similar_body("beta"), encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _wait_deep_analysis_complete(api)
+    snap = api.get_snapshot()
+    validate_app_snapshot(snap)
+    resolve = snap["work"]["resolve"]
+    move_ready = resolve["moveReadyCount"]
+    review_signal = resolve["reviewSignalCount"]
+    queue = resolve["queueCount"]
+    assert move_ready + review_signal == queue
+    assert review_signal > 0
+    assert move_ready < queue
+    assert isinstance(resolve["approvedCount"], int)
+    assert isinstance(resolve["conflictCount"], int)
+    assert isinstance(resolve["groupCount"], int)
+
+
 def test_query_review_rows_near_after_similar_scan(tmp_path: Path) -> None:
     (tmp_path / "alpha.txt").write_text(_near_similar_body("alpha"), encoding="utf-8")
     (tmp_path / "beta.txt").write_text(_near_similar_body("beta"), encoding="utf-8")

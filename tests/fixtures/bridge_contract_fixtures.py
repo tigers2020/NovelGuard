@@ -35,6 +35,8 @@ VALID_SNAPSHOT: dict[str, Any] = {
         },
         "resolve": {
             "queueCount": 0,
+            "moveReadyCount": 0,
+            "reviewSignalCount": 0,
             "groupCount": 0,
             "conflictCount": 0,
             "approvedCount": 0,
