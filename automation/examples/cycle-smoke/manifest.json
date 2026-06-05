@@ -47,9 +47,15 @@
           "expect_reason_contains": "todo-list-done→implement"
         },
         {
+          "id": "B1-task-list-done",
+          "fixture": "B1-task-list-done.json",
+          "expect_prompt": "linear/in-progress/implement.md",
+          "expect_reason_contains": "task-list-done→implement"
+        },
+        {
           "id": "B2-plan-done",
           "fixture": "B2-plan-done.json",
-          "expect_prompt": "linear/todo/write-todo-list.md"
+          "expect_prompt": "linear/todo/write-task-list.md"
         },
         {
           "id": "B2-research-done",

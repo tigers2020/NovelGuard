@@ -9,12 +9,15 @@ from typing import Any
 
 from automation.linear.linear_ids import (
     has_label_key,
+    has_task_list_done,
     issue_in_scope,
     issue_label_ids,
     label_ids_before,
     resolve_state_id,
     resolve_state_name,
     route_debug,
+    task_list_done_label_ids,
+    task_list_done_reason_suffix,
 )
 
 _PROMPT_CREATE = "linear/backlog/create-research.md"
@@ -110,7 +113,7 @@ def resolve_planning_prompt(
         if has_label_key(data, cfg, "grill_needs_revision"):
             return "linear/todo/revise-spec.md"
         if has_label_key(data, cfg, "plan_done"):
-            return "linear/todo/write-todo-list.md"
+            return "linear/todo/write-task-list.md"
         if has_label_key(data, cfg, "spec_done") and not has_label_key(data, cfg, "plan_done"):
             return "linear/todo/defer-to-backlog.md"
         if has_label_key(data, cfg, "research_done"):
@@ -177,14 +180,15 @@ def _route_execution_from_labels(
             reason=f"{reason_prefix} (impl-done→verify)",
         )
 
-    if has_label_key(data, cfg, "todo_list_done"):
+    if has_task_list_done(data, cfg):
         if state in ("In Progress", "Todo", "Backlog"):
+            suffix = task_list_done_reason_suffix(data, cfg)
             return LinearRoute(
                 prompt_file=_PROMPT_IMPLEMENT,
                 commit=True,
                 verify="none",
                 git_prepare=False,
-                reason=f"{reason_prefix} (todo-list-done→implement)",
+                reason=f"{reason_prefix} ({suffix})",
             )
 
     return None
@@ -209,10 +213,8 @@ def _route_label_only_execution(
 
     merged = (cfg or {}).get("linear", {}).get("label_ids") or {}
     impl_done_id = str(merged.get("impl_done") or DEFAULT_LABEL_IDS.get("impl_done") or "")
-    todo_list_done_id = str(
-        merged.get("todo_list_done") or DEFAULT_LABEL_IDS.get("todo_list_done") or ""
-    )
     blocked_id = str(merged.get("impl_blocked") or DEFAULT_LABEL_IDS.get("impl_blocked") or "")
+    done_ids = task_list_done_label_ids(cfg)
 
     if impl_done_id and impl_done_id in current and impl_done_id not in before:
         if not has_label_key(data, cfg, "verify_done"):
@@ -224,19 +226,19 @@ def _route_label_only_execution(
                 reason=f"labels@{state} (impl-done→verify)",
             )
 
+    newly_done = [label_id for label_id in done_ids if label_id in current and label_id not in before]
     if (
-        todo_list_done_id
-        and todo_list_done_id in current
-        and todo_list_done_id not in before
+        newly_done
         and not has_label_key(data, cfg, "impl_done")
         and state in ("In Progress", "Todo", "Backlog")
     ):
+        suffix = task_list_done_reason_suffix(data, cfg)
         return LinearRoute(
             prompt_file=_PROMPT_IMPLEMENT,
             commit=True,
             verify="none",
             git_prepare=False,
-            reason=f"labels@{state} (todo-list-done→implement)",
+            reason=f"labels@{state} ({suffix})",
         )
 
     if state == "In Progress":
