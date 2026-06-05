@@ -125,9 +125,7 @@ def _merge_non_exact_row(
     keeper_override = group_entry[0] if group_entry else None
 
     member_records = [
-        files_by_id[member_id]
-        for member_id in group_member_ids
-        if member_id in files_by_id
+        files_by_id[member_id] for member_id in group_member_ids if member_id in files_by_id
     ]
     member_ids = [member.id for member in member_records]
     keeper_id: str | None = None
