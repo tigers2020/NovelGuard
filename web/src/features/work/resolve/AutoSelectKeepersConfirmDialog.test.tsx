@@ -1,15 +1,19 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AutoSelectKeepersConfirmDialog } from "./AutoSelectKeepersConfirmDialog";
-import type { AutoSelectKeepersStats } from "./autoSelectKeepers";
+import type { AutoSelectSummary } from "./computeAutoSelectSummary";
 
-const baseStats: AutoSelectKeepersStats = {
-  exactUnreviewed: 4,
-  nearUnreviewed: 2,
-  relationUnreviewed: 1,
-  keeperCount: 3,
-  moveCandidateCount: 4,
-  unreviewedFileCount: 7,
+const baseSummary: AutoSelectSummary = {
+  unreviewedCount: 10,
+  keeperCount: 4,
+  moveCandidateCount: 6,
+  exactCount: 3,
+  nearCount: 4,
+  relationCount: 3,
+  capped: false,
+  mutationTargetCount: 10,
+  partialLoad: false,
+  keeperPreviewUsesMtime: true,
 };
 
 describe("AutoSelectKeepersConfirmDialog", () => {
@@ -17,34 +21,57 @@ describe("AutoSelectKeepersConfirmDialog", () => {
     cleanup();
   });
 
-  it("renders E/N/R counts and keeper rule", () => {
+  it("renders canonical sections and count testids", () => {
     render(
       <AutoSelectKeepersConfirmDialog
         open
-        stats={baseStats}
+        summary={baseSummary}
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
 
     expect(screen.getByTestId("auto-select-keepers-confirm-dialog")).toBeTruthy();
-    expect(screen.getByText(/Exact 4/)).toBeTruthy();
-    expect(screen.getByText(/Near 2/)).toBeTruthy();
-    expect(screen.getByText(/Relation 1/)).toBeTruthy();
-    expect(screen.getByTestId("auto-select-keeper-rule").textContent).toContain("크기");
-    expect(screen.queryByTestId("auto-select-cap-warning")).toBeNull();
+    expect(screen.getByText(/미검토 10건을 자동 선정합니다/)).toBeTruthy();
+    expect(screen.getByTestId("auto-select-summary-exact").textContent).toContain("3");
+    expect(screen.getByTestId("auto-select-summary-near").textContent).toContain("4");
+    expect(screen.getByTestId("auto-select-summary-relation").textContent).toContain("3");
+    expect(screen.getByText(/가장 용량이 큰 파일/)).toBeTruthy();
+    expect(
+      screen.getByText(/이동 계획 미리보기에서 최종 이동 대상을 검토합니다/),
+    ).toBeTruthy();
+    expect(screen.queryByTestId("bulk-auto-select-cap-warning")).toBeNull();
   });
 
-  it("shows cap warning when unreviewed count exceeds 500", () => {
+  it("shows cap warning when capped", () => {
     render(
       <AutoSelectKeepersConfirmDialog
         open
-        stats={{ ...baseStats, unreviewedFileCount: 501, moveCandidateCount: 498 }}
+        summary={{
+          ...baseSummary,
+          capped: true,
+          mutationTargetCount: 500,
+          unreviewedCount: 501,
+        }}
         onConfirm={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
 
-    expect(screen.getByTestId("auto-select-cap-warning")).toBeTruthy();
+    expect(screen.getByTestId("bulk-auto-select-cap-warning")).toBeTruthy();
+    expect(screen.getByText(/500건을 초과합니다/)).toBeTruthy();
+  });
+
+  it("shows partial load warning when partialLoad", () => {
+    render(
+      <AutoSelectKeepersConfirmDialog
+        open
+        summary={{ ...baseSummary, partialLoad: true }}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("batch-partial-load-warning")).toBeTruthy();
   });
 });
