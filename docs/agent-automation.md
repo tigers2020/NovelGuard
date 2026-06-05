@@ -39,6 +39,19 @@ automation/
 
 Quick start: [automation/README.md](../automation/README.md).
 
+### Linear webhook routing
+
+**Routing is defined only in** `automation/linear/router.py`. Prompt YAML `trigger:` frontmatter is documentation; the router picks **one** prompt per webhook.
+
+| Event | Prompt |
+| ----- | ------ |
+| Issue create (Backlog only) | `00-linear-create-pr-to-spec.md` |
+| Update, status or labels @ Backlog/Todo | `01-linear-status-changed-router.md` |
+| Update, status → In Progress | `02-linear-in-progress-implement.md` |
+| Update, status → In Review | `03-linear-in-review-verification.md` |
+
+Label-only updates at In Progress / In Review are ignored. Phase closeouts must use `save_issue` with status **and** done label in one call so the next webhook fires.
+
 Hermes can enqueue the same JSON shape as [automation/examples/hermes-job.json](../automation/examples/hermes-job.json):
 
 ```bash

@@ -1,0 +1,30 @@
+{
+  "action": "update",
+  "type": "Issue",
+  "updatedFrom": {
+    "labelIds": []
+  },
+  "data": {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "identifier": "NOV-21",
+    "title": "Resolve: load full filtered review grid result set",
+    "url": "https://linear.app/zkaufman/issue/NOV-21/example",
+    "project": {
+      "id": "20965ebc-3ea7-4787-9310-f15ad9019007",
+      "name": "NovelGuard"
+    },
+    "team": {
+      "id": "97047174-6453-4458-b170-a9bf5f7b52e0",
+      "name": "NoverGuard"
+    },
+    "state": {
+      "id": "49a46ce6-eb18-4377-95ae-b76f655a77b7",
+      "name": "Todo",
+      "type": "unstarted"
+    },
+    "labels": [
+      { "name": "auto:spec-done" },
+      { "name": "auto:plan-done" }
+    ]
+  }
+}
