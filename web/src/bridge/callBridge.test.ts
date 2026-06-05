@@ -1,13 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BridgeCallError } from "./bridgeErrors";
 import { callBridge } from "./callBridge";
 import { getBridgeTimeoutMs } from "./bridgeTimeouts";
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("bridgeTimeouts", () => {
   it("returns method-specific timeouts", () => {
     expect(getBridgeTimeoutMs("get_snapshot")).toBe(5_000);
     expect(getBridgeTimeoutMs("query_file_rows")).toBe(60_000);
     expect(getBridgeTimeoutMs("query_review_rows")).toBe(45_000);
+    expect(getBridgeTimeoutMs("query_quality_rows")).toBe(45_000);
+    expect(getBridgeTimeoutMs("start_scan")).toBe(10_000);
+    expect(getBridgeTimeoutMs("get_move_preview")).toBe(120_000);
     expect(getBridgeTimeoutMs("unknown_method")).toBe(15_000);
   });
 });
@@ -74,5 +81,16 @@ describe("callBridge", () => {
         { method: "get_snapshot", timeoutMs: 30 },
       ),
     ).rejects.toMatchObject({ code: "timeout" });
+  });
+
+  it("times out using method-default timeout from bridgeTimeouts", async () => {
+    vi.useFakeTimers();
+    const promise = callBridge(() => new Promise(() => {}), { method: "get_snapshot" });
+    const expectReject = expect(promise).rejects.toMatchObject({
+      code: "timeout",
+      method: "get_snapshot",
+    });
+    await vi.advanceTimersByTimeAsync(5_000);
+    await expectReject;
   });
 });
