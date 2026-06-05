@@ -16,6 +16,7 @@ from typing import Any, Iterator
 
 from automation.runners import emit as emit_mod
 from automation.runners.config import load_config, repo_path, repo_root
+from automation.runners.context_compressor import compress_job_context
 from automation.runners.cursor_runner import (
     PROMPT_DELIVERY,
     is_cursor_proc_running,
@@ -156,6 +157,16 @@ def render_prompt(cfg: dict[str, Any], payload: dict[str, Any], branch: str) -> 
     template = template_path.read_text(encoding="utf-8")
     meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
     linear_event = meta.get("linear_event") if isinstance(meta, dict) else None
+    raw_context = "\n".join(
+        [
+            str(payload.get("task") or ""),
+            str(meta.get("route_reason") or ""),
+            json.dumps(linear_event or {}, ensure_ascii=False),
+        ]
+    )
+    memory_result = compress_job_context(cfg, payload=payload, raw_context=raw_context)
+    memory = memory_result.get("memory")
+    memory_json = json.dumps(memory, ensure_ascii=False, indent=2) if memory else "{}"
     replacements = {
         "{{TASK}}": str(payload["task"]),
         "{{JOB_ID}}": str(payload["id"]),
@@ -169,6 +180,8 @@ def render_prompt(cfg: dict[str, Any], payload: dict[str, Any], branch: str) -> 
             ensure_ascii=False,
             separators=(",", ":"),
         ),
+        "{{CONTEXT_MEMORY_JSON}}": memory_json,
+        "{{NEXT_PROMPT}}": str((memory or {}).get("next_prompt") or payload.get("task") or ""),
     }
     rendered = template
     for key, value in replacements.items():

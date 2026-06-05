@@ -54,7 +54,16 @@ Quick start: [automation/README.md](../automation/README.md).
 | status → In Progress | `in-progress/implement.md` |
 | status → In Review | `in-review/verify.md` |
 
-Routing logic: `automation/linear/router.py` (`resolve_planning_prompt`). Label-only updates route only when a **routing** label is present (`research-done`, `spec-done`, `plan-done`, `grill-needs-revision`); progress labels (`triaging`, `impl-running`, …) are ignored. Phase closeouts must use `save_issue` with status **and** done label in one call.
+Routing logic: `automation/linear/router.py` (`resolve_planning_prompt`). Production webhooks use **`stateId` / `labelIds` UUIDs** — configure `linear.state_ids` and `linear.label_ids` in `automation/config.yaml`. Label-only updates route when a **routing** label resolves; progress labels alone are ignored. Phase closeouts must use `save_issue` with status **and** done label in one call.
+
+### Token / context pipeline
+
+1. **Router (Python)** picks one `linear/*` prompt — never `archive/01-linear-status-changed-router.md`.
+2. **Phase prompts** use `runner-brief-compact.md` (~40 lines).
+3. **Optional compressor** (`context_compressor.enabled: true`): `gemma4:latest` summarizes prior context into `automation/context_cache/<job-id>/memory.json`. If compression fails, the job aborts (no raw dump fallback).
+4. **Stall guard**: `cursor.stall_seconds` (default 300) — see `automation/runners/cursor_stall.py`.
+
+Doctor: `python scripts/automation_compressor_doctor.py`
 
 Hermes can enqueue the same JSON shape as [automation/examples/hermes-job.json](../automation/examples/hermes-job.json):
 

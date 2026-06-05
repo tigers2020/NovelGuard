@@ -62,6 +62,19 @@ locks:
 prompts:
   dir: automation/prompts
 
+context_compressor:
+  enabled: false
+  endpoint: "http://localhost:11434/api/generate"
+  model: gemma4:latest
+  cache_dir: automation/context_cache
+  max_input_chars: 12000
+  include_previous_jobs: true
+  max_previous_jobs: 5
+  max_previous_log_chars: 3000
+  timeout_seconds: 180
+  num_ctx: 32768
+  top_p: 0.9
+
 verify:
   minimal:
     - [python, -m, ruff, check, .]
