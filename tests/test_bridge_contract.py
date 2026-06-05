@@ -1272,10 +1272,14 @@ def test_query_quality_rows_detects_issues(tmp_path: Path) -> None:
     small_page = api.query_quality_rows({"issueType": "small_file", "limit": 50})
     validate_quality_rows_page(small_page)
     assert len(small_page["rows"]) == 2
+    assert small_page["pageInfo"]["totalFiltered"] == 2
+    assert small_page["summary"]["issueCount"] == 2
     assert all(row["id"].startswith("quality:") for row in small_page["rows"])
 
     encoding_page = api.query_quality_rows({"issueType": "encoding", "limit": 50})
     assert len(encoding_page["rows"]) == 1
+    assert encoding_page["pageInfo"]["totalFiltered"] == 1
+    assert encoding_page["summary"]["errorCount"] >= 1
     assert encoding_page["rows"][0]["issueType"] == "encoding"
 
 

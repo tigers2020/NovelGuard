@@ -18,7 +18,14 @@ export function validateQualityRowsPage(page: unknown): asserts page is QualityR
   if (!Array.isArray(p.rows) || p.rows.length > MAX_QUERY_LIMIT) {
     throw new PageContractError(`QualityRowsPage.rows invalid or exceeds ${MAX_QUERY_LIMIT}`);
   }
-  if (!p.pageInfo || !p.summary) {
+  if (
+    !p.pageInfo ||
+    typeof p.pageInfo.totalFiltered !== "number" ||
+    !p.summary ||
+    typeof p.summary.issueCount !== "number" ||
+    typeof p.summary.warningCount !== "number" ||
+    typeof p.summary.errorCount !== "number"
+  ) {
     throw new PageContractError("QualityRowsPage.pageInfo or summary invalid");
   }
 }
