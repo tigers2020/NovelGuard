@@ -74,9 +74,7 @@ def _label_names(data: dict[str, Any]) -> frozenset[str]:
 
 def _auto_label_slug(data: dict[str, Any]) -> str:
     auto = sorted(
-        name.removeprefix("auto:")
-        for name in _label_names(data)
-        if name.startswith("auto:")
+        name.removeprefix("auto:") for name in _label_names(data) if name.startswith("auto:")
     )
     if not auto:
         return ""
