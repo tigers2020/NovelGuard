@@ -9,7 +9,10 @@ safety_level: 3
 base_branch: main
 ---
 
-@docs/agents/runner-brief.md
+@docs/agents/runner-brief-compact.md
+
+## Context memory
+{{CONTEXT_MEMORY_JSON}}
 
 # In Review → tests → PR → babysit → Done
 

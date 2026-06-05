@@ -8,7 +8,10 @@ repo: F:/Python_Projects/NovelGuard
 commit: false
 ---
 
-@docs/agents/runner-brief.md
+@docs/agents/runner-brief-compact.md
+
+## Context memory
+{{CONTEXT_MEMORY_JSON}}
 
 # Todo → todo list → In Progress
 
