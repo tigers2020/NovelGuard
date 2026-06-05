@@ -26,4 +26,21 @@ describe("validateQualityRowsPage", () => {
       PageContractError,
     );
   });
+
+  it("rejects missing pageInfo.totalFiltered", () => {
+    const page = {
+      ...validQualityRowsPage,
+      pageInfo: { ...validQualityRowsPage.pageInfo, totalFiltered: undefined },
+    };
+    expect(() => validateQualityRowsPage(page)).toThrow(PageContractError);
+  });
+
+  it("accepts non-zero totalFiltered and tab summary counts", () => {
+    const page = {
+      ...validQualityRowsPage,
+      pageInfo: { ...validQualityRowsPage.pageInfo, totalFiltered: 3 },
+      summary: { issueCount: 2, warningCount: 1, errorCount: 0 },
+    };
+    expect(() => validateQualityRowsPage(page)).not.toThrow();
+  });
 });
