@@ -14,6 +14,15 @@ from automation.linear.webhook import (
     verify_linear_signature,
 )
 from automation.runners.config import load_config
+from automation.runners.emit import emit_or_print
+from automation.runners.runtime_state import get_runtime_state
+
+
+def _runtime_state_or_none():
+    try:
+        return get_runtime_state()
+    except RuntimeError:
+        return None
 
 
 class LinearWebhookHandler(BaseHTTPRequestHandler):
@@ -21,7 +30,8 @@ class LinearWebhookHandler(BaseHTTPRequestHandler):
     cfg: dict[str, Any] = {}
 
     def log_message(self, format: str, *args: Any) -> None:
-        print(f"[webhook] {args[0]}" if args else format)
+        summary = f"{args[0]}" if args else format
+        emit_or_print("webhook", "webhook.log", summary, plain_prefix=f"[webhook] {summary}")
 
     def _respond(self, status: int, body: dict[str, Any]) -> None:
         payload = json.dumps(body, ensure_ascii=False).encode("utf-8")
@@ -62,11 +72,18 @@ class LinearWebhookHandler(BaseHTTPRequestHandler):
                 dedupe=self.dedupe_cache,
             )
             issue = (payload.get("data") or {}).get("identifier") or "?"
-            print(
-                f"[webhook] POST {path} issue={issue} "
+            summary = (
+                f"POST {path} issue={issue} "
                 f"status={result.status} job_id={result.job_id or '-'} "
                 f"msg={result.message}"
             )
+            emit_or_print("webhook", "webhook.post", summary, plain_prefix=f"[webhook] {summary}")
+
+            state = _runtime_state_or_none()
+            if state is not None:
+                state.queued = result.queue_depth
+                state.running = result.active_jobs
+
             self._respond(
                 200,
                 {
@@ -92,8 +109,14 @@ def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
 
     LinearWebhookHandler.cfg = cfg
     server = ThreadingHTTPServer((host, port), LinearWebhookHandler)
-    print(
-        f"Linear webhook listening on http://{host}:{port}{linear.get('webhook_path', '/linear/webhook')}"
+    webhook_path = linear.get("webhook_path", "/linear/webhook")
+    emit_or_print(
+        "webhook",
+        "webhook.listen",
+        f"http://{host}:{port}{webhook_path}",
+        plain_prefix=(
+            f"Linear webhook listening on http://{host}:{port}{webhook_path}\n"
+            "Health: GET /health"
+        ),
     )
-    print("Health: GET /health")
     server.serve_forever()

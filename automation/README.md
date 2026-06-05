@@ -17,6 +17,20 @@ Linear status change → webhook enqueue → worker runs job automatically.
 
 Doctor: `python scripts/linear_webhook_doctor.py`
 
+### Dashboard (default in PowerShell)
+
+```powershell
+# Use the same Python as run-automation.ps1 (.venv), not global pip:
+.\.venv\Scripts\python.exe -m pip install -e ".[automation]"
+.\automation\run-automation.ps1
+```
+
+Interactive TTY shows a Rich Live dashboard (queue, Linear events, agent output).
+
+Flags on `scripts/automation_daemon.py`:
+- `--plain` — line logs only (CI / pipes)
+- `--tui` — force dashboard in non-TTY
+
 ## Manual / Hermes
 
 ```powershell

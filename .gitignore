@@ -275,3 +275,6 @@ Sample/
 # Leftover from full reset when files were locked by another process
 _delete_*/
 
+# Local git worktrees (sibling checkouts)
+.worktrees/
+
