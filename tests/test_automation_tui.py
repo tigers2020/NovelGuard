@@ -426,12 +426,61 @@ def test_webhook_crash_emits_bus_event(capsys, monkeypatch):
     monkeypatch.setattr(bus, "append", tracking_append)
 
     daemon = _load_automation_daemon()
-    daemon._start_webhook_background("127.0.0.1", 8765)
+    stop_event = threading.Event()
+    daemon._start_webhook_background(
+        "127.0.0.1",
+        8765,
+        restart_delay=30.0,
+        stop_event=stop_event,
+    )
 
-    assert crash_seen.wait(timeout=2.0)
+    try:
+        assert crash_seen.wait(timeout=2.0)
+    finally:
+        stop_event.set()
     out, err = capsys.readouterr()
     assert out == ""
     assert "FATAL: webhook background crashed" not in err
     assert get_runtime_state().webhook_status == "crashed"
     events = bus.tail(10)
     assert any(e.kind == "webhook.crashed" and "webhook boom" in e.summary for e in events)
+
+
+def test_webhook_crash_restarts(monkeypatch):
+    bus = EventBus()
+    emit_mod.init_emit(mode="tui", bus=bus)
+    init_runtime_state(
+        webhook_enabled=True,
+        host="127.0.0.1",
+        port=8765,
+        path="/linear/webhook",
+        poll=15.0,
+    )
+
+    calls = 0
+    restarted = threading.Event()
+    stop_event = threading.Event()
+
+    def serve_once_then_stop(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("webhook boom")
+        stop_event.set()
+        restarted.set()
+
+    monkeypatch.setattr("automation.linear.webhook_server.serve", serve_once_then_stop)
+
+    daemon = _load_automation_daemon()
+    daemon._start_webhook_background(
+        "127.0.0.1",
+        8765,
+        restart_delay=0.01,
+        stop_event=stop_event,
+    )
+
+    assert restarted.wait(timeout=2.0)
+    assert calls == 2
+    events = bus.tail(10)
+    assert any(e.kind == "webhook.crashed" for e in events)
+    assert any(e.kind == "webhook.restarting" for e in events)

@@ -245,3 +245,42 @@ class JobQueue:
         with self._connect() as conn:
             self._requeue_running(conn, row_id)
             conn.commit()
+
+    def requeue_failed(
+        self,
+        *,
+        job_id: str | None = None,
+        limit: int | None = None,
+    ) -> list[str]:
+        """Move failed jobs back to queued so the worker can retry them."""
+        requeued: list[str] = []
+        with self._connect() as conn:
+            query = """
+                SELECT id, job_id FROM jobs
+                WHERE status = 'failed'
+                """
+            params: list[Any] = []
+            if job_id:
+                query += " AND job_id = ?"
+                params.append(job_id)
+            query += " ORDER BY finished_at DESC"
+            if limit is not None:
+                query += " LIMIT ?"
+                params.append(int(limit))
+            rows = conn.execute(query, params).fetchall()
+            for row in rows:
+                row_id = int(row["id"])
+                jid = str(row["job_id"])
+                updated = conn.execute(
+                    """
+                    UPDATE jobs
+                    SET status = 'queued', started_at = NULL, finished_at = NULL,
+                        result = NULL, log_path = NULL
+                    WHERE id = ? AND status = 'failed'
+                    """,
+                    (row_id,),
+                )
+                if updated.rowcount == 1:
+                    requeued.append(jid)
+            conn.commit()
+        return requeued

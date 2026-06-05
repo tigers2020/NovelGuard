@@ -2,14 +2,29 @@
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot\..
 
+$RequiredPython = "3.12"
+
+function Get-PythonMinorVersion {
+    param([string]$PythonExe)
+    & $PythonExe -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+}
+
 if (-not (Test-Path "automation\config.yaml")) {
     Copy-Item "automation\config.example.yaml" "automation\config.yaml"
 }
 
-$Python = if (Test-Path ".venv\Scripts\python.exe") {
-    (Resolve-Path ".venv\Scripts\python.exe").Path
-} else {
-    "python"
+if (-not (Test-Path ".venv\Scripts\python.exe")) {
+    Write-Host "Creating Python $RequiredPython venv..."
+    & py -$RequiredPython -m venv .venv
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Failed to create .venv with Python $RequiredPython. Install Python $RequiredPython or run: py -$RequiredPython -m venv .venv"
+    }
+}
+
+$Python = (Resolve-Path ".venv\Scripts\python.exe").Path
+$PythonVersion = Get-PythonMinorVersion $Python
+if ($PythonVersion -ne $RequiredPython) {
+    Write-Error ".venv uses Python $PythonVersion, expected $RequiredPython. Recreate it with: py -$RequiredPython -m venv .venv"
 }
 
 Write-Host "Using Python: $Python"
