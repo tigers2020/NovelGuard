@@ -232,6 +232,23 @@ automation/logs/*
 automation/locks/*.lock
 !automation/locks/.gitkeep
 
+# Local agent / kanban scratch (canonical docs: docs/superpowers/)
+.devtool/
+
+# MCP / browser session snapshots (not source)
+.playwright-mcp/
+
+# Cursor — commit shared rules only; skills and hooks are machine-local
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
+
+# Ad-hoc verify/lint redirects (agent or manual `> file`)
+*-out.txt
+
+# Optional codebase analysis output (graphify skill)
+graphify-out/
+
 # Runtime output directories
 logs/
 !web/src/features/logs/
