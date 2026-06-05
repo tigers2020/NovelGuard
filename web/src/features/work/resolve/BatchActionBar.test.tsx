@@ -16,6 +16,7 @@ describe("BatchActionBar", () => {
         loadedCount={200}
         loadingAll
         onExcludeAllFiltered={noop}
+        onAutoSelectKeepers={noop}
         onPreview={noop}
       />,
     );
@@ -30,6 +31,7 @@ describe("BatchActionBar", () => {
         filteredCount={500}
         loadedCount={200}
         onExcludeAllFiltered={noop}
+        onAutoSelectKeepers={noop}
         onPreview={noop}
       />,
     );
@@ -44,6 +46,7 @@ describe("BatchActionBar", () => {
         filteredCount={500}
         loadedCount={500}
         onExcludeAllFiltered={noop}
+        onAutoSelectKeepers={noop}
         onPreview={noop}
       />,
     );

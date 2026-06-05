@@ -6,6 +6,7 @@ from typing import Any
 
 from application.ports.library_index import LoadedReviewState
 from domain.duplicate_exact import find_exact_duplicate_groups
+from domain.keeper_selection import pick_keeper_file_id
 from domain.models import DuplicateGroup, FileRecord
 
 
@@ -13,8 +14,7 @@ def _pick_keeper_id(group: DuplicateGroup, files_by_id: dict[str, FileRecord]) -
     members = [files_by_id[mid] for mid in group.member_ids if mid in files_by_id]
     if not members:
         return group.keeper_id
-    keeper = max(members, key=lambda m: (m.size_bytes, m.relative_path))
-    return keeper.id
+    return pick_keeper_file_id(members)
 
 
 def merge_review_state(
@@ -117,8 +117,15 @@ def _merge_non_exact_row(
     if keeper_override and keeper_override in files_by_id:
         keeper = files_by_id[keeper_override]
         updated["keeperLabel"] = keeper.name
-        updated["proposedAction"] = "keep" if file_id == keeper.id else "ignore"
-    updated.pop("targetFolder", None)
+        if file_id == keeper.id:
+            updated["proposedAction"] = "keep"
+            updated.pop("targetFolder", None)
+        elif effective_status == "approved":
+            updated["proposedAction"] = "move_duplicate"
+            updated["targetFolder"] = "duplicate/"
+        else:
+            updated["proposedAction"] = "ignore"
+            updated.pop("targetFolder", None)
     return updated
 
 

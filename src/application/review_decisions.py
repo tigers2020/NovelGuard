@@ -8,7 +8,7 @@ from app.selection_resolve import resolve_selection_rows
 from application.library_session import LibrarySession
 from application.ports.library_index import LibraryIndexPort
 from application.review_errors import ReviewDecisionError
-from application.review_state_merge import group_id_from_row
+from application.review_state_merge import _file_id_from_row_id, group_id_from_row
 from domain.duplicate_exact import find_exact_duplicate_groups
 
 MAX_REVIEW_MUTATIONS = 500
@@ -50,9 +50,18 @@ class UpdateReviewDecisionsUseCase:
         files = self._index.files()
         groups = find_exact_duplicate_groups(files)
         members_by_group = {g.group_id: set(g.member_ids) for g in groups}
+        for group_id, near_group in self._session.near_groups_by_id().items():
+            members_by_group[group_id] = set(near_group.member_file_ids)
+        for group_id, relation_group in self._session.relation_groups_by_id().items():
+            members_by_group[group_id] = set(relation_group.member_file_ids)
 
         updated = 0
         for row in rows:
+            if command != "reset" and row.get("status") == "conflict":
+                continue
+            if command == "approve" and row.get("rowKind") != "file":
+                continue
+
             group_id = group_id_from_row(row)
             if not group_id or group_id not in members_by_group:
                 continue
@@ -152,11 +161,9 @@ class UpdateReviewDecisionsUseCase:
 
 def _require_file_id(row: dict[str, Any]) -> str:
     row_id = str(row.get("id", ""))
-    if not row_id.startswith("file:"):
+    file_id = _file_id_from_row_id(row_id)
+    if not file_id:
         raise ReviewDecisionError(
             "INVALID_REVIEW_COMMAND", "setKeeper requires a file row or keeperFileId"
         )
-    parts = row_id.split(":", 2)
-    if len(parts) != 3:
-        raise ReviewDecisionError("INVALID_REVIEW_COMMAND", "Invalid file row id")
-    return parts[2]
+    return file_id
