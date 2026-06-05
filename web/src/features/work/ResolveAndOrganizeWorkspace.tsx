@@ -27,9 +27,12 @@ import { AutoSelectConfirmDialog } from "./resolve/AutoSelectConfirmDialog";
 import { BulkFilterConfirmDialog } from "./resolve/BulkFilterConfirmDialog";
 import type { AutoSelectKeepersSummary } from "../../types/autoSelectSummary";
 import {
+  countExecutableMovePreviewRows,
   hasExecutableMovePreviewRows,
   reviewOnlyBlockedReasonForFilter,
+  reviewOnlyGuidanceBannerForFilter,
 } from "./resolve/previewEligibility";
+import { previewCtaLabel } from "./resolve/previewCtaCopy";
 import {
   bulkMutationChunkCursors,
   bulkMutationTargetCount,
@@ -280,6 +283,11 @@ export function ResolveAndOrganizeWorkspace({
     [rowTypeFilter, rows],
   );
 
+  const reviewOnlyGuidance = useMemo(
+    () => reviewOnlyGuidanceBannerForFilter(rowTypeFilter),
+    [rowTypeFilter],
+  );
+
   const previewBlockedReason = useMemo(() => {
     if (reviewOnlyBlockedReason) return reviewOnlyBlockedReason;
     if (filteredCount === 0) {
@@ -290,6 +298,23 @@ export function ResolveAndOrganizeWorkspace({
     }
     return undefined;
   }, [filteredCount, hasExecutableRows, reviewOnlyBlockedReason]);
+
+  const executableCount = useMemo(
+    () => countExecutableMovePreviewRows(rows),
+    [rows],
+  );
+
+  const previewCtaText = useMemo(
+    () =>
+      previewCtaLabel({
+        filter: rowTypeFilter,
+        executableCount,
+        moveReadyCount: resolve.moveReadyCount,
+      }),
+    [rowTypeFilter, executableCount, resolve.moveReadyCount],
+  );
+
+  const showPreviewCta = rowTypeFilter === "exact";
 
   const openAutoSelectConfirm = useCallback(async () => {
     try {
@@ -448,7 +473,8 @@ export function ResolveAndOrganizeWorkspace({
             </div>
           )}
           <ResolveGridToolbar
-            queueCount={resolve.queueCount}
+            moveReadyCount={resolve.moveReadyCount}
+            reviewSignalCount={resolve.reviewSignalCount}
             groupCount={resolve.groupCount}
             conflictCount={resolve.conflictCount}
             approvedCount={resolve.approvedCount}
@@ -460,6 +486,11 @@ export function ResolveAndOrganizeWorkspace({
             queryError={queryError}
             onRetry={() => void loadAllFiltered()}
             onOpenFinalize={onOpenFinalize}
+            showPreviewCta={showPreviewCta}
+            onPreview={() => onOpenPreview(previewSelection)}
+            previewDisabled={Boolean(previewBlockedReason)}
+            previewDisabledReason={previewBlockedReason}
+            previewLabel={previewCtaText}
           />
           <VirtualizedReviewGrid
             rows={rows}
@@ -544,6 +575,7 @@ export function ResolveAndOrganizeWorkspace({
         filteredCount={filteredCount}
         loadedCount={rows.length}
         loadingAll={loadingAll}
+        reviewOnlyGuidance={reviewOnlyGuidance}
         onExcludeAllFiltered={() => setBulkExcludeConfirmOpen(true)}
         onAutoSelectKeepers={() => void openAutoSelectConfirm()}
         autoSelectDisabled={bulkMutating || autoSelectMutating || filteredCount === 0}
@@ -555,6 +587,7 @@ export function ResolveAndOrganizeWorkspace({
         onPreview={() => onOpenPreview(previewSelection)}
         previewDisabled={Boolean(previewBlockedReason)}
         previewDisabledReason={previewBlockedReason}
+        previewLabel={previewCtaText}
       />
 
       <AutoSelectConfirmDialog

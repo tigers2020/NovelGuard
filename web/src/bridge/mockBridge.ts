@@ -37,6 +37,7 @@ import {
   applyMockReviewState,
   fileRowStatusCounts,
   persistMockExactNonKeeperApprovals,
+  resolveInsightCounts,
   summarizeMockAutoSelectKeepers,
 } from "./mockReviewState";
 import type { DuplicateGroupDetail, ReviewRow } from "../types/review";
@@ -75,6 +76,7 @@ const state = {
 };
 
 let libraryRevision = 0;
+let exactAutoApprovedCount = 0;
 
 let invalidationSequence = 0;
 const invalidationListeners = new Set<(event: SnapshotInvalidationEvent) => void>();
@@ -240,6 +242,7 @@ function finalizeLastStatusFromReport(doc: FinalizeReportDocument | null): Final
 function buildSnapshot(): AppSnapshot {
   const merged = mergedReviewRows();
   const counts = fileRowStatusCounts(merged);
+  const insight = resolveInsightCounts(merged);
   const qualityRows = buildQualityRows();
 
   return {
@@ -268,6 +271,7 @@ function buildSnapshot(): AppSnapshot {
       scan: {
         state: state.pipelineRunning ? "running" : "success",
         lastRun: "2026-06-01 10:42",
+        exactAutoApprovedCount,
         indexReady: !state.pipelineRunning,
         deepAnalysisComplete: !state.pipelineRunning,
         deepAnalysisStatus: state.pipelineRunning ? "running" : "complete",
@@ -275,6 +279,8 @@ function buildSnapshot(): AppSnapshot {
       },
       resolve: {
         queueCount: counts.queueCount,
+        moveReadyCount: insight.moveReadyCount,
+        reviewSignalCount: insight.reviewSignalCount,
         groupCount: 37,
         conflictCount: counts.conflictCount,
         approvedCount: counts.approvedCount,
@@ -494,8 +500,10 @@ export const mockBridge: NovelGuardBridge = {
       rejectApply("start_scan", "LIBRARY_BUSY");
     }
     stopScanSimulation();
+    exactAutoApprovedCount = 0;
     appendMockLog("INFO", "Mock scan started");
     state.pipelineRunning = true;
+    exactAutoApprovedCount = 0;
     emitSnapshotInvalidation("pipelinePhase", { pipelinePhase: "probe" });
     let pct = 0;
     scanSimulationTimer = setInterval(() => {
@@ -504,7 +512,7 @@ export const mockBridge: NovelGuardBridge = {
       if (pct >= 100) {
         stopScanSimulation();
         state.pipelineRunning = false;
-        persistMockExactNonKeeperApprovals(getAllReviewRows());
+        exactAutoApprovedCount = persistMockExactNonKeeperApprovals(getAllReviewRows());
         libraryRevision += 1;
         emitSnapshotInvalidation("libraryRevision", { libraryRevision });
       }
