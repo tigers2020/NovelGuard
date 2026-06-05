@@ -65,6 +65,26 @@ describe("reviewOnlyGuidanceBannerForFilter", () => {
   });
 });
 
+describe("NOV-29 verification matrix", () => {
+  it("banner copy marks review-only filters and differs from tooltip blocked reason", () => {
+    for (const filter of ["near", "relation", "all"] as const) {
+      const banner = reviewOnlyGuidanceBannerForFilter(filter);
+      const blocked = reviewOnlyBlockedReasonForFilter(filter);
+
+      expect(banner).toMatch(/검토 전용/);
+      expect(banner).toMatch(/Exact \(이동\) 탭/);
+      expect(banner).not.toBe(blocked);
+    }
+  });
+
+  it("keeps preview blocked reasons for review-only filters unchanged", () => {
+    expect(reviewOnlyBlockedReasonForFilter("near")).toMatch(/Near 중복/);
+    expect(reviewOnlyBlockedReasonForFilter("relation")).toMatch(/Relation 그룹/);
+    expect(reviewOnlyBlockedReasonForFilter("all")).toMatch(/Exact만 선택하세요/);
+    expect(reviewOnlyBlockedReasonForFilter("exact")).toBeUndefined();
+  });
+});
+
 describe("hasExecutableMovePreviewRows", () => {
   it("returns true when any loaded row is executable", () => {
     expect(
