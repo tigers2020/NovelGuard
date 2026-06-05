@@ -124,8 +124,7 @@ def acquire_daemon_lock(locks_dir: Path) -> None:
     if alive and data:
         pid = int(data.get("pid") or 0)
         raise RuntimeError(
-            f"Automation daemon already running (pid={pid}). "
-            "Stop it before starting another."
+            f"Automation daemon already running (pid={pid}). " "Stop it before starting another."
         )
     if path.is_file():
         path.unlink(missing_ok=True)
@@ -159,8 +158,7 @@ def release_stale_locks(cfg: dict[str, Any]) -> list[str]:
         locks_dir = repo_root() / locks_dir
     cleared: list[str] = []
     repo_lock_name = str(
-        ((cfg.get("repos") or {}).get("novelguard") or {}).get("lock_name")
-        or "NovelGuard.lock"
+        ((cfg.get("repos") or {}).get("novelguard") or {}).get("lock_name") or "NovelGuard.lock"
     )
     for name in (repo_lock_name, "automation-worker.lock"):
         path = locks_dir / name

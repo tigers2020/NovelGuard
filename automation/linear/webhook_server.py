@@ -38,7 +38,7 @@ class LinearWebhookHandler(BaseHTTPRequestHandler):
         self._respond(404, {"ok": False, "error": "not found"})
 
     def do_POST(self) -> None:
-        linear_cfg = (self.cfg.get("linear") or {})
+        linear_cfg = self.cfg.get("linear") or {}
         path = self.path.rstrip("/") or "/"
         expected_path = str(linear_cfg.get("webhook_path") or "/linear/webhook")
         if path != expected_path:
@@ -92,6 +92,8 @@ def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
 
     LinearWebhookHandler.cfg = cfg
     server = ThreadingHTTPServer((host, port), LinearWebhookHandler)
-    print(f"Linear webhook listening on http://{host}:{port}{linear.get('webhook_path', '/linear/webhook')}")
+    print(
+        f"Linear webhook listening on http://{host}:{port}{linear.get('webhook_path', '/linear/webhook')}"
+    )
     print("Health: GET /health")
     server.serve_forever()

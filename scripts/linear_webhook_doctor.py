@@ -50,7 +50,9 @@ def main(argv: list[str] | None = None) -> int:
 
     health = _get_json(f"http://{host}:{port}/health")
     if health and health.get("ok"):
-        checks.append({"check": "webhook serve", "status": "ok", "detail": f"http://{host}:{port}/health"})
+        checks.append(
+            {"check": "webhook serve", "status": "ok", "detail": f"http://{host}:{port}/health"}
+        )
     else:
         checks.append(
             {
@@ -131,7 +133,9 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(result, indent=2, ensure_ascii=False))
         except urllib.error.HTTPError as exc:
             print()
-            print(f"smoke POST failed: HTTP {exc.code} {exc.read().decode('utf-8', errors='replace')}")
+            print(
+                f"smoke POST failed: HTTP {exc.code} {exc.read().decode('utf-8', errors='replace')}"
+            )
             return 1
 
     failed = [c for c in checks if c["status"] == "FAIL"]

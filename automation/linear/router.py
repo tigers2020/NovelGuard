@@ -75,7 +75,9 @@ def _state_changed(payload: dict[str, Any], data: dict[str, Any]) -> bool:
 
     before = updated_from.get("state")
     if isinstance(before, dict) and isinstance(after_state, dict):
-        return before.get("id") != after_state.get("id") or before.get("name") != after_state.get("name")
+        return before.get("id") != after_state.get("id") or before.get("name") != after_state.get(
+            "name"
+        )
 
     if "state" in updated_from:
         return True
