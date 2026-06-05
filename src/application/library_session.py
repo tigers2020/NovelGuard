@@ -1216,16 +1216,9 @@ class LibrarySession:
                     valid_file_ids = {file_record.id for file_record in files}
                     self._index.prune_review_state(folder, valid_group_ids, valid_file_ids)
                     stored = self._index.load_review_state(folder)
-<<<<<<< HEAD
                     exact_auto_approved_count = persist_exact_non_keeper_approvals(
                         folder, files, self._index, stored
                     )
-=======
-                    approved_n = persist_exact_non_keeper_approvals(
-                        folder, files, self._index, stored
-                    )
-                    self._exact_auto_approved_count = approved_n
->>>>>>> origin/main
                     stored = self._index.load_review_state(folder)
                     self._set_exact_index_progress("검토 행 구성 중…", 91)
                     review_rows = rebuild_rows_with_review_state(files, stored)
