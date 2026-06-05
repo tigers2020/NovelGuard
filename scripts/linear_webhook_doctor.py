@@ -44,7 +44,6 @@ def main(argv: list[str] | None = None) -> int:
     port = int(linear.get("webhook_port") or 8765)
     path = str(linear.get("webhook_path") or "/linear/webhook")
     configured_public = str(linear.get("webhook_public_url") or "").rstrip("/")
-    local_url = f"http://{host}:{port}{path}"
     secret = linear.get("webhook_secret") or ""
 
     checks: list[dict[str, str]] = []
@@ -101,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     print("Linear -> Settings -> Administration -> API -> Webhooks -> Create webhook")
     print(f"  URL:      {linear_url}")
     print("  Events:   Issues (Issue create + update)")
-    print(f"  Team:     NoverGuard (NovelGuard project)")
+    print("  Team:     NoverGuard (NovelGuard project)")
     if secret:
         print("  Secret:   matches automation/config.yaml linear.webhook_secret")
     else:

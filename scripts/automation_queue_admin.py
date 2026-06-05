@@ -19,8 +19,6 @@ def main(argv: list[str] | None = None) -> int:
         clear_lock,
         clear_stale_file_lock,
         lock_holder_alive,
-        parse_pid_lock_file,
-        pid_alive,
     )
 
     parser = argparse.ArgumentParser(description="Automation queue admin")

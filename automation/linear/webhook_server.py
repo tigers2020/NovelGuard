@@ -7,7 +7,12 @@ import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
-from automation.linear.webhook import DedupeCache, parse_webhook_body, process_linear_webhook, verify_linear_signature
+from automation.linear.webhook import (
+    DedupeCache,
+    parse_webhook_body,
+    process_linear_webhook,
+    verify_linear_signature,
+)
 from automation.runners.config import load_config
 
 
