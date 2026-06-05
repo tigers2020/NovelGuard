@@ -243,6 +243,23 @@ test.describe("NovelGuard smoke", () => {
     await expect(page.getByTestId("batch-preview-open")).toBeEnabled({ timeout: 15_000 });
   });
 
+  test("NOV-34 auto-select pre-approve summary", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await page.getByTestId("resolve-type-filter-exact").click();
+    const autoSelect = page.getByTestId("batch-auto-select-keepers");
+    await expect(autoSelect).toBeEnabled({ timeout: 15_000 });
+    await autoSelect.click();
+    const dialog = page.getByTestId("auto-select-keepers-confirm-dialog");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByTestId("auto-select-summary-exact")).toBeVisible();
+    await expect(dialog.getByText(/가장 용량이 큰 파일/)).toBeVisible();
+    await expect(
+      dialog.getByText(/이동 계획 미리보기에서 최종 이동 대상을 검토합니다/),
+    ).toBeVisible();
+    await page.getByTestId("auto-select-keepers-confirm-cancel").click();
+    await expect(dialog).toHaveCount(0);
+  });
+
   test("NOV-19 bulk exclude confirm shows updated copy", async ({ page }) => {
     await openResolveWorkspace(page);
     await page.getByTestId("resolve-type-filter-exact").click();
