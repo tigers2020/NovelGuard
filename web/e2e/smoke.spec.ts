@@ -251,6 +251,12 @@ test.describe("NovelGuard smoke", () => {
     );
   });
 
+  test("NOV-22 resolve defaults to exact and preview needs no type-filter click", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await expect(page.getByTestId("resolve-type-filter-exact")).toHaveClass(/bg-primary/);
+    await expect(page.getByTestId("batch-preview-open")).toBeEnabled({ timeout: 15_000 });
+  });
+
   test("NOV-20 scan resolve preview without checkbox selection", async ({ page }) => {
     await page.goto("/");
     await runScanToSuccess(page);
