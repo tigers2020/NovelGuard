@@ -13,11 +13,29 @@ cursor:
   commands:
     - cursor-agent
     - agent
-  args: ["-p"]
-  dry_run: false  # true = skip CLI, still runs git + verify (for queue testing)
+  # -p = --print (headless). Prompt on stdin, not argv.
+  args: ["-p", "--trust", "--force", "--approve-mcps"]
+  dry_run: false
 
 queue:
   path: automation/jobs/queue.sqlite
+  stale_seconds: 120
+
+daemon:
+  poll_seconds: 15
+  webhook: true
+
+linear:
+  repo_key: novelguard
+  project_names: [NovelGuard]
+  team_names: [NoverGuard, NovelGuard]
+  webhook_host: 127.0.0.1
+  webhook_port: 8765
+  webhook_path: /linear/webhook
+  # Optional: your stable ngrok URL (no trailing slash), e.g. https://foo.ngrok-free.dev
+  webhook_public_url: ""
+  webhook_secret: ""
+  dedupe_ttl_seconds: 120
 
 logs:
   dir: automation/logs

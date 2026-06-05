@@ -2,22 +2,33 @@
 
 Hermes / Telegram dispatcher writes jobs to the queue; **one worker** runs Cursor CLI on an isolated branch.
 
-## Quick start
+## Quick start (Linear automation)
 
 ```powershell
-# 1) Copy config; enable dry_run until Cursor CLI is on PATH
+# Terminal 1 — tunnel (keep running)
+ngrok http 8765
+
+# Terminal 2 — webhook + worker (one process)
+python scripts/automation_daemon.py
+# or: .\automation\run-automation.ps1
+```
+
+Linear status change → webhook enqueue → worker runs job automatically.
+
+Doctor: `python scripts/linear_webhook_doctor.py`
+
+## Manual / Hermes
+
+```powershell
+# Copy config; enable dry_run until Cursor CLI is on PATH
 Copy-Item automation\config.example.yaml automation\config.yaml
 pip install pyyaml   # or: pip install -e ".[automation]"
 
-# 2) Enqueue
+# Enqueue
 python scripts/automation_enqueue.py --kind implement --task "Fix typo in README"
 
-# 3) Process one job
+# Process one job (daemon must be stopped, or use --force)
 python scripts/automation_worker.py --once
-# or: .\automation\run-worker.ps1
-
-# 4) Loop (Task Scheduler / systemd)
-python scripts/automation_worker.py
 ```
 
 Hermes:

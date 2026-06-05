@@ -63,9 +63,12 @@ class BuildPreviewPlanUseCase:
         for row in selected_rows:
             if row.get("rowKind") != "file":
                 continue
-            if row.get("status") in ("excluded", "conflict"):
+            status = row.get("status")
+            if status in ("excluded", "conflict"):
                 continue
             action = row.get("proposedAction")
+            if status == "approved" and action != "move_duplicate":
+                continue
             if action in ("keep", "ignore", "delete"):
                 continue
             if action == "move_organized":
