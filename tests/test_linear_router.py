@@ -178,7 +178,43 @@ def test_label_ids_only_routes_by_uuid():
     )
     route = route_linear_webhook(payload, cfg=_TEST_CFG)
     assert route is not None
-    assert route.prompt_file == "linear/todo/write-todo-list.md"
+    assert route.prompt_file == "linear/todo/write-task-list.md"
+
+
+def test_has_task_list_done_accepts_new_label_uuid():
+    from automation.linear.linear_ids import has_task_list_done
+
+    data = {"labelIds": [DEFAULT_LABEL_IDS["task_list_done"]]}
+    assert has_task_list_done(data, _TEST_CFG) is True
+
+
+def test_has_task_list_done_accepts_legacy_todo_list_done_uuid():
+    from automation.linear.linear_ids import has_task_list_done
+
+    data = {"labelIds": [DEFAULT_LABEL_IDS["todo_list_done"]]}
+    assert has_task_list_done(data, _TEST_CFG) is True
+
+
+def test_task_list_done_label_uuid_routes_implement():
+    payload = {
+        "action": "update",
+        "type": "Issue",
+        "updatedFrom": {"labelIds": ["f3424dcd-6d2c-47f9-a8fe-5f4d5b626d27"]},
+        "data": {
+            "identifier": "NOV-SMOKE",
+            "teamId": "97047174-6453-4458-b170-a9bf5f7b52e0",
+            "projectId": "20965ebc-3ea7-4787-9310-f15ad9019007",
+            "stateId": "49a46ce6-eb18-4377-95ae-b76f655a77b7",
+            "labelIds": [
+                "f3424dcd-6d2c-47f9-a8fe-5f4d5b626d27",
+                DEFAULT_LABEL_IDS["task_list_done"],
+            ],
+        },
+    }
+    route = route_linear_webhook(payload, cfg=_TEST_CFG)
+    assert route is not None
+    assert route.prompt_file == "linear/in-progress/implement.md"
+    assert "task-list-done→implement" in route.reason
 
 
 def test_build_job_payload_task_is_compact():

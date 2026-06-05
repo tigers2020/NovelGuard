@@ -24,6 +24,7 @@ DEFAULT_LABEL_IDS: dict[str, str] = {
     "spec_done": "bffa5b70-6009-4c1c-8f6a-f7fd62e79621",
     "plan_done": "f3424dcd-6d2c-47f9-a8fe-5f4d5b626d27",
     "grill_needs_revision": "6213baed-1cd7-4bb7-acb4-1572e7fbdf36",
+    "task_list_done": "aaaaaaaa-bbbb-4ccc-dddd-111111111111",
     "todo_list_done": "75d4a692-8214-4592-8f45-f29f93162b45",
     "impl_done": "41269879-fa85-478c-bca6-3329340d8069",
     "verify_done": "65836882-f344-4675-b3a2-552a3fb3c79c",
@@ -157,6 +158,29 @@ def has_label_key(data: dict[str, Any], cfg: dict[str, Any] | None, key: str) ->
     if not label_uuid:
         return False
     return label_uuid in issue_label_ids(data)
+
+
+_TASK_LIST_DONE_KEYS = ("task_list_done", "todo_list_done")
+
+
+def task_list_done_label_ids(cfg: dict[str, Any] | None = None) -> frozenset[str]:
+    merged = _merged_label_ids(cfg)
+    ids: set[str] = set()
+    for key in _TASK_LIST_DONE_KEYS:
+        value = merged.get(key)
+        if value:
+            ids.add(str(value))
+    return frozenset(ids)
+
+
+def has_task_list_done(data: dict[str, Any], cfg: dict[str, Any] | None = None) -> bool:
+    return bool(task_list_done_label_ids(cfg) & issue_label_ids(data))
+
+
+def task_list_done_reason_suffix(data: dict[str, Any], cfg: dict[str, Any] | None) -> str:
+    if has_label_key(data, cfg, "task_list_done"):
+        return "task-list-done→implement"
+    return "todo-list-done→implement"
 
 
 def route_debug(data: dict[str, Any], cfg: dict[str, Any] | None = None) -> str:
