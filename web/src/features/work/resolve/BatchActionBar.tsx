@@ -8,6 +8,7 @@ export function BatchActionBar({
   onPreview,
   previewDisabled = false,
   previewDisabledReason,
+  previewLabel = "이동 계획 미리보기",
 }: {
   filteredCount: number;
   loadedCount: number;
@@ -18,6 +19,7 @@ export function BatchActionBar({
   onPreview: () => void;
   previewDisabled?: boolean;
   previewDisabledReason?: string;
+  previewLabel?: string;
 }) {
   const bulkFilterDisabled = bulkQueryDisabled || filteredCount === 0;
 
@@ -58,9 +60,9 @@ export function BatchActionBar({
           title={previewDisabledReason}
           data-testid="batch-preview-open"
           onClick={onPreview}
-          className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-md border border-outline px-3 py-2 text-sm font-semibold text-on-surface hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
         >
-          이동 계획 미리보기
+          {previewLabel}
         </button>
       </div>
     </div>

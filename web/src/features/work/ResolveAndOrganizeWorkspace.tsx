@@ -25,9 +25,11 @@ import { DetailPanel } from "./resolve/DetailPanel";
 import { BatchActionBar } from "./resolve/BatchActionBar";
 import { BulkFilterConfirmDialog } from "./resolve/BulkFilterConfirmDialog";
 import {
+  countExecutableMovePreviewRows,
   hasExecutableMovePreviewRows,
   reviewOnlyBlockedReasonForFilter,
 } from "./resolve/previewEligibility";
+import { previewCtaLabel } from "./resolve/previewCtaCopy";
 import {
   bulkMutationChunkCursors,
   bulkMutationTargetCount,
@@ -268,6 +270,15 @@ export function ResolveAndOrganizeWorkspace({
 
   const hasExecutableRows = useMemo(() => hasExecutableMovePreviewRows(rows), [rows]);
 
+  const executableCount = useMemo(() => countExecutableMovePreviewRows(rows), [rows]);
+
+  const previewCtaText = useMemo(
+    () => previewCtaLabel({ filter: rowTypeFilter, executableCount }),
+    [rowTypeFilter, executableCount],
+  );
+
+  const showPreviewCta = rowTypeFilter === "exact";
+
   const reviewOnlyBlockedReason = useMemo(
     () => reviewOnlyBlockedReasonForFilter(rowTypeFilter),
     [rowTypeFilter],
@@ -399,6 +410,11 @@ export function ResolveAndOrganizeWorkspace({
             queryError={queryError}
             onRetry={() => void loadAllFiltered()}
             onOpenFinalize={onOpenFinalize}
+            showPreviewCta={showPreviewCta}
+            onPreview={() => onOpenPreview(previewSelection)}
+            previewDisabled={Boolean(previewBlockedReason)}
+            previewDisabledReason={previewBlockedReason}
+            previewLabel={previewCtaText}
           />
           <VirtualizedReviewGrid
             rows={rows}
@@ -489,6 +505,7 @@ export function ResolveAndOrganizeWorkspace({
         onPreview={() => onOpenPreview(previewSelection)}
         previewDisabled={Boolean(previewBlockedReason)}
         previewDisabledReason={previewBlockedReason}
+        previewLabel={previewCtaText}
       />
 
       <BulkFilterConfirmDialog

@@ -22,6 +22,11 @@ export function ResolveGridToolbar({
   queryError,
   onRetry,
   onOpenFinalize,
+  showPreviewCta = false,
+  onPreview,
+  previewDisabled = false,
+  previewDisabledReason,
+  previewLabel = "이동 계획 미리보기",
 }: {
   queueCount: number;
   groupCount: number;
@@ -35,6 +40,11 @@ export function ResolveGridToolbar({
   queryError: string | null;
   onRetry: () => void;
   onOpenFinalize: () => void;
+  showPreviewCta?: boolean;
+  onPreview?: () => void;
+  previewDisabled?: boolean;
+  previewDisabledReason?: string;
+  previewLabel?: string;
 }) {
   return (
     <div className="shrink-0 border-b border-outline bg-surface px-3 py-2">
@@ -44,14 +54,28 @@ export function ResolveGridToolbar({
         <StatChip label="Groups" value={groupCount} />
         <StatChip label="Conflicts" value={conflictCount} tone="danger" />
         <StatChip label="Approved" value={approvedCount} tone="good" />
-        <button
-          type="button"
-          data-testid="resolve-open-finalize"
-          className="ml-auto rounded-md border border-outline px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-hover"
-          onClick={onOpenFinalize}
-        >
-          최종 검증
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          {showPreviewCta && onPreview && (
+            <button
+              type="button"
+              data-testid="resolve-preview-primary"
+              disabled={previewDisabled}
+              title={previewDisabledReason}
+              onClick={onPreview}
+              className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {previewLabel}
+            </button>
+          )}
+          <button
+            type="button"
+            data-testid="resolve-open-finalize"
+            className="rounded-md border border-outline px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-hover"
+            onClick={onOpenFinalize}
+          >
+            최종 검증
+          </button>
+        </div>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2" data-testid="resolve-type-filter">
         {TYPE_FILTERS.map(({ id, label }) => (

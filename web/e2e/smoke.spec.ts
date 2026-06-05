@@ -28,6 +28,16 @@ async function openApplyDialog(page: import("@playwright/test").Page) {
   await expect(dialog.getByTestId("apply-preview-run")).toBeVisible();
 }
 
+/** Open apply subflow from toolbar primary CTA (same evaluate pattern as batch bar). */
+async function openApplyDialogFromToolbar(page: import("@playwright/test").Page) {
+  await page
+    .getByTestId("resolve-preview-primary")
+    .evaluate((el) => (el as HTMLButtonElement).click());
+  const dialog = page.getByTestId("apply-subflow-dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByTestId("apply-preview-run")).toBeVisible();
+}
+
 async function clickApplyPreviewRun(page: import("@playwright/test").Page) {
   await page
     .getByTestId("apply-subflow-dialog")
@@ -288,6 +298,36 @@ test.describe("NovelGuard smoke", () => {
     await page.getByTestId("resolve-type-filter-exact").click();
     await expect(page.getByTestId("resolve-type-filter-exact")).toHaveClass(/bg-primary/);
     await expect(page.getByTestId("batch-preview-open")).toBeEnabled({ timeout: 15_000 });
+  });
+
+  test("NOV-30 toolbar primary CTA enabled on exact filter with executables", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await prepareExecutableMoveFilter(page);
+    const toolbarCta = page.getByTestId("resolve-preview-primary");
+    await expect(toolbarCta).toBeVisible();
+    await expect(toolbarCta).toBeEnabled();
+    await expect(toolbarCta).toContainText(/Exact .* 이동 계획 미리보기/);
+  });
+
+  test("NOV-30 toolbar CTA opens apply preview dialog", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await prepareExecutableMoveFilter(page);
+    await openApplyDialogFromToolbar(page);
+  });
+
+  test("NOV-30 toolbar CTA hidden on near filter", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await page.getByTestId("resolve-type-filter-near").click();
+    await expect(page.getByTestId("resolve-preview-primary")).toBeHidden();
+  });
+
+  test("NOV-30 scan resolve toolbar CTA opens preview dialog", async ({ page }) => {
+    await page.goto("/");
+    await runScanToSuccess(page);
+    await page.getByTestId("work-mode-tab-resolve").click();
+    await expect(page.getByTestId("resolve-workspace")).toBeVisible();
+    await prepareExecutableMoveFilter(page);
+    await openApplyDialogFromToolbar(page);
   });
 
   test("NOV-24 facet collapsed by default and expands to five modes", async ({ page }) => {
