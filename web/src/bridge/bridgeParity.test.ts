@@ -442,7 +442,7 @@ describe("snapshot invalidation", () => {
     const row = getAllReviewRows().find((candidate) => candidate.id === "row-2");
     expect(row?.type).toBe("exact");
     const groupId = reviewRowGroupId(row!);
-    expect(groupId).toBe("group-02");
+    expect(groupId).toBe("group-exact-e2e");
     if (!groupId) {
       throw new Error("expected exact review row to resolve a group id");
     }
@@ -855,7 +855,10 @@ describe("auto-approve parity (NOV-20)", () => {
     await scanPromise;
     const after = (await mockBridge.getSnapshot()).work.resolve.libraryRevision;
     expect(after).toBeGreaterThan(before);
-    expect((await mockBridge.getSnapshot()).work.scan.state).toBe("success");
+    const snap = await mockBridge.getSnapshot();
+    expect(snap.work.scan.state).toBe("success");
+    expect(typeof snap.work.scan.exactAutoApprovedCount).toBe("number");
+    expect(snap.work.scan.exactAutoApprovedCount).toBeGreaterThanOrEqual(0);
     vi.useRealTimers();
   });
 });

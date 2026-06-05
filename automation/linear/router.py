@@ -4,7 +4,43 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 from typing import Any
+
+# Progress labels must not enqueue jobs on label-only webhooks (token / duplicate runs).
+_PROGRESS_LABELS = frozenset(
+    {
+        "auto:triaging",
+        "auto:researching",
+        "auto:branch-creating",
+        "auto:spec-brainstorming",
+        "auto:implementing",
+        "auto:impl-running",
+        "auto:impl-verifying",
+        "auto:verifying",
+        "auto:verify-testing",
+        "auto:verify-fixing",
+        "auto:verify-pr",
+        "auto:verify-babysit",
+        "auto:blocked",
+        "auto:impl-blocked",
+        "auto:verify-blocked",
+    }
+)
+
+# Labels that may trigger planning-phase prompts on label-only updates.
+_ROUTING_LABELS = frozenset(
+    {
+        "auto:research-done",
+        "auto:spec-done",
+        "auto:plan-done",
+        "auto:grill-needs-revision",
+    }
+)
+
+_PROMPT_CREATE = "linear/backlog/create-research.md"
+_PROMPT_IMPLEMENT = "linear/in-progress/implement.md"
+_PROMPT_VERIFY = "linear/in-review/verify.md"
 
 
 @dataclass(frozen=True)
@@ -121,6 +157,44 @@ def _labels_changed(payload: dict[str, Any]) -> bool:
     return "labelIds" in updated_from or "labels" in updated_from
 
 
+def resolve_planning_prompt(state: str, labels: frozenset[str]) -> str | None:
+    """Pick one planning prompt from status + routing labels (priority order)."""
+    if state == "Todo":
+        if "auto:grill-needs-revision" in labels:
+            return "linear/todo/revise-spec.md"
+        if "auto:plan-done" in labels:
+            return "linear/todo/write-todo-list.md"
+        if "auto:spec-done" in labels and "auto:plan-done" not in labels:
+            return "linear/todo/defer-to-backlog.md"
+        if "auto:research-done" in labels:
+            return "linear/todo/write-spec.md"
+    if state == "Backlog" and "auto:spec-done" in labels:
+        return "linear/backlog/grill-plan.md"
+    return None
+
+
+def _label_only_should_route(state: str, labels: frozenset[str]) -> bool:
+    """Ignore progress-label-only webhooks; require a resolvable routing label."""
+    if state not in ("Backlog", "Todo"):
+        return False
+    if not labels & _ROUTING_LABELS:
+        return False
+    return resolve_planning_prompt(state, labels) is not None
+
+
+def _route_planning(state: str, labels: frozenset[str], *, reason: str) -> LinearRoute | None:
+    prompt = resolve_planning_prompt(state, labels)
+    if prompt is None:
+        return None
+    return LinearRoute(
+        prompt_file=prompt,
+        commit=False,
+        verify="none",
+        git_prepare=False,
+        reason=reason,
+    )
+
+
 def in_scope(data: dict[str, Any], *, project_names: set[str], team_names: set[str]) -> bool:
     project = _project_name(data)
     team = _team_name(data)
@@ -132,16 +206,6 @@ def in_scope(data: dict[str, Any], *, project_names: set[str], team_names: set[s
 
 
 _SKIP_CREATE_STATES = frozenset({"Done", "Canceled", "Cancelled", "Duplicate"})
-
-
-def _route_status_router(state: str, *, reason: str) -> LinearRoute:
-    return LinearRoute(
-        prompt_file="01-linear-status-changed-router.md",
-        commit=False,
-        verify="none",
-        git_prepare=False,
-        reason=reason,
-    )
 
 
 def route_linear_webhook(
@@ -165,6 +229,7 @@ def route_linear_webhook(
 
     action = str(payload.get("action") or "")
     state = _state_name(data)
+    labels = _label_names(data)
 
     if action == "create":
         if state in _SKIP_CREATE_STATES:
@@ -172,7 +237,7 @@ def route_linear_webhook(
         if state != "Backlog":
             return None
         return LinearRoute(
-            prompt_file="00-linear-create-pr-to-spec.md",
+            prompt_file=_PROMPT_CREATE,
             commit=False,
             verify="none",
             git_prepare=False,
@@ -189,11 +254,11 @@ def route_linear_webhook(
 
     if state_changed:
         if state in ("Backlog", "Todo"):
-            return _route_status_router(state, reason=f"status→{state}")
+            return _route_planning(state, labels, reason=f"status→{state}")
 
         if state == "In Progress":
             return LinearRoute(
-                prompt_file="02-linear-in-progress-implement.md",
+                prompt_file=_PROMPT_IMPLEMENT,
                 commit=True,
                 verify="none",
                 git_prepare=False,
@@ -202,7 +267,7 @@ def route_linear_webhook(
 
         if state == "In Review":
             return LinearRoute(
-                prompt_file="03-linear-in-review-verification.md",
+                prompt_file=_PROMPT_VERIFY,
                 commit=True,
                 verify="none",
                 git_prepare=False,
@@ -211,9 +276,9 @@ def route_linear_webhook(
 
         return None
 
-    # Label-only update: route 01 at Todo/Backlog; ignore In Progress / In Review.
-    if state in ("Backlog", "Todo"):
-        return _route_status_router(state, reason=f"labels@{state}")
+    # Label-only: planning states only; ignore progress-label noise.
+    if _label_only_should_route(state, labels):
+        return _route_planning(state, labels, reason=f"labels@{state}")
 
     return None
 
@@ -231,11 +296,11 @@ def build_job_payload(
     action = str(webhook_payload.get("action") or "update")
 
     slug_state = state.lower().replace(" ", "-") if state else "unknown"
-    prompt_prefix = (route.prompt_file or "job")[:2]
+    prompt_stem = PurePosixPath(route.prompt_file).stem
     label_slug = _auto_label_slug(data)
     label_suffix = f"-{label_slug}" if label_slug else ""
     job_id = (
-        f"linear-{identifier}-{slug_state}-{prompt_prefix}-{state_id[:8] or action}{label_suffix}"
+        f"linear-{identifier}-{slug_state}-{prompt_stem}-" f"{state_id[:8] or action}{label_suffix}"
     )
 
     title = str(data.get("title") or "")

@@ -22,6 +22,8 @@
       "name": "Todo",
       "type": "unstarted"
     },
-    "labels": []
+    "labels": [
+      { "name": "auto:research-done" }
+    ]
   }
 }
