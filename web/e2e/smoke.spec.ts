@@ -273,6 +273,26 @@ test.describe("NovelGuard smoke", () => {
     await expect(panel).toHaveAttribute("data-state", "collapsed");
   });
 
+  test("NOV-21 auto-loads all filtered rows without scroll", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await expandResolveFacet(page);
+    await page.getByTestId("resolve-facet-all").click();
+    await expect(page.getByTestId("batch-loading-all")).toBeHidden({ timeout: 30_000 });
+    const countLine = page
+      .getByTestId("batch-exclude-all-filtered")
+      .locator("xpath=ancestor::div[contains(@class,'border-t')]")
+      .getByText(/필터.*로드/);
+    await expect(countLine).toBeVisible();
+    const text = await countLine.innerText();
+    const filterMatch = text.match(/필터\s+([\d,]+)/);
+    const loadMatch = text.match(/로드\s+([\d,]+)/);
+    expect(filterMatch && loadMatch).toBeTruthy();
+    const filtered = Number(filterMatch![1].replace(/,/g, ""));
+    const loaded = Number(loadMatch![1].replace(/,/g, ""));
+    expect(loaded).toBe(filtered);
+    expect(filtered).toBeGreaterThan(200);
+  });
+
   test("NOV-20 scan resolve preview without checkbox selection", async ({ page }) => {
     await page.goto("/");
     await runScanToSuccess(page);
