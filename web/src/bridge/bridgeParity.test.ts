@@ -287,10 +287,16 @@ describe("bridge parity", () => {
   });
 
   it("getMovePreview executable rows are move_duplicate only", async () => {
-    const moveIds = getAllReviewRows()
+    const page = await mockBridge.queryReviewRows({
+      viewMode: "move",
+      limit: 50,
+      filters: { types: ["exact"] },
+    });
+    const moveIds = page.rows
       .filter((row) => row.rowKind === "file" && row.proposedAction === "move_duplicate")
       .slice(0, 5)
       .map((row) => row.id);
+    expect(moveIds.length).toBeGreaterThan(0);
     const preview = await mockBridge.getMovePreview({
       type: "explicit_rows",
       rowIds: moveIds,

@@ -47,10 +47,18 @@ describe("reviewOnlyBlockedReasonForFilter", () => {
     expect(reviewOnlyBlockedReasonForFilter("exact")).toBeUndefined();
   });
 
-  it("blocks near, relation, and all filters with distinct reasons", () => {
+  it("blocks near, relation, and all filters when no executable rows loaded", () => {
     expect(reviewOnlyBlockedReasonForFilter("near")).toMatch(/Near 중복/);
     expect(reviewOnlyBlockedReasonForFilter("relation")).toMatch(/Relation 그룹/);
-    expect(reviewOnlyBlockedReasonForFilter("all")).toMatch(/Exact만 선택하세요/);
+    expect(reviewOnlyBlockedReasonForFilter("all")).toMatch(/승인 항목이 없습니다/);
+  });
+
+  it("unblocks near filter when loaded rows include move_duplicate", () => {
+    expect(
+      reviewOnlyBlockedReasonForFilter("near", [
+        fileRow({ type: "near", proposedAction: "move_duplicate" }),
+      ]),
+    ).toBeUndefined();
   });
 });
 
@@ -78,10 +86,10 @@ describe("NOV-29 verification matrix", () => {
     }
   });
 
-  it("keeps preview blocked reasons for review-only filters unchanged", () => {
-    expect(reviewOnlyBlockedReasonForFilter("near")).toMatch(/Near 중복/);
-    expect(reviewOnlyBlockedReasonForFilter("relation")).toMatch(/Relation 그룹/);
-    expect(reviewOnlyBlockedReasonForFilter("all")).toMatch(/Exact만 선택하세요/);
+  it("keeps preview blocked reasons distinct from banner guidance", () => {
+    expect(reviewOnlyBlockedReasonForFilter("near")).toMatch(/자동 선정·승인/);
+    expect(reviewOnlyBlockedReasonForFilter("relation")).toMatch(/자동 선정·승인/);
+    expect(reviewOnlyBlockedReasonForFilter("all")).toMatch(/승인 항목이 없습니다/);
     expect(reviewOnlyBlockedReasonForFilter("exact")).toBeUndefined();
   });
 });

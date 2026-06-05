@@ -16,6 +16,7 @@ describe("BatchActionBar", () => {
         loadedCount={200}
         loadingAll
         onExcludeAllFiltered={noop}
+        onAutoSelectKeepers={noop}
         onPreview={noop}
       />,
     );
@@ -30,6 +31,7 @@ describe("BatchActionBar", () => {
         filteredCount={500}
         loadedCount={200}
         onExcludeAllFiltered={noop}
+        onAutoSelectKeepers={noop}
         onPreview={noop}
       />,
     );
@@ -45,6 +47,7 @@ describe("BatchActionBar", () => {
         loadedCount={10}
         reviewOnlyGuidance="Near 중복은 검토 전용이며 일괄 적용할 수 없습니다."
         onExcludeAllFiltered={noop}
+        onAutoSelectKeepers={noop}
         onPreview={noop}
       />,
     );
@@ -58,6 +61,7 @@ describe("BatchActionBar", () => {
         filteredCount={500}
         loadedCount={500}
         onExcludeAllFiltered={noop}
+        onAutoSelectKeepers={noop}
         onPreview={noop}
       />,
     );
@@ -72,6 +76,7 @@ describe("BatchActionBar", () => {
         loadedCount={10}
         reviewOnlyGuidance="Exact (이동) 탭에서만 가능합니다."
         onExcludeAllFiltered={noop}
+        onAutoSelectKeepers={noop}
         onPreview={noop}
       />,
     );
@@ -85,6 +90,7 @@ describe("BatchActionBar", () => {
         filteredCount={10}
         loadedCount={10}
         onExcludeAllFiltered={noop}
+        onAutoSelectKeepers={noop}
         onPreview={noop}
       />,
     );

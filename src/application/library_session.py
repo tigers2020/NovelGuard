@@ -485,6 +485,24 @@ class LibrarySession:
                 packaging_log_path=packaging_log_path,
             )
 
+    def near_groups_by_id(self) -> dict[str, NearDuplicateGroup]:
+        with self._lock:
+            return dict(self._near_groups_by_id)
+
+    def relation_groups_by_id(self) -> dict[str, RelationGroup]:
+        with self._lock:
+            return dict(self._relation_groups_by_id)
+
+    def summarize_auto_select_keepers(self, query: dict[str, Any]) -> dict[str, Any]:
+        from application.auto_select_summary import summarize_auto_select_keepers as summarize
+
+        with self._lock:
+            return summarize(
+                self._review_rows_cache,
+                query,
+                files_by_id=self._files_by_id,
+            )
+
     def library_revision(self) -> int:
         with self._lock:
             return self._library_revision

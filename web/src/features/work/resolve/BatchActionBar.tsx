@@ -4,6 +4,9 @@ export function BatchActionBar({
   loadingAll = false,
   reviewOnlyGuidance,
   onExcludeAllFiltered,
+  onAutoSelectKeepers,
+  autoSelectDisabled = false,
+  autoSelectDisabledReason,
   bulkQueryDisabled = false,
   bulkQueryDisabledReason,
   onPreview,
@@ -16,6 +19,9 @@ export function BatchActionBar({
   loadingAll?: boolean;
   reviewOnlyGuidance?: string;
   onExcludeAllFiltered: () => void;
+  onAutoSelectKeepers: () => void;
+  autoSelectDisabled?: boolean;
+  autoSelectDisabledReason?: string;
   bulkQueryDisabled?: boolean;
   bulkQueryDisabledReason?: string;
   onPreview: () => void;
@@ -67,6 +73,16 @@ export function BatchActionBar({
             className="rounded-md border border-outline px-3 py-2 text-sm font-semibold text-on-surface hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             현재 필터 결과 제외
+          </button>
+          <button
+            type="button"
+            disabled={autoSelectDisabled}
+            title={autoSelectDisabledReason}
+            data-testid="batch-auto-select-keepers"
+            onClick={onAutoSelectKeepers}
+            className="rounded-md border border-outline px-3 py-2 text-sm font-semibold text-on-surface hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            미검토 자동 선정·승인
           </button>
           <button
             type="button"

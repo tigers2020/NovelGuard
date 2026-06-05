@@ -1,5 +1,6 @@
 import type { NovelGuardBridge } from "./NovelGuardBridge";
 import type { AppSnapshot } from "../types/snapshot";
+import type { AutoSelectKeepersSummary } from "../types/autoSelectSummary";
 import type { DuplicateGroupDetail, ReviewRowsPage, ReviewRowsQuery } from "../types/review";
 import type { QualityIssueDetailResponse, QualityRowsPage, QualityRowsQuery } from "../types/quality";
 import { validateQualityRowsPage } from "../contracts/qualityPageContract";
@@ -130,6 +131,10 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
     updateReviewDecisions: (request: UpdateReviewDecisionsRequest) =>
       callBridge(() => call<UpdateReviewDecisionsResult>(api, "update_review_decisions", request), {
         method: "update_review_decisions",
+      }),
+    summarizeAutoSelectKeepers: (query: ReviewRowsQuery) =>
+      callBridge(() => call<AutoSelectKeepersSummary>(api, "summarize_auto_select_keepers", query), {
+        method: "summarize_auto_select_keepers",
       }),
     getAppSetting: (key) =>
       callBridge(() => call(api, "get_app_setting", key), { method: "get_app_setting" }),

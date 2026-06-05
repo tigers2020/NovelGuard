@@ -38,6 +38,7 @@ import {
   fileRowStatusCounts,
   persistMockExactNonKeeperApprovals,
   resolveInsightCounts,
+  summarizeMockAutoSelectKeepers,
 } from "./mockReviewState";
 import type { DuplicateGroupDetail, ReviewRow } from "../types/review";
 import { buildMockDuplicateGroupDetail } from "./mockDuplicateGroupDetail";
@@ -798,6 +799,10 @@ export const mockBridge: NovelGuardBridge = {
       emitSnapshotInvalidation("libraryRevision", { libraryRevision });
     }
     return { updatedCount: updated, libraryRevision };
+  },
+
+  async summarizeAutoSelectKeepers(query: ReviewRowsQuery) {
+    return summarizeMockAutoSelectKeepers(mergedReviewRows(), query);
   },
 
   async discardMovePreview(request: DiscardMovePreviewRequest) {

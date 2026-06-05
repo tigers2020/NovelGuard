@@ -21,6 +21,7 @@ PYWEBVIEW_API_METHODS: tuple[str, ...] = (
     "apply_resolved_actions",
     "discard_move_preview",
     "update_review_decisions",
+    "summarize_auto_select_keepers",
     "get_app_setting",
     "set_app_setting",
     "query_log_entries",

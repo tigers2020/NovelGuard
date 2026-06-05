@@ -229,14 +229,36 @@ test.describe("NovelGuard smoke", () => {
     await expect(resolveGrid.getByTestId("grid-header-select-all")).toHaveCount(0);
   });
 
-  test("NOV-19 batch bar keeps exclude and preview only", async ({ page }) => {
+  test("NOV-19 batch bar keeps exclude, auto-select, and preview", async ({ page }) => {
     await openResolveWorkspace(page);
     await expect(page.getByTestId("batch-exclude-all-filtered")).toBeVisible();
+    await expect(page.getByTestId("batch-auto-select-keepers")).toBeVisible();
     await expect(page.getByTestId("batch-preview-open")).toBeVisible();
     await expect(page.getByTestId("batch-approve-selected")).toHaveCount(0);
     await expect(page.getByTestId("batch-exclude-selected")).toHaveCount(0);
     await expect(page.getByTestId("batch-approve-all-filtered")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "보이는 행 전체 선택" })).toHaveCount(0);
+  });
+
+  test("NOV-31 auto-select confirm then preview opens apply dialog", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await page.getByTestId("resolve-type-filter-exact").click();
+    const autoSelect = page.getByTestId("batch-auto-select-keepers");
+    await expect(autoSelect).toBeEnabled({ timeout: 15_000 });
+    await autoSelect.click();
+
+    const dialog = page.getByTestId("auto-select-confirm-dialog");
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText("미검토");
+    await expect(dialog).toContainText("보관 기준");
+    await expect(dialog).toContainText("이동 계획 미리보기");
+
+    await page.getByTestId("auto-select-confirm-ok").click();
+    await expect(dialog).toHaveCount(0, { timeout: 15_000 });
+
+    await prepareExecutableMoveFilter(page);
+    await openApplyDialog(page);
+    await expect(page.getByTestId("apply-preview-run")).toBeVisible();
   });
 
   test("NOV-19 bulk exclude confirm shows updated copy", async ({ page }) => {
