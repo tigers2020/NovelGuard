@@ -1084,7 +1084,8 @@ def test_update_review_decisions_approve_persists(tmp_path: Path) -> None:
     api.start_scan()
     _scan_until_idle(api)
     page = api.query_review_rows({"viewMode": "all", "limit": 50})
-    file_row = next(row for row in page["rows"] if row.get("rowKind") == "file")
+    file_rows = [row for row in page["rows"] if row.get("rowKind") == "file"]
+    file_row = next(row for row in file_rows if row.get("status") == "unreviewed")
     assert file_row.get("status") == "unreviewed"
 
     result = api.update_review_decisions(
@@ -1114,11 +1115,21 @@ def test_query_review_rows_exact_duplicate_pair(tmp_path: Path) -> None:
     api.start_scan()
     snap = _scan_until_idle(api)
     assert snap["work"]["scan"]["state"] == "success"
+    assert snap["work"]["resolve"]["approvedCount"] >= 1
     page = api.query_review_rows({"viewMode": "all", "limit": 50})
     validate_review_rows_page(page)
     assert len(page["rows"]) >= 3
     assert all(row["type"] == "exact" for row in page["rows"])
     assert any(row["rowKind"] == "group" for row in page["rows"])
+
+    file_rows = [row for row in page["rows"] if row.get("rowKind") == "file"]
+    assert len(file_rows) == 2
+    keeper_row = max(file_rows, key=lambda row: row["name"])
+    non_keeper_row = min(file_rows, key=lambda row: row["name"])
+    assert keeper_row["status"] == "unreviewed"
+    assert keeper_row["proposedAction"] == "keep"
+    assert non_keeper_row["status"] == "approved"
+    assert non_keeper_row["proposedAction"] == "move_duplicate"
 
 
 def test_snapshot_duplicate_group_count(tmp_path: Path) -> None:
