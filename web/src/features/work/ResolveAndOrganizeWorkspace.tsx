@@ -24,7 +24,10 @@ import { mergeReviewColumnVisibility } from "./resolve/reviewGridLayout";
 import { DetailPanel } from "./resolve/DetailPanel";
 import { BatchActionBar } from "./resolve/BatchActionBar";
 import { BulkFilterConfirmDialog } from "./resolve/BulkFilterConfirmDialog";
-import { hasExecutableMovePreviewRows } from "./resolve/previewEligibility";
+import {
+  hasExecutableMovePreviewRows,
+  reviewOnlyBlockedReasonForFilter,
+} from "./resolve/previewEligibility";
 import {
   bulkMutationChunkCursors,
   bulkMutationTargetCount,
@@ -59,7 +62,7 @@ export function ResolveAndOrganizeWorkspace({
     setFacetExpanded(next);
     persistResolveFacetExpanded(next);
   };
-  const [rowTypeFilter, setRowTypeFilter] = useState<"exact" | "near" | "relation" | "all">("all");
+  const [rowTypeFilter, setRowTypeFilter] = useState<"exact" | "near" | "relation" | "all">("exact");
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [filteredCount, setFilteredCount] = useState(0);
@@ -265,18 +268,10 @@ export function ResolveAndOrganizeWorkspace({
 
   const hasExecutableRows = useMemo(() => hasExecutableMovePreviewRows(rows), [rows]);
 
-  const reviewOnlyBlockedReason = useMemo(() => {
-    if (rowTypeFilter === "near") {
-      return "Near 중복은 검토 전용이며 일괄 적용할 수 없습니다.";
-    }
-    if (rowTypeFilter === "relation") {
-      return "Relation 그룹은 검토 전용이며 일괄 적용할 수 없습니다.";
-    }
-    if (rowTypeFilter === "all") {
-      return "현재 필터에 검토 전용 유형이 포함되어 있습니다. Exact만 선택하세요.";
-    }
-    return undefined;
-  }, [rowTypeFilter]);
+  const reviewOnlyBlockedReason = useMemo(
+    () => reviewOnlyBlockedReasonForFilter(rowTypeFilter),
+    [rowTypeFilter],
+  );
 
   const previewBlockedReason = useMemo(() => {
     if (reviewOnlyBlockedReason) return reviewOnlyBlockedReason;

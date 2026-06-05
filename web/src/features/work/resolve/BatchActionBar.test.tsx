@@ -29,7 +29,6 @@ describe("BatchActionBar", () => {
       <BatchActionBar
         filteredCount={500}
         loadedCount={200}
-        loadingAll={false}
         onExcludeAllFiltered={noop}
         onPreview={noop}
       />,
@@ -44,7 +43,6 @@ describe("BatchActionBar", () => {
       <BatchActionBar
         filteredCount={500}
         loadedCount={500}
-        loadingAll={false}
         onExcludeAllFiltered={noop}
         onPreview={noop}
       />,
