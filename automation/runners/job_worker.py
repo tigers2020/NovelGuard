@@ -52,6 +52,37 @@ def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProc
 @contextmanager
 def repo_lock(lock_path: Path) -> Iterator[None]:
     lock_path.parent.mkdir(parents=True, exist_ok=True)
+    if sys.platform == "win32":
+        import msvcrt
+
+        last_exc: OSError | None = None
+        for attempt in range(12):
+            clear_stale_file_lock(lock_path)
+            try:
+                handle = open(lock_path, "a+b")
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            except OSError as exc:
+                last_exc = exc
+                if attempt < 11:
+                    time.sleep(0.15 * (attempt + 1))
+                    continue
+                raise RuntimeError(f"Repo busy (lock exists): {lock_path}") from exc
+            try:
+                handle.seek(0)
+                handle.truncate()
+                handle.write(f"pid={os.getpid()} ts={time.time()}\n".encode())
+                handle.flush()
+                yield
+            finally:
+                try:
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+                finally:
+                    handle.close()
+            return
+        if last_exc is not None:
+            raise RuntimeError(f"Repo busy (lock exists): {lock_path}") from last_exc
+        return
+
     clear_stale_file_lock(lock_path)
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
     try:

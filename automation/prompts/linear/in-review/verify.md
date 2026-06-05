@@ -16,7 +16,8 @@ base_branch: main
 **Issue:** `{{ISSUE_IDENTIFIER}}` · **URL:** `{{ISSUE_URL}}` · **Job:** `{{JOB_ID}}`  
 **HARD-GATE:** Linear MCP on **exactly** `{{ISSUE_IDENTIFIER}}` only.
 
-**Entry:** In Review · **Exit:** Done + `auto:verify-done` OR In Progress + `auto:verify-failed`
+**Entry:** In Review (or In Progress + `auto:impl-done` — advance first) · **Exit:** Done + `auto:verify-done` OR In Progress + `auto:verify-failed`  
+**Route:** `{{ROUTE_REASON}}` · **Webhook state:** `{{LINEAR_STATE}}`
 
 **TEST_ALLOWED** — new/extended tests per Spec + Plan + Todo.
 
@@ -25,7 +26,8 @@ base_branch: main
 | Check | Action |
 | ----- | ------ |
 | project/team ≠ NovelGuard | silent exit |
-| status ≠ In Review | silent exit |
+| status ≠ In Review and no `auto:impl-done` | silent exit |
+| status = In Progress + `auto:impl-done` | `save_issue(state=In Review)` **one call**, then continue |
 | `auto:verify-done` + no `regenerate verify` | idempotent exit |
 | missing Spec/Plan/Todo | `## Verification blocked`, `auto:verify-blocked` |
 
@@ -33,12 +35,13 @@ Progress labels (`verifying`, `verify-testing`, …) — **no separate `save_iss
 
 ## Do
 
-1. **Load** — Spec, Plan, Todo, Implementation report. AC → test matrix.
-2. **Write tests** — extend or add per matrix (TEST_ALLOWED). Commit on impl branch.
-3. **Green loop** — pytest, contracts, lint, `verify_phase_completion.py`. Max 5 cycles.
-4. **PR** — /finishing-a-development-branch: push + `gh pr create` (no merge).
-5. **Babysit** — /babysit until merge-ready.
-6. **Done** — `## Verification report`: **Summary (caveman)**, test matrix↔AC, tests changed, commands (pass), PR URL, babysit status → `save_issue(state=Done, labels+=auto:verify-done)` **one call**. STOP.  
+1. **Status** — if not In Review but `auto:impl-done` present → `save_issue(state=In Review)` once, then continue.
+2. **Load** — Spec, Plan, Todo, Implementation report. AC → test matrix.
+3. **Write tests** — extend or add per matrix (TEST_ALLOWED). Commit on impl branch.
+4. **Green loop** — pytest, contracts, lint, `verify_phase_completion.py`. Max 5 cycles.
+5. **PR** — /finishing-a-development-branch: push + `gh pr create` (no merge).
+6. **Babysit** — /babysit until merge-ready.
+7. **Done** — `## Verification report`: **Summary (caveman)**, test matrix↔AC, tests changed, commands (pass), PR URL, babysit status → `save_issue(state=Done, labels+=auto:verify-done)` **one call**. STOP.  
    **Rebuke** — `## Verification rebuke`: **Summary (caveman)**, failures, required fixes, PR URL → `save_issue(state=In Progress, labels+=auto:verify-failed, labels-=auto:impl-done)` **one call**. STOP. → `linear/in-progress/implement.md`.
 
 **Tools:** Linear MCP · git · `gh` · pytest · npm

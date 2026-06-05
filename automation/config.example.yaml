@@ -29,6 +29,22 @@ linear:
   repo_key: novelguard
   project_names: [NovelGuard]
   team_names: [NoverGuard, NovelGuard]
+  team_ids: ["97047174-6453-4458-b170-a9bf5f7b52e0"]
+  project_ids: ["20965ebc-3ea7-4787-9310-f15ad9019007"]
+  state_ids:
+    180fc254-f066-4fad-a425-7ebab180d4c6: Backlog
+    49a46ce6-eb18-4377-95ae-b76f655a77b7: Todo
+    0be134b7-bc56-4ba6-ba76-6b0a705e2ded: In Progress
+    31a91042-9d59-49eb-8821-43ddd92ed76d: In Review
+  label_ids:
+    research_done: b26a0e92-112f-49dc-bdc1-16628995c020
+    spec_done: bffa5b70-6009-4c1c-8f6a-f7fd62e79621
+    plan_done: f3424dcd-6d2c-47f9-a8fe-5f4d5b626d27
+    grill_needs_revision: 6213baed-1cd7-4bb7-acb4-1572e7fbdf36
+    todo_list_done: 75d4a692-8214-4592-8f45-f29f93162b45
+    impl_done: 41269879-fa85-478c-bca6-3329340d8069
+    verify_done: 65836882-f344-4675-b3a2-552a3fb3c79c
+    impl_blocked: 21887166-c56e-4a0b-bf66-5f8cca32703b
   webhook_host: 127.0.0.1
   webhook_port: 8765
   webhook_path: /linear/webhook

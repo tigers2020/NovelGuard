@@ -7,40 +7,22 @@ from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Any
 
-# Progress labels must not enqueue jobs on label-only webhooks (token / duplicate runs).
-_PROGRESS_LABELS = frozenset(
-    {
-        "auto:triaging",
-        "auto:researching",
-        "auto:branch-creating",
-        "auto:spec-brainstorming",
-        "auto:implementing",
-        "auto:impl-running",
-        "auto:impl-verifying",
-        "auto:verifying",
-        "auto:verify-testing",
-        "auto:verify-fixing",
-        "auto:verify-pr",
-        "auto:verify-babysit",
-        "auto:blocked",
-        "auto:impl-blocked",
-        "auto:verify-blocked",
-    }
-)
-
-# Labels that may trigger planning-phase prompts on label-only updates.
-_ROUTING_LABELS = frozenset(
-    {
-        "auto:research-done",
-        "auto:spec-done",
-        "auto:plan-done",
-        "auto:grill-needs-revision",
-    }
+from automation.linear.linear_ids import (
+    has_label_key,
+    issue_in_scope,
+    issue_label_ids,
+    label_ids_before,
+    resolve_state_id,
+    resolve_state_name,
+    route_debug,
 )
 
 _PROMPT_CREATE = "linear/backlog/create-research.md"
 _PROMPT_IMPLEMENT = "linear/in-progress/implement.md"
 _PROMPT_VERIFY = "linear/in-review/verify.md"
+
+_SKIP_CREATE_STATES = frozenset({"Done", "Canceled", "Cancelled", "Duplicate"})
+_SKIP_UPDATE_STATES = frozenset({"Done", "Canceled", "Cancelled", "Duplicate"})
 
 
 @dataclass(frozen=True)
@@ -57,32 +39,12 @@ def _issue_data(payload: dict[str, Any]) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def _project_name(data: dict[str, Any]) -> str:
-    project = data.get("project")
-    if isinstance(project, dict):
-        return str(project.get("name") or "")
-    return str(project or "")
-
-
-def _team_name(data: dict[str, Any]) -> str:
-    team = data.get("team")
-    if isinstance(team, dict):
-        return str(team.get("name") or "")
-    return str(team or "")
-
-
-def _state_name(data: dict[str, Any]) -> str:
-    state = data.get("state")
-    if isinstance(state, dict):
-        return str(state.get("name") or "")
-    return str(state or "")
+def _state_name(data: dict[str, Any], cfg: dict[str, Any] | None = None) -> str:
+    return resolve_state_name(data, cfg)
 
 
 def _state_id(data: dict[str, Any]) -> str:
-    state = data.get("state")
-    if isinstance(state, dict):
-        return str(state.get("id") or "")
-    return ""
+    return resolve_state_id(data)
 
 
 def _issue_identifier(data: dict[str, Any]) -> str:
@@ -93,28 +55,10 @@ def _issue_url(data: dict[str, Any]) -> str:
     return str(data.get("url") or "")
 
 
-def _label_names(data: dict[str, Any]) -> frozenset[str]:
-    labels = data.get("labels")
-    if not isinstance(labels, list):
-        return frozenset()
-    out: set[str] = set()
-    for item in labels:
-        if isinstance(item, dict):
-            name = item.get("name")
-            if name:
-                out.add(str(name))
-        elif item:
-            out.add(str(item))
-    return frozenset(out)
-
-
-def _auto_label_slug(data: dict[str, Any]) -> str:
-    auto = sorted(
-        name.removeprefix("auto:") for name in _label_names(data) if name.startswith("auto:")
-    )
-    if not auto:
+def _auto_label_slug(label_ids: frozenset[str]) -> str:
+    if not label_ids:
         return ""
-    slug = "-".join(auto)
+    slug = "-".join(sorted(label_id[:8] for label_id in label_ids))
     if len(slug) > 24:
         digest = hashlib.sha256(slug.encode()).hexdigest()[:8]
         return f"h{digest}"
@@ -133,7 +77,6 @@ def _state_changed(payload: dict[str, Any], data: dict[str, Any]) -> bool:
     if not after_id:
         after_id = str(data.get("stateId") or "")
 
-    # Linear production webhooks use updatedFrom.stateId (not nested state object).
     before_id = str(updated_from.get("stateId") or "")
     if before_id and after_id:
         return before_id != after_id
@@ -157,55 +100,178 @@ def _labels_changed(payload: dict[str, Any]) -> bool:
     return "labelIds" in updated_from or "labels" in updated_from
 
 
-def resolve_planning_prompt(state: str, labels: frozenset[str]) -> str | None:
-    """Pick one planning prompt from status + routing labels (priority order)."""
+def resolve_planning_prompt(
+    state: str,
+    data: dict[str, Any],
+    cfg: dict[str, Any] | None,
+) -> str | None:
+    """Pick one planning prompt from status + routing label UUIDs (priority order)."""
     if state == "Todo":
-        if "auto:grill-needs-revision" in labels:
+        if has_label_key(data, cfg, "grill_needs_revision"):
             return "linear/todo/revise-spec.md"
-        if "auto:plan-done" in labels:
+        if has_label_key(data, cfg, "plan_done"):
             return "linear/todo/write-todo-list.md"
-        if "auto:spec-done" in labels and "auto:plan-done" not in labels:
+        if has_label_key(data, cfg, "spec_done") and not has_label_key(data, cfg, "plan_done"):
             return "linear/todo/defer-to-backlog.md"
-        if "auto:research-done" in labels:
+        if has_label_key(data, cfg, "research_done"):
             return "linear/todo/write-spec.md"
-    if state == "Backlog" and "auto:spec-done" in labels:
+    if state == "Backlog" and has_label_key(data, cfg, "spec_done"):
         return "linear/backlog/grill-plan.md"
     return None
 
 
-def _label_only_should_route(state: str, labels: frozenset[str]) -> bool:
-    """Ignore progress-label-only webhooks; require a resolvable routing label."""
-    if state not in ("Backlog", "Todo"):
-        return False
-    if not labels & _ROUTING_LABELS:
-        return False
-    return resolve_planning_prompt(state, labels) is not None
-
-
-def _route_planning(state: str, labels: frozenset[str], *, reason: str) -> LinearRoute | None:
-    prompt = resolve_planning_prompt(state, labels)
+def _route_planning(
+    state: str,
+    data: dict[str, Any],
+    cfg: dict[str, Any] | None,
+    *,
+    reason: str,
+    commit: bool = False,
+) -> LinearRoute | None:
+    prompt = resolve_planning_prompt(state, data, cfg)
     if prompt is None:
         return None
     return LinearRoute(
         prompt_file=prompt,
-        commit=False,
+        commit=commit,
         verify="none",
         git_prepare=False,
         reason=reason,
     )
 
 
-def in_scope(data: dict[str, Any], *, project_names: set[str], team_names: set[str]) -> bool:
-    project = _project_name(data)
-    team = _team_name(data)
-    if project and project in project_names:
-        return True
-    if team and team in team_names:
-        return True
-    return False
+def _route_execution_from_labels(
+    state: str,
+    data: dict[str, Any],
+    cfg: dict[str, Any] | None,
+    *,
+    reason_prefix: str,
+) -> LinearRoute | None:
+    """Infer implement/verify from phase-done labels — status column optional."""
+    if has_label_key(data, cfg, "verify_done"):
+        return None
+
+    if has_label_key(data, cfg, "verify_failed"):
+        if state == "In Progress":
+            return LinearRoute(
+                prompt_file=_PROMPT_IMPLEMENT,
+                commit=True,
+                verify="none",
+                git_prepare=False,
+                reason=f"{reason_prefix} (verify-failed→implement)",
+            )
+        return LinearRoute(
+            prompt_file=_PROMPT_VERIFY,
+            commit=True,
+            verify="none",
+            git_prepare=False,
+            reason=f"{reason_prefix} (verify-failed→verify)",
+        )
+
+    if has_label_key(data, cfg, "impl_done"):
+        return LinearRoute(
+            prompt_file=_PROMPT_VERIFY,
+            commit=True,
+            verify="none",
+            git_prepare=False,
+            reason=f"{reason_prefix} (impl-done→verify)",
+        )
+
+    if has_label_key(data, cfg, "todo_list_done"):
+        if state in ("In Progress", "Todo", "Backlog"):
+            return LinearRoute(
+                prompt_file=_PROMPT_IMPLEMENT,
+                commit=True,
+                verify="none",
+                git_prepare=False,
+                reason=f"{reason_prefix} (todo-list-done→implement)",
+            )
+
+    return None
 
 
-_SKIP_CREATE_STATES = frozenset({"Done", "Canceled", "Cancelled", "Duplicate"})
+def _label_only_should_route(state: str, data: dict[str, Any], cfg: dict[str, Any] | None) -> bool:
+    if state not in ("Backlog", "Todo"):
+        return False
+    return resolve_planning_prompt(state, data, cfg) is not None
+
+
+def _route_label_only_execution(
+    payload: dict[str, Any],
+    state: str,
+    data: dict[str, Any],
+    cfg: dict[str, Any] | None,
+) -> LinearRoute | None:
+    before = label_ids_before(payload)
+    current = issue_label_ids(data)
+
+    from automation.linear.linear_ids import DEFAULT_LABEL_IDS
+
+    merged = (cfg or {}).get("linear", {}).get("label_ids") or {}
+    impl_done_id = str(merged.get("impl_done") or DEFAULT_LABEL_IDS.get("impl_done") or "")
+    todo_list_done_id = str(
+        merged.get("todo_list_done") or DEFAULT_LABEL_IDS.get("todo_list_done") or ""
+    )
+    blocked_id = str(merged.get("impl_blocked") or DEFAULT_LABEL_IDS.get("impl_blocked") or "")
+
+    if impl_done_id and impl_done_id in current and impl_done_id not in before:
+        if not has_label_key(data, cfg, "verify_done"):
+            return LinearRoute(
+                prompt_file=_PROMPT_VERIFY,
+                commit=True,
+                verify="none",
+                git_prepare=False,
+                reason=f"labels@{state} (impl-done→verify)",
+            )
+
+    if (
+        todo_list_done_id
+        and todo_list_done_id in current
+        and todo_list_done_id not in before
+        and not has_label_key(data, cfg, "impl_done")
+        and state in ("In Progress", "Todo", "Backlog")
+    ):
+        return LinearRoute(
+            prompt_file=_PROMPT_IMPLEMENT,
+            commit=True,
+            verify="none",
+            git_prepare=False,
+            reason=f"labels@{state} (todo-list-done→implement)",
+        )
+
+    if state == "In Progress":
+        if has_label_key(data, cfg, "verify_failed"):
+            return LinearRoute(
+                prompt_file=_PROMPT_IMPLEMENT,
+                commit=True,
+                verify="none",
+                git_prepare=False,
+                reason="labels@In Progress (verify-failed)",
+            )
+        if (
+            blocked_id
+            and blocked_id in before
+            and blocked_id not in current
+            and not has_label_key(data, cfg, "impl_done")
+        ):
+            return LinearRoute(
+                prompt_file=_PROMPT_IMPLEMENT,
+                commit=True,
+                verify="none",
+                git_prepare=False,
+                reason="labels@In Progress (unblocked)",
+            )
+
+    if state == "In Review" and has_label_key(data, cfg, "verify_failed"):
+        return LinearRoute(
+            prompt_file=_PROMPT_VERIFY,
+            commit=True,
+            verify="none",
+            git_prepare=False,
+            reason="labels@In Review (verify-failed)",
+        )
+
+    return None
 
 
 def route_linear_webhook(
@@ -213,6 +279,7 @@ def route_linear_webhook(
     *,
     project_names: set[str] | None = None,
     team_names: set[str] | None = None,
+    cfg: dict[str, Any] | None = None,
 ) -> LinearRoute | None:
     """Return prompt route or None when event should be ignored."""
     if payload.get("type") not in (None, "Issue", "issue"):
@@ -224,12 +291,11 @@ def route_linear_webhook(
 
     projects = project_names or {"NovelGuard"}
     teams = team_names or {"NoverGuard", "NovelGuard"}
-    if not in_scope(data, project_names=projects, team_names=teams):
+    if not issue_in_scope(data, project_names=projects, team_names=teams, cfg=cfg):
         return None
 
     action = str(payload.get("action") or "")
-    state = _state_name(data)
-    labels = _label_names(data)
+    state = _state_name(data, cfg)
 
     if action == "create":
         if state in _SKIP_CREATE_STATES:
@@ -252,24 +318,29 @@ def route_linear_webhook(
     if not state_changed and not labels_changed:
         return None
 
+    if state in _SKIP_UPDATE_STATES:
+        return None
+
     if state_changed:
+        execution = _route_execution_from_labels(
+            state,
+            data,
+            cfg,
+            reason_prefix=f"status→{state}",
+        )
+        if execution is not None:
+            return execution
+
         if state in ("Backlog", "Todo"):
-            return _route_planning(state, labels, reason=f"status→{state}")
+            return _route_planning(state, data, cfg, reason=f"status→{state}")
 
         if state == "In Progress":
-            if "auto:impl-done" in labels and "auto:verify-failed" not in labels:
-                return None
-            reason = (
-                "status→In Progress (verify-failed)"
-                if "auto:verify-failed" in labels
-                else "status→In Progress"
-            )
             return LinearRoute(
                 prompt_file=_PROMPT_IMPLEMENT,
                 commit=True,
                 verify="none",
                 git_prepare=False,
-                reason=reason,
+                reason="status→In Progress",
             )
 
         if state == "In Review":
@@ -283,21 +354,22 @@ def route_linear_webhook(
 
         return None
 
-    # Label-only: planning states only; ignore progress-label noise.
-    if _label_only_should_route(state, labels):
-        return _route_planning(state, labels, reason=f"labels@{state}")
+    if not labels_changed:
+        return None
 
-    # Rebuke may arrive label-only if status was already In Progress.
-    if state == "In Progress" and "auto:verify-failed" in labels:
-        return LinearRoute(
-            prompt_file=_PROMPT_IMPLEMENT,
-            commit=True,
-            verify="none",
-            git_prepare=False,
-            reason="labels@In Progress (verify-failed)",
-        )
+    execution = _route_execution_from_labels(
+        state,
+        data,
+        cfg,
+        reason_prefix=f"labels@{state}",
+    )
+    if execution is not None:
+        return execution
 
-    return None
+    if _label_only_should_route(state, data, cfg):
+        return _route_planning(state, data, cfg, reason=f"labels@{state}")
+
+    return _route_label_only_execution(payload, state, data, cfg)
 
 
 def build_job_payload(
@@ -305,19 +377,21 @@ def build_job_payload(
     route: LinearRoute,
     *,
     repo_key: str = "novelguard",
+    cfg: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     data = _issue_data(webhook_payload)
     identifier = _issue_identifier(data)
-    state = _state_name(data)
+    state = _state_name(data, cfg)
     state_id = _state_id(data)
     action = str(webhook_payload.get("action") or "update")
 
-    slug_state = state.lower().replace(" ", "-") if state else "unknown"
+    slug_state = state.lower().replace(" ", "-") if state else (state_id[:8] or "unknown")
     prompt_stem = PurePosixPath(route.prompt_file).stem
-    label_slug = _auto_label_slug(data)
+    label_slug = _auto_label_slug(issue_label_ids(data))
     label_suffix = f"-{label_slug}" if label_slug else ""
     job_id = (
-        f"linear-{identifier}-{slug_state}-{prompt_stem}-" f"{state_id[:8] or action}{label_suffix}"
+        f"linear-{identifier}-{slug_state}-{prompt_stem}-"
+        f"{state_id[:8] or action}{label_suffix}"
     )
 
     title = str(data.get("title") or "")
@@ -350,8 +424,33 @@ def build_job_payload(
     }
 
 
-def dedupe_key(webhook_payload: dict[str, Any], route: LinearRoute) -> str:
+def dedupe_key(
+    webhook_payload: dict[str, Any],
+    route: LinearRoute,
+    *,
+    cfg: dict[str, Any] | None = None,
+) -> str:
     data = _issue_data(webhook_payload)
     identifier = _issue_identifier(data)
-    state = _state_name(data)
-    return f"{identifier}:{route.prompt_file}:{state}"
+    state = _state_name(data, cfg) or resolve_state_id(data)
+    parts = [identifier, route.prompt_file, state]
+    if _state_changed(webhook_payload, data):
+        parts.append(f"state:{resolve_state_id(data)}")
+    if _labels_changed(webhook_payload):
+        parts.append(",".join(sorted(issue_label_ids(data))))
+    webhook_id = webhook_payload.get("webhookId")
+    if webhook_id:
+        parts.append(str(webhook_id))
+    return ":".join(parts)
+
+
+__all__ = [
+    "LinearRoute",
+    "_labels_changed",
+    "_state_changed",
+    "build_job_payload",
+    "dedupe_key",
+    "resolve_planning_prompt",
+    "route_debug",
+    "route_linear_webhook",
+]
