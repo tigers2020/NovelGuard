@@ -33,7 +33,6 @@ VALID_SNAPSHOT: dict[str, Any] = {
             "deepAnalysisComplete": False,
             "deepAnalysisStatus": "idle",
             "deepAnalysisError": None,
-            "exactAutoApprovedCount": 0,
         },
         "resolve": {
             "queueCount": 0,

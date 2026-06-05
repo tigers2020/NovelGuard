@@ -123,7 +123,6 @@ def build_snapshot(
                 "deepAnalysisComplete": deep_analysis_complete,
                 "deepAnalysisStatus": deep_analysis_status,
                 "deepAnalysisError": deep_analysis_error,
-                "exactAutoApprovedCount": exact_auto_approved_count,
             },
             "resolve": {
                 "queueCount": queue_count,

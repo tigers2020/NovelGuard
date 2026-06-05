@@ -25,7 +25,6 @@ export interface ScanSnapshot {
   deepAnalysisComplete: boolean;
   deepAnalysisStatus: DeepAnalysisStatus;
   deepAnalysisError: string | null;
-  exactAutoApprovedCount: number;
 }
 
 export interface ResolveSnapshot {

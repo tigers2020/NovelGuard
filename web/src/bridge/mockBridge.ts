@@ -275,7 +275,6 @@ function buildSnapshot(): AppSnapshot {
         deepAnalysisComplete: !state.pipelineRunning,
         deepAnalysisStatus: state.pipelineRunning ? "running" : "complete",
         deepAnalysisError: null,
-        exactAutoApprovedCount,
       },
       resolve: {
         queueCount: counts.queueCount,
