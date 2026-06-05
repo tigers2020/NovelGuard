@@ -36,7 +36,10 @@ describe("AutoSelectKeepersConfirmDialog", () => {
     expect(screen.getByTestId("auto-select-summary-exact").textContent).toContain("3");
     expect(screen.getByTestId("auto-select-summary-near").textContent).toContain("4");
     expect(screen.getByTestId("auto-select-summary-relation").textContent).toContain("3");
+    expect(screen.getByTestId("auto-select-summary-keepers").textContent).toContain("4");
+    expect(screen.getByTestId("auto-select-summary-move-candidates").textContent).toContain("6");
     expect(screen.getByText(/가장 용량이 큰 파일/)).toBeTruthy();
+    expect(screen.getByText(/용량이 같으면 가장 최근 수정된 파일/)).toBeTruthy();
     expect(
       screen.getByText(/이동 계획 미리보기에서 최종 이동 대상을 검토합니다/),
     ).toBeTruthy();

@@ -125,9 +125,7 @@ def _merge_non_exact_row(
     keeper_override = group_entry[0] if group_entry else None
 
     member_records = [
-        files_by_id[member_id]
-        for member_id in group_member_ids
-        if member_id in files_by_id
+        files_by_id[member_id] for member_id in group_member_ids if member_id in files_by_id
     ]
     member_ids = [member.id for member in member_records]
     keeper_id: str | None = None
@@ -161,7 +159,9 @@ def _merge_non_exact_row(
             updated["proposedAction"] = "keep" if is_keeper else "move_duplicate"
             updated["targetFolder"] = None if is_keeper else "duplicate/"
         else:
-            updated["proposedAction"] = row.get("proposedAction", "keep" if is_keeper else "move_duplicate")
+            updated["proposedAction"] = row.get(
+                "proposedAction", "keep" if is_keeper else "move_duplicate"
+            )
             if not is_keeper and updated["proposedAction"] == "move_duplicate":
                 updated["targetFolder"] = row.get("targetFolder", "duplicate/")
             elif is_keeper:

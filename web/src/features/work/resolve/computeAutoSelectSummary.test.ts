@@ -70,6 +70,21 @@ describe("computeAutoSelectSummary", () => {
     expect(summary.partialLoad).toBe(true);
   });
 
+  it("pickKeeperPreviewId prefers larger size then newer mtime", () => {
+    const rows = [
+      file({ id: "small-old", name: "small-old.txt", groupId: "g1", sizeBytes: 100, modifiedAtNs: 1 }),
+      file({ id: "large-new", name: "large-new.txt", groupId: "g1", sizeBytes: 200, modifiedAtNs: 2 }),
+      file({ id: "large-old", name: "large-old.txt", groupId: "g1", sizeBytes: 200, modifiedAtNs: 1 }),
+    ];
+    const summary = computeAutoSelectSummary(rows, {
+      filteredCount: 3,
+      loadedFileRowCount: 3,
+    });
+    expect(summary.keeperCount).toBe(1);
+    expect(summary.moveCandidateCount).toBe(2);
+    expect(summary.samples?.keepers).toEqual(["large-new.txt"]);
+  });
+
   it("excludes conflict and group rows", () => {
     const rows = [
       file({ id: "ok" }),
