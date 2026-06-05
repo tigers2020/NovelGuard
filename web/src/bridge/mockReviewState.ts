@@ -98,6 +98,8 @@ export function applyMockReviewState(rows: ReviewRow[]): ReviewRow[] {
   });
 }
 
+const UNRESOLVED_STATUSES = new Set(["unreviewed", "conflict"]);
+
 export function resolveInsightCounts(rows: ReviewRow[]): {
   moveReadyCount: number;
   reviewSignalCount: number;
