@@ -1679,9 +1679,7 @@ def test_current_query_move_preview_includes_auto_approved_duplicate(tmp_path: P
     assert move_row["status"] == "approved"
 
     action_page = api.query_review_rows({"viewMode": "action", "limit": 50})
-    action_file_ids = {
-        row["id"] for row in action_page["rows"] if row.get("rowKind") == "file"
-    }
+    action_file_ids = {row["id"] for row in action_page["rows"] if row.get("rowKind") == "file"}
     assert move_row["id"] in action_file_ids
 
     selection = {
