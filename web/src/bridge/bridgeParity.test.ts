@@ -31,6 +31,7 @@ import { derivePipelineTracks } from "../features/work/pipelineTracks";
 import { deriveScanSectionState } from "../features/work/scanSectionState";
 import { buildQualityRows, getAllReviewRows, sortQualityRows } from "./mockData";
 import {
+  applyMockReviewCommand,
   applyMockReviewState,
   persistMockExactNonKeeperApprovals,
   resetMockReviewState,
@@ -769,6 +770,58 @@ describe("quality repair parity (PR-42)", () => {
   it("cancelFinalize is idempotent", async () => {
     await mockBridge.cancelFinalize();
     await expect(mockBridge.cancelFinalize()).resolves.toBeUndefined();
+  });
+});
+
+describe("auto-select keepers parity (NOV-33)", () => {
+  beforeEach(() => {
+    resetMockReviewState();
+  });
+
+  function nearPairFixture(): ReviewRow[] {
+    const groupId = "near:test";
+    const keeperFileId = "a".repeat(64);
+    const otherFileId = "b".repeat(64);
+    return [
+      {
+        id: `file:${groupId}:${keeperFileId}`,
+        rowKind: "file",
+        type: "near",
+        status: "unreviewed",
+        name: "keeper.txt",
+        groupId,
+        proposedAction: "keep",
+        sizeBytes: 2_000,
+        hasChildren: false,
+        path: "keeper.txt",
+      },
+      {
+        id: `file:${groupId}:${otherFileId}`,
+        rowKind: "file",
+        type: "near",
+        status: "unreviewed",
+        name: "other.txt",
+        groupId,
+        proposedAction: "move_duplicate",
+        targetFolder: "duplicate/",
+        sizeBytes: 1_000,
+        hasChildren: false,
+        path: "other.txt",
+      },
+    ];
+  }
+
+  it("setKeeper plus approve on near non-keeper yields move_duplicate", () => {
+    const rows = nearPairFixture();
+    const keeper = rows[0]!;
+    const nonKeeper = rows[1]!;
+    applyMockReviewCommand([keeper], "setKeeper");
+    expect(applyMockReviewCommand([nonKeeper], "approve")).toBe(1);
+    const merged = applyMockReviewState(rows);
+    const updated = merged.find((row) => row.id === nonKeeper.id);
+    expect(updated?.status).toBe("approved");
+    expect(updated?.proposedAction).toBe("move_duplicate");
+    expect(updated?.targetFolder).toBe("duplicate/");
   });
 });
 

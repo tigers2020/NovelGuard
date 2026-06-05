@@ -6,6 +6,7 @@ from typing import Any
 
 from application.ports.library_index import LoadedReviewState
 from domain.duplicate_exact import find_exact_duplicate_groups
+from domain.keeper_selection import pick_keeper_file_id
 from domain.models import DuplicateGroup, FileRecord
 
 
@@ -13,8 +14,23 @@ def _pick_keeper_id(group: DuplicateGroup, files_by_id: dict[str, FileRecord]) -
     members = [files_by_id[mid] for mid in group.member_ids if mid in files_by_id]
     if not members:
         return group.keeper_id
-    keeper = max(members, key=lambda m: (m.size_bytes, m.relative_path))
-    return keeper.id
+    return pick_keeper_file_id(members)
+
+
+def _non_exact_member_ids_by_group(rows: list[dict[str, Any]]) -> dict[str, list[str]]:
+    members: dict[str, list[str]] = {}
+    for row in rows:
+        group_id = row.get("groupId")
+        if not isinstance(group_id, str):
+            continue
+        if not (group_id.startswith("near:") or group_id.startswith("relation:")):
+            continue
+        if row.get("rowKind") != "file":
+            continue
+        file_id = _file_id_from_row_id(str(row.get("id", "")))
+        if file_id:
+            members.setdefault(group_id, []).append(file_id)
+    return members
 
 
 def merge_review_state(
@@ -25,6 +41,7 @@ def merge_review_state(
     files_by_id: dict[str, FileRecord],
 ) -> list[dict[str, Any]]:
     members_by_group = {g.group_id: g for g in groups}
+    non_exact_member_ids = _non_exact_member_ids_by_group(rows)
     merged: list[dict[str, Any]] = []
 
     for row in rows:
@@ -43,7 +60,15 @@ def merge_review_state(
             if isinstance(group_id, str) and (
                 group_id.startswith("near:") or group_id.startswith("relation:")
             ):
-                merged.append(_merge_non_exact_row(updated, group_id, stored, files_by_id))
+                merged.append(
+                    _merge_non_exact_row(
+                        updated,
+                        group_id,
+                        stored,
+                        files_by_id,
+                        group_member_ids=non_exact_member_ids.get(group_id, []),
+                    )
+                )
             else:
                 merged.append(updated)
             continue
@@ -91,16 +116,30 @@ def _merge_non_exact_row(
     group_id: str,
     stored: LoadedReviewState,
     files_by_id: dict[str, FileRecord],
+    *,
+    group_member_ids: list[str],
 ) -> dict[str, Any]:
     updated = dict(row)
     group_entry = stored.groups.get(group_id)
     group_status = group_entry[1] if group_entry else None
     keeper_override = group_entry[0] if group_entry else None
 
+    member_records = [
+        files_by_id[member_id]
+        for member_id in group_member_ids
+        if member_id in files_by_id
+    ]
+    member_ids = [member.id for member in member_records]
+    keeper_id: str | None = None
+    if keeper_override and keeper_override in member_ids:
+        keeper_id = keeper_override
+    elif member_records:
+        keeper_id = pick_keeper_file_id(member_records)
+
     if row.get("rowKind") == "group":
         updated["status"] = group_status or row.get("status", "unreviewed")
-        if keeper_override and keeper_override in files_by_id:
-            updated["keeperLabel"] = files_by_id[keeper_override].name
+        if keeper_id and keeper_id in files_by_id:
+            updated["keeperLabel"] = files_by_id[keeper_id].name
         updated["proposedAction"] = "keep"
         return updated
 
@@ -114,11 +153,19 @@ def _merge_non_exact_row(
         effective_status = row.get("status", "unreviewed")
 
     updated["status"] = effective_status
-    if keeper_override and keeper_override in files_by_id:
-        keeper = files_by_id[keeper_override]
+    if keeper_id and keeper_id in files_by_id:
+        keeper = files_by_id[keeper_id]
         updated["keeperLabel"] = keeper.name
-        updated["proposedAction"] = "keep" if file_id == keeper.id else "ignore"
-    updated.pop("targetFolder", None)
+        is_keeper = file_id == keeper_id
+        if effective_status == "approved":
+            updated["proposedAction"] = "keep" if is_keeper else "move_duplicate"
+            updated["targetFolder"] = None if is_keeper else "duplicate/"
+        else:
+            updated["proposedAction"] = row.get("proposedAction", "keep" if is_keeper else "move_duplicate")
+            if not is_keeper and updated["proposedAction"] == "move_duplicate":
+                updated["targetFolder"] = row.get("targetFolder", "duplicate/")
+            elif is_keeper:
+                updated["targetFolder"] = None
     return updated
 
 

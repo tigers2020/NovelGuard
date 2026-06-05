@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from domain.filename_relation import RelationGroup
+from domain.keeper_selection import pick_keeper_file_id
 from domain.models import FileRecord
 
 
@@ -25,7 +26,8 @@ def build_relation_review_rows(
         members = [files_by_id[mid] for mid in group.member_file_ids if mid in files_by_id]
         if len(members) < 2:
             continue
-        keeper = min(members, key=lambda member: member.relative_path)
+        keeper_id = pick_keeper_file_id(members)
+        keeper = next(member for member in members if member.id == keeper_id)
         rows.append(
             {
                 "id": relation_group_row_id(group.group_id),
@@ -53,7 +55,8 @@ def build_relation_review_rows(
                     "path": member.relative_path,
                     "sizeBytes": member.size_bytes,
                     "keeperLabel": keeper.name,
-                    "proposedAction": "ignore",
+                    "proposedAction": "keep" if member.id == keeper_id else "move_duplicate",
+                    "targetFolder": None if member.id == keeper_id else "duplicate/",
                     "hasChildren": False,
                     "groupId": group.group_id,
                     "relationKind": group.relation_kind,

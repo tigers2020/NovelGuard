@@ -8,8 +8,7 @@ from app.selection_resolve import resolve_selection_rows
 from application.library_session import LibrarySession
 from application.ports.library_index import LibraryIndexPort
 from application.review_errors import ReviewDecisionError
-from application.review_state_merge import group_id_from_row
-from domain.duplicate_exact import find_exact_duplicate_groups
+from application.review_state_merge import _file_id_from_row_id, group_id_from_row
 
 MAX_REVIEW_MUTATIONS = 500
 
@@ -47,9 +46,7 @@ class UpdateReviewDecisionsUseCase:
                 f"Selection resolves to more than {MAX_REVIEW_MUTATIONS} rows",
             )
 
-        files = self._index.files()
-        groups = find_exact_duplicate_groups(files)
-        members_by_group = {g.group_id: set(g.member_ids) for g in groups}
+        members_by_group = self._session.build_review_members_by_group()
 
         updated = 0
         for row in rows:
@@ -79,6 +76,8 @@ class UpdateReviewDecisionsUseCase:
         return updated
 
     def _apply_status(self, folder: str, row: dict[str, Any], group_id: str, status: str) -> int:
+        if status == "approved" and row.get("status") == "conflict":
+            return 0
         if row.get("rowKind") == "group":
             self._index.upsert_review_group(
                 folder,
@@ -156,7 +155,7 @@ def _require_file_id(row: dict[str, Any]) -> str:
         raise ReviewDecisionError(
             "INVALID_REVIEW_COMMAND", "setKeeper requires a file row or keeperFileId"
         )
-    parts = row_id.split(":", 2)
-    if len(parts) != 3:
+    file_id = _file_id_from_row_id(row_id)
+    if not file_id:
         raise ReviewDecisionError("INVALID_REVIEW_COMMAND", "Invalid file row id")
-    return parts[2]
+    return file_id

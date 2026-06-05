@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from domain.keeper_selection import pick_keeper_file_id
 from domain.models import DuplicateGroup, FileRecord
 
 
@@ -23,7 +24,8 @@ def find_exact_duplicate_groups(files: list[FileRecord]) -> list[DuplicateGroup]
         for content_hash, members in by_hash.items():
             if len(members) < 2 or not content_hash:
                 continue
-            keeper = _pick_keeper(members)
+            keeper_id = pick_keeper_file_id(members)
+            keeper = next(member for member in members if member.id == keeper_id)
             group_id = f"dup-{content_hash[:16]}"
             groups.append(
                 DuplicateGroup(
@@ -33,7 +35,3 @@ def find_exact_duplicate_groups(files: list[FileRecord]) -> list[DuplicateGroup]
                 )
             )
     return groups
-
-
-def _pick_keeper(members: list[FileRecord]) -> FileRecord:
-    return max(members, key=lambda m: (m.size_bytes, m.relative_path))
