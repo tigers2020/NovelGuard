@@ -67,6 +67,7 @@ def build_snapshot(
     pipeline_background: dict[str, Any] | None = None,
     scan_state: str,
     scan_last_run: str | None,
+    exact_auto_approved_count: int = 0,
     index_ready: bool = False,
     deep_analysis_complete: bool = False,
     deep_analysis_status: str = "idle",
@@ -74,6 +75,8 @@ def build_snapshot(
     has_pending_apply: bool,
     duplicate_group_count: int = 0,
     queue_count: int = 0,
+    move_ready_count: int = 0,
+    review_signal_count: int = 0,
     approved_count: int = 0,
     conflict_count: int = 0,
     integrity_issue_count: int = 0,
@@ -115,6 +118,7 @@ def build_snapshot(
             "scan": {
                 "state": scan_state,
                 "lastRun": scan_last_run,
+                "exactAutoApprovedCount": exact_auto_approved_count,
                 "indexReady": index_ready,
                 "deepAnalysisComplete": deep_analysis_complete,
                 "deepAnalysisStatus": deep_analysis_status,
@@ -122,6 +126,8 @@ def build_snapshot(
             },
             "resolve": {
                 "queueCount": queue_count,
+                "moveReadyCount": move_ready_count,
+                "reviewSignalCount": review_signal_count,
                 "groupCount": duplicate_group_count,
                 "conflictCount": conflict_count,
                 "approvedCount": approved_count,

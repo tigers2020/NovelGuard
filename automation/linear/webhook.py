@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from automation.linear.router import build_job_payload, dedupe_key, route_linear_webhook_events
+from automation.linear.router import build_job_payload, dedupe_key, route_linear_webhook
 from automation.runners.config import load_config, repo_root
 from automation.runners.queue import JobQueue
 
@@ -20,7 +20,6 @@ class WebhookResult:
     status: str
     message: str
     job_id: str | None = None
-    job_ids: tuple[str, ...] = ()
     queue_depth: int = 0
     active_jobs: int = 0
 
@@ -68,62 +67,50 @@ def process_linear_webhook(
     team_names = set(linear.get("team_names") or ["NoverGuard", "NovelGuard"])
     repo_key = str(linear.get("repo_key") or "novelguard")
 
-    event_routes = route_linear_webhook_events(
+    route = route_linear_webhook(
         payload,
         project_names=project_names,
         team_names=team_names,
     )
-    if not event_routes:
+    if route is None:
         return WebhookResult(status="ignored", message="No automation route for this event")
 
     cache = dedupe or DedupeCache(float(linear.get("dedupe_ttl_seconds") or 120))
+    key = dedupe_key(payload, route)
+    if cache.check_and_set(key):
+        return WebhookResult(status="deduped", message=f"Duplicate suppressed: {key}")
+
+    job_payload = build_job_payload(payload, route, repo_key=repo_key)
+
     queue_path = Path(cfg.get("queue", {}).get("path", "automation/jobs/queue.sqlite"))
     if not queue_path.is_absolute():
         queue_path = repo_root() / queue_path
 
     queue = JobQueue(queue_path)
-    queued_ids: list[str] = []
-    deduped_ids: list[str] = []
+    stats = queue.stats()
 
-    for event_route in event_routes:
-        route = event_route.route
-        key = dedupe_key(payload, route)
-        if cache.check_and_set(key):
-            deduped_ids.append(key)
-            continue
+    if stats["running"] > 0 or stats["queued"] > 0:
+        # Still enqueue — worker is serial; avoids lost events.
+        pass
 
-        job_payload = build_job_payload(payload, route, repo_key=repo_key)
-        job_payload["meta"]["linear_event"] = event_route.event
-
-        try:
-            queue.enqueue(job_payload)
-            queued_ids.append(job_payload["id"])
-        except Exception as exc:
-            if (
-                "already active" in str(exc)
-                or "already succeeded" in str(exc)
-                or "UNIQUE constraint failed" in str(exc)
-            ):
-                deduped_ids.append(job_payload["id"])
-                continue
-            raise
+    try:
+        queue.enqueue(job_payload)
+    except Exception as exc:
+        if "UNIQUE constraint failed" in str(exc):
+            return WebhookResult(
+                status="deduped",
+                message=f"Job already queued: {job_payload['id']}",
+                job_id=job_payload["id"],
+                queue_depth=stats["queued"],
+                active_jobs=stats["running"],
+            )
+        raise
 
     stats = queue.stats()
-    if queued_ids:
-        status = "queued"
-        message = f"Enqueued {len(queued_ids)} job(s): {', '.join(queued_ids)}"
-    elif deduped_ids:
-        status = "deduped"
-        message = f"Duplicate suppressed: {', '.join(deduped_ids)}"
-    else:
-        status = "ignored"
-        message = "No new automation job for this event"
-
     return WebhookResult(
-        status=status,
-        message=message,
-        job_id=queued_ids[0] if queued_ids else None,
-        job_ids=tuple(queued_ids),
+        status="queued",
+        message=f"Enqueued {job_payload['id']} → {route.prompt_file}",
+        job_id=job_payload["id"],
         queue_depth=stats["queued"],
         active_jobs=stats["running"],
     )

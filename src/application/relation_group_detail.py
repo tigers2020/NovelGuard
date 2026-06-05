@@ -7,6 +7,7 @@ from typing import Any
 from application.duplicate_group_detail import member_integrity
 from application.review_state_merge import _file_id_from_row_id
 from domain.filename_relation import RelationGroup
+from domain.keeper_selection import pick_keeper_file_id
 from domain.models import FileRecord
 
 _NOT_FOUND_MESSAGE = "Group not found. Refresh the review list."
@@ -80,7 +81,10 @@ def build_relation_group_detail(
             "message": _NOT_FOUND_MESSAGE,
         }
 
-    keeper_file_id = min(members, key=lambda member: member["path"])["fileId"]
+    member_records = [
+        files_by_id[member["fileId"]] for member in members if member["fileId"] in files_by_id
+    ]
+    keeper_file_id = pick_keeper_file_id(member_records) if member_records else members[0]["fileId"]
     for member in members:
         member["isKeeper"] = member["fileId"] == keeper_file_id
 

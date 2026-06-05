@@ -8,8 +8,7 @@ from app.selection_resolve import resolve_selection_rows
 from application.library_session import LibrarySession
 from application.ports.library_index import LibraryIndexPort
 from application.review_errors import ReviewDecisionError
-from application.review_state_merge import group_id_from_row
-from domain.duplicate_exact import find_exact_duplicate_groups
+from application.review_state_merge import _file_id_from_row_id, group_id_from_row
 
 MAX_REVIEW_MUTATIONS = 500
 
@@ -47,26 +46,29 @@ class UpdateReviewDecisionsUseCase:
                 f"Selection resolves to more than {MAX_REVIEW_MUTATIONS} rows",
             )
 
-        files = self._index.files()
-        groups = find_exact_duplicate_groups(files)
-        members_by_group = {g.group_id: set(g.member_ids) for g in groups}
+        members_by_group = self._session.build_review_members_by_group()
 
         updated = 0
         for row in rows:
-            group_id = group_id_from_row(row)
-            if not group_id or group_id not in members_by_group:
+            if command != "reset" and row.get("status") == "conflict":
+                continue
+            if command == "approve" and row.get("rowKind") != "file":
+                continue
+
+            gid = group_id_from_row(row)
+            if not gid or gid not in members_by_group:
                 continue
 
             if command == "reset":
-                updated += self._apply_reset(folder, row, group_id)
+                updated += self._apply_reset(folder, row, gid)
                 continue
 
             if command == "setKeeper":
                 updated += self._apply_set_keeper(
                     folder,
                     row,
-                    group_id,
-                    members_by_group[group_id],
+                    gid,
+                    members_by_group[gid],
                     keeper_file_id=keeper_file_id,
                 )
                 continue
@@ -74,11 +76,13 @@ class UpdateReviewDecisionsUseCase:
             status = _COMMAND_STATUS.get(command)
             if status is None:
                 continue
-            updated += self._apply_status(folder, row, group_id, status)
+            updated += self._apply_status(folder, row, gid, status)
 
         return updated
 
     def _apply_status(self, folder: str, row: dict[str, Any], group_id: str, status: str) -> int:
+        if status == "approved" and row.get("status") == "conflict":
+            return 0
         if row.get("rowKind") == "group":
             self._index.upsert_review_group(
                 folder,
@@ -152,11 +156,9 @@ class UpdateReviewDecisionsUseCase:
 
 def _require_file_id(row: dict[str, Any]) -> str:
     row_id = str(row.get("id", ""))
-    if not row_id.startswith("file:"):
+    file_id = _file_id_from_row_id(row_id)
+    if not file_id:
         raise ReviewDecisionError(
             "INVALID_REVIEW_COMMAND", "setKeeper requires a file row or keeperFileId"
         )
-    parts = row_id.split(":", 2)
-    if len(parts) != 3:
-        raise ReviewDecisionError("INVALID_REVIEW_COMMAND", "Invalid file row id")
-    return parts[2]
+    return file_id

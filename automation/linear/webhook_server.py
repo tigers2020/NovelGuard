@@ -91,7 +91,6 @@ class LinearWebhookHandler(BaseHTTPRequestHandler):
                     "status": result.status,
                     "message": result.message,
                     "job_id": result.job_id,
-                    "job_ids": list(result.job_ids),
                     "queue_depth": result.queue_depth,
                     "active_jobs": result.active_jobs,
                 },
@@ -102,8 +101,8 @@ class LinearWebhookHandler(BaseHTTPRequestHandler):
             self._respond(500, {"ok": False, "error": str(exc)})
 
 
-def serve(host: str = "127.0.0.1", port: int = 8765, cfg: dict[str, Any] | None = None) -> None:
-    cfg = cfg or load_config()
+def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
+    cfg = load_config()
     linear = cfg.get("linear") or {}
     host = str(linear.get("webhook_host") or host)
     port = int(linear.get("webhook_port") or port)

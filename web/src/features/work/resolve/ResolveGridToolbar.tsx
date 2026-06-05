@@ -3,14 +3,15 @@ import { StatChip } from "../../../components/ui/StatChip";
 export type ResolveRowTypeFilter = "exact" | "near" | "relation" | "all";
 
 const TYPE_FILTERS: { id: ResolveRowTypeFilter; label: string }[] = [
-  { id: "exact", label: "Exact only" },
-  { id: "near", label: "Near only" },
-  { id: "relation", label: "Relation only" },
+  { id: "exact", label: "Exact (이동)" },
+  { id: "near", label: "Near (참고)" },
+  { id: "relation", label: "Relation (참고)" },
   { id: "all", label: "All types" },
 ];
 
 export function ResolveGridToolbar({
-  queueCount,
+  moveReadyCount,
+  reviewSignalCount,
   groupCount,
   conflictCount,
   approvedCount,
@@ -22,8 +23,14 @@ export function ResolveGridToolbar({
   queryError,
   onRetry,
   onOpenFinalize,
+  showPreviewCta = false,
+  onPreview,
+  previewDisabled = false,
+  previewDisabledReason,
+  previewLabel = "이동 계획 미리보기",
 }: {
-  queueCount: number;
+  moveReadyCount: number;
+  reviewSignalCount: number;
   groupCount: number;
   conflictCount: number;
   approvedCount: number;
@@ -35,23 +42,43 @@ export function ResolveGridToolbar({
   queryError: string | null;
   onRetry: () => void;
   onOpenFinalize: () => void;
+  showPreviewCta?: boolean;
+  onPreview?: () => void;
+  previewDisabled?: boolean;
+  previewDisabledReason?: string;
+  previewLabel?: string;
 }) {
   return (
     <div className="shrink-0 border-b border-outline bg-surface px-3 py-2">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-xs font-semibold text-secondary">Resolve & Organize</p>
-        <StatChip label="Queue" value={queueCount} tone="warn" />
+        <StatChip label="이동 대기" value={moveReadyCount} tone="warn" />
+        <StatChip label="참고 신호" value={reviewSignalCount} />
         <StatChip label="Groups" value={groupCount} />
         <StatChip label="Conflicts" value={conflictCount} tone="danger" />
         <StatChip label="Approved" value={approvedCount} tone="good" />
-        <button
-          type="button"
-          data-testid="resolve-open-finalize"
-          className="ml-auto rounded-md border border-outline px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-hover"
-          onClick={onOpenFinalize}
-        >
-          최종 검증
-        </button>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {showPreviewCta && onPreview && (
+            <button
+              type="button"
+              data-testid="resolve-preview-primary"
+              disabled={previewDisabled}
+              title={previewDisabledReason}
+              onClick={onPreview}
+              className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-background hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {previewLabel}
+            </button>
+          )}
+          <button
+            type="button"
+            data-testid="resolve-open-finalize"
+            className="rounded-md border border-outline px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-hover"
+            onClick={onOpenFinalize}
+          >
+            최종 검증
+          </button>
+        </div>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2" data-testid="resolve-type-filter">
         {TYPE_FILTERS.map(({ id, label }) => (
