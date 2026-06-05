@@ -38,6 +38,8 @@ export interface ReviewRow {
   confidenceLabel?: ConfidenceLabel;
   relationKind?: RelationKind;
   sizeBytes?: number;
+  /** Populated when bridge exposes file mtime for keeper preview tie-break. */
+  modifiedAtNs?: number;
   encoding?: string;
   integrity?: string;
   hasChildren: boolean;
