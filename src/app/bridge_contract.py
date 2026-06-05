@@ -138,9 +138,12 @@ def validate_app_snapshot(snapshot: Any) -> None:
         "deepAnalysisComplete",
         "deepAnalysisStatus",
         "deepAnalysisError",
+        "exactAutoApprovedCount",
     ):
         if key not in scan:
             raise SnapshotContractError(f"AppSnapshot.work.scan missing {key}")
+    if not isinstance(scan.get("exactAutoApprovedCount"), int):
+        raise SnapshotContractError("invalid work.scan.exactAutoApprovedCount")
     status = scan.get("deepAnalysisStatus")
     if status not in ("idle", "running", "complete", "error"):
         raise SnapshotContractError(f"invalid work.scan.deepAnalysisStatus: {status!r}")
@@ -161,6 +164,9 @@ def validate_app_snapshot(snapshot: Any) -> None:
     resolve = work.get("resolve")
     if not isinstance(resolve, dict) or not isinstance(resolve.get("libraryRevision"), int):
         raise SnapshotContractError("ResolveSnapshot.libraryRevision must be a number")
+    for key in ("moveReadyCount", "reviewSignalCount"):
+        if key not in resolve or not isinstance(resolve.get(key), int):
+            raise SnapshotContractError(f"invalid work.resolve.{key}")
 
 
 def clamp_query_limit(query: dict[str, Any]) -> int:

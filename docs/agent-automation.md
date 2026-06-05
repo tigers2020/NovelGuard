@@ -43,14 +43,18 @@ Quick start: [automation/README.md](../automation/README.md).
 
 **Routing is defined only in** `automation/linear/router.py`. Prompt YAML `trigger:` frontmatter is documentation; the router picks **one** prompt per webhook.
 
-| Event | Prompt |
+| Event | Prompt (`automation/prompts/linear/…`) |
 | ----- | ------ |
-| Issue create (Backlog only) | `00-linear-create-pr-to-spec.md` |
-| Update, status or labels @ Backlog/Todo | `01-linear-status-changed-router.md` |
-| Update, status → In Progress | `02-linear-in-progress-implement.md` |
-| Update, status → In Review | `03-linear-in-review-verification.md` |
+| Issue create (Backlog) | `backlog/create-research.md` |
+| Todo + `auto:research-done` | `todo/write-spec.md` |
+| Backlog + `auto:spec-done` | `backlog/grill-plan.md` |
+| Todo + `auto:grill-needs-revision` | `todo/revise-spec.md` |
+| Todo + `auto:spec-done` (no plan) | `todo/defer-to-backlog.md` |
+| Todo + `auto:plan-done` | `todo/write-todo-list.md` |
+| status → In Progress | `in-progress/implement.md` |
+| status → In Review | `in-review/verify.md` |
 
-Label-only updates at In Progress / In Review are ignored. Phase closeouts must use `save_issue` with status **and** done label in one call so the next webhook fires.
+Routing logic: `automation/linear/router.py` (`resolve_planning_prompt`). Label-only updates route only when a **routing** label is present (`research-done`, `spec-done`, `plan-done`, `grill-needs-revision`); progress labels (`triaging`, `impl-running`, …) are ignored. Phase closeouts must use `save_issue` with status **and** done label in one call.
 
 Hermes can enqueue the same JSON shape as [automation/examples/hermes-job.json](../automation/examples/hermes-job.json):
 

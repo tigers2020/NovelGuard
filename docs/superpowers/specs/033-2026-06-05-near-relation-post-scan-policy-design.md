@@ -1,4 +1,4 @@
-﻿---
+---
 title: NOV-26 Near/Relation Post-Scan Handling Policy
 status: approved
 date: 2026-06-05
