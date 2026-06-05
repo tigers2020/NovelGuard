@@ -157,12 +157,25 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
         }
         setRows((prev) => (append ? [...prev, ...page.rows] : page.rows));
         if (!append) {
-          const next =
-            preserveRowId != null
-              ? (page.rows.find((r) => r.id === preserveRowId) ?? page.rows[0] ?? null)
-              : (page.rows[0] ?? null);
-          setSelected(next);
-          void loadDetail(next);
+          if (page.rows.length === 0) {
+            setSelected(null);
+            void loadDetail(null);
+            setRepairOpen(false);
+          } else if (preserveRowId != null) {
+            const preserved = page.rows.find((r) => r.id === preserveRowId) ?? null;
+            if (preserved) {
+              setSelected(preserved);
+              void loadDetail(preserved);
+            } else {
+              setSelected(null);
+              void loadDetail(null);
+              setRepairOpen(false);
+            }
+          } else {
+            const first = page.rows[0] ?? null;
+            setSelected(first);
+            void loadDetail(first);
+          }
         }
       } catch (err) {
         setQueryError(err instanceof Error ? err.message : "Failed to load quality rows");
