@@ -1,5 +1,13 @@
 import { test, expect } from "@playwright/test";
 
+async function expandResolveFacet(page: import("@playwright/test").Page) {
+  const panel = page.getByTestId("resolve-facet-panel");
+  if ((await panel.getAttribute("data-state")) === "collapsed") {
+    await panel.getByRole("button", { name: /검토 보기|▸/ }).click();
+    await expect(panel).toHaveAttribute("data-state", "expanded");
+  }
+}
+
 async function openResolveWorkspace(page: import("@playwright/test").Page) {
   await page.goto("/");
   await page.evaluate(() => {
@@ -8,6 +16,7 @@ async function openResolveWorkspace(page: import("@playwright/test").Page) {
   await page.reload();
   await page.getByTestId("work-mode-tab-resolve").click();
   await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "collapsed");
+  await expect(page.getByTestId("resolve-facet-panel")).toHaveAttribute("data-state", "collapsed");
   await expect(page.getByTestId("resolve-review-grid")).toBeVisible({ timeout: 15_000 });
 }
 
@@ -29,6 +38,7 @@ async function clickApplyPreviewRun(page: import("@playwright/test").Page) {
 /** Open move facet + Exact filter so current_query preview is enabled. */
 async function prepareExecutableMoveFilter(page: import("@playwright/test").Page) {
   await page.getByTestId("resolve-type-filter-exact").click();
+  await expandResolveFacet(page);
   await page.getByTestId("resolve-facet-move").click();
   await expect(page.getByTestId("batch-preview-open")).toBeEnabled({ timeout: 15_000 });
 }
