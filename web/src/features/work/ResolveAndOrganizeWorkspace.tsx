@@ -28,6 +28,7 @@ import {
   countExecutableMovePreviewRows,
   hasExecutableMovePreviewRows,
   reviewOnlyBlockedReasonForFilter,
+  reviewOnlyGuidanceBannerForFilter,
 } from "./resolve/previewEligibility";
 import { previewCtaLabel } from "./resolve/previewCtaCopy";
 import {
@@ -284,6 +285,11 @@ export function ResolveAndOrganizeWorkspace({
     [rowTypeFilter],
   );
 
+  const reviewOnlyGuidance = useMemo(
+    () => reviewOnlyGuidanceBannerForFilter(rowTypeFilter),
+    [rowTypeFilter],
+  );
+
   const previewBlockedReason = useMemo(() => {
     if (reviewOnlyBlockedReason) return reviewOnlyBlockedReason;
     if (filteredCount === 0) {
@@ -294,6 +300,23 @@ export function ResolveAndOrganizeWorkspace({
     }
     return undefined;
   }, [filteredCount, hasExecutableRows, reviewOnlyBlockedReason]);
+
+  const executableCount = useMemo(
+    () => countExecutableMovePreviewRows(rows),
+    [rows],
+  );
+
+  const previewCtaText = useMemo(
+    () =>
+      previewCtaLabel({
+        filter: rowTypeFilter,
+        executableCount,
+        moveReadyCount: resolve.moveReadyCount,
+      }),
+    [rowTypeFilter, executableCount, resolve.moveReadyCount],
+  );
+
+  const showPreviewCta = rowTypeFilter === "exact";
 
   const runDetailReviewCommand = useCallback(
     async (
@@ -398,7 +421,8 @@ export function ResolveAndOrganizeWorkspace({
             </div>
           )}
           <ResolveGridToolbar
-            queueCount={resolve.queueCount}
+            moveReadyCount={resolve.moveReadyCount}
+            reviewSignalCount={resolve.reviewSignalCount}
             groupCount={resolve.groupCount}
             conflictCount={resolve.conflictCount}
             approvedCount={resolve.approvedCount}
@@ -499,6 +523,7 @@ export function ResolveAndOrganizeWorkspace({
         filteredCount={filteredCount}
         loadedCount={rows.length}
         loadingAll={loadingAll}
+        reviewOnlyGuidance={reviewOnlyGuidance}
         onExcludeAllFiltered={() => setBulkExcludeConfirmOpen(true)}
         bulkQueryDisabled={Boolean(reviewOnlyBlockedReason)}
         bulkQueryDisabledReason={reviewOnlyBlockedReason}

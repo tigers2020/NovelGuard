@@ -38,6 +38,20 @@ describe("BatchActionBar", () => {
     expect(screen.getByTestId("batch-partial-load-warning").textContent).toContain("일부만 로드됨");
   });
 
+  it("shows review-only banner when guidance provided", () => {
+    render(
+      <BatchActionBar
+        filteredCount={10}
+        loadedCount={10}
+        reviewOnlyGuidance="Near 중복은 검토 전용이며 일괄 적용할 수 없습니다."
+        onExcludeAllFiltered={noop}
+        onPreview={noop}
+      />,
+    );
+
+    expect(screen.getByTestId("batch-review-only-banner").textContent).toContain("검토 전용");
+  });
+
   it("hides partial warning when loaded equals filtered", () => {
     render(
       <BatchActionBar
@@ -49,5 +63,32 @@ describe("BatchActionBar", () => {
     );
 
     expect(screen.queryByTestId("batch-partial-load-warning")).toBeNull();
+  });
+
+  it("shows review-only banner when guidance is set", () => {
+    render(
+      <BatchActionBar
+        filteredCount={10}
+        loadedCount={10}
+        reviewOnlyGuidance="Exact (이동) 탭에서만 가능합니다."
+        onExcludeAllFiltered={noop}
+        onPreview={noop}
+      />,
+    );
+
+    expect(screen.getByTestId("batch-review-only-banner").textContent).toContain("Exact (이동)");
+  });
+
+  it("hides review-only banner when guidance is unset", () => {
+    render(
+      <BatchActionBar
+        filteredCount={10}
+        loadedCount={10}
+        onExcludeAllFiltered={noop}
+        onPreview={noop}
+      />,
+    );
+
+    expect(screen.queryByTestId("batch-review-only-banner")).toBeNull();
   });
 });

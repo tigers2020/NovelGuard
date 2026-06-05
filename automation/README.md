@@ -68,7 +68,7 @@ Worker refuses dirty working tree — commit/stash WIP on feature branch first.
 automation/
   config.example.yaml
   config.yaml          # local, gitignored
-  prompts/             # templates
+  prompts/             # templates (Linear: prompts/linear/{status}/)
   schemas/job-payload.schema.json
   jobs/queue.sqlite    # gitignored
   logs/                # gitignored

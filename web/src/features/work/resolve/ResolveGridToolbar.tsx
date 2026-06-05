@@ -3,14 +3,15 @@ import { StatChip } from "../../../components/ui/StatChip";
 export type ResolveRowTypeFilter = "exact" | "near" | "relation" | "all";
 
 const TYPE_FILTERS: { id: ResolveRowTypeFilter; label: string }[] = [
-  { id: "exact", label: "Exact only" },
-  { id: "near", label: "Near only" },
-  { id: "relation", label: "Relation only" },
+  { id: "exact", label: "Exact (이동)" },
+  { id: "near", label: "Near (참고)" },
+  { id: "relation", label: "Relation (참고)" },
   { id: "all", label: "All types" },
 ];
 
 export function ResolveGridToolbar({
-  queueCount,
+  moveReadyCount,
+  reviewSignalCount,
   groupCount,
   conflictCount,
   approvedCount,
@@ -28,7 +29,8 @@ export function ResolveGridToolbar({
   previewDisabledReason,
   previewLabel = "이동 계획 미리보기",
 }: {
-  queueCount: number;
+  moveReadyCount: number;
+  reviewSignalCount: number;
   groupCount: number;
   conflictCount: number;
   approvedCount: number;
@@ -50,11 +52,12 @@ export function ResolveGridToolbar({
     <div className="shrink-0 border-b border-outline bg-surface px-3 py-2">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-xs font-semibold text-secondary">Resolve & Organize</p>
-        <StatChip label="Queue" value={queueCount} tone="warn" />
+        <StatChip label="이동 대기" value={moveReadyCount} tone="warn" />
+        <StatChip label="참고 신호" value={reviewSignalCount} />
         <StatChip label="Groups" value={groupCount} />
         <StatChip label="Conflicts" value={conflictCount} tone="danger" />
         <StatChip label="Approved" value={approvedCount} tone="good" />
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           {showPreviewCta && onPreview && (
             <button
               type="button"

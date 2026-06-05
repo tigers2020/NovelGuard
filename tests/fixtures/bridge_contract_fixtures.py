@@ -28,6 +28,7 @@ VALID_SNAPSHOT: dict[str, Any] = {
         "scan": {
             "state": "empty",
             "lastRun": None,
+            "exactAutoApprovedCount": 0,
             "indexReady": False,
             "deepAnalysisComplete": False,
             "deepAnalysisStatus": "idle",
@@ -35,6 +36,8 @@ VALID_SNAPSHOT: dict[str, Any] = {
         },
         "resolve": {
             "queueCount": 0,
+            "moveReadyCount": 0,
+            "reviewSignalCount": 0,
             "groupCount": 0,
             "conflictCount": 0,
             "approvedCount": 0,

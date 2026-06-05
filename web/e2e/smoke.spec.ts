@@ -330,6 +330,27 @@ test.describe("NovelGuard smoke", () => {
     await openApplyDialogFromToolbar(page);
   });
 
+  test("NOV-29 review-only banner on near, relation, and all filters", async ({ page }) => {
+    await openResolveWorkspace(page);
+    const banner = page.getByTestId("batch-review-only-banner");
+
+    for (const filter of ["near", "relation", "all"] as const) {
+      await page.getByTestId(`resolve-type-filter-${filter}`).click();
+      await expect(banner).toBeVisible();
+      await expect(banner).toContainText(/Exact \(이동\) 탭/);
+      await expect(banner).toContainText(/검토 전용/);
+      await expect(page.getByTestId("batch-preview-open")).toBeDisabled();
+    }
+  });
+
+  test("NOV-29 review-only banner hidden on exact filter", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await page.getByTestId("resolve-type-filter-near").click();
+    await expect(page.getByTestId("batch-review-only-banner")).toBeVisible();
+    await page.getByTestId("resolve-type-filter-exact").click();
+    await expect(page.getByTestId("batch-review-only-banner")).toHaveCount(0);
+  });
+
   test("NOV-24 facet collapsed by default and expands to five modes", async ({ page }) => {
     await openResolveWorkspace(page);
     const panel = page.getByTestId("resolve-facet-panel");
@@ -387,6 +408,36 @@ test.describe("NovelGuard smoke", () => {
     await prepareExecutableMoveFilter(page);
     await openApplyDialog(page);
     await expect(page.getByTestId("apply-preview-run")).toBeVisible();
+  });
+
+  test("NOV-25 resolve toolbar shows move-ready and review-signal lane chips", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await expect(page.getByText("이동 대기")).toBeVisible();
+    await expect(page.getByText("참고 신호")).toBeVisible();
+    await expect(page.getByText("Queue", { exact: true })).toHaveCount(0);
+  });
+
+  test("NOV-28 scan success shows exact auto-approve summary when count > 0", async ({ page }) => {
+    await page.goto("/");
+    await runScanToSuccess(page);
+    await expect(page.getByTestId("scan-auto-approve-summary")).toBeVisible();
+    await expect(page.getByTestId("scan-auto-approve-summary")).toContainText(/자동 승인/);
+  });
+
+  test("NOV-29 near filter shows review-only banner", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await page.getByTestId("resolve-type-filter-near").click();
+    await expect(page.getByTestId("batch-review-only-banner")).toBeVisible();
+    await expect(page.getByTestId("batch-review-only-banner")).toContainText(/검토 전용/);
+  });
+
+  test("NOV-30 exact filter shows primary preview CTA in toolbar", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await expect(page.getByTestId("resolve-type-filter-exact")).toHaveClass(/bg-primary/);
+    const primary = page.getByTestId("resolve-preview-primary");
+    await expect(primary).toBeVisible();
+    await expect(primary).toBeEnabled({ timeout: 15_000 });
+    await expect(primary).toContainText(/미리보기/);
   });
 
   test("quality query failure shows error and retry", async ({ page }) => {
