@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from "react";
 import type { OnChangeFn, SortingState, VisibilityState } from "@tanstack/react-table";
 import { VirtualizedDataGrid } from "../../../components/grid/VirtualizedDataGrid";
-import type { QualityRow } from "../../../types/quality";
+import type { QualityRow, QualityRowsPage } from "../../../types/quality";
 import { buildQualityGridColumns } from "./qualityGridColumns";
 import { mergeQualityColumnVisibility } from "./qualityGridLayout";
 
@@ -19,6 +19,7 @@ export function VirtualizedQualityGrid({
   userColumnVisibility,
   columnSizing,
   onColumnSizingChange,
+  tabSummary,
 }: {
   rows: QualityRow[];
   filteredCount: number;
@@ -31,6 +32,7 @@ export function VirtualizedQualityGrid({
   userColumnVisibility: VisibilityState;
   columnSizing?: Record<string, number>;
   onColumnSizingChange?: (next: Record<string, number>) => void;
+  tabSummary: QualityRowsPage["summary"];
 }) {
   const columns = useMemo(() => buildQualityGridColumns(), []);
 
@@ -64,11 +66,20 @@ export function VirtualizedQualityGrid({
       onNearEnd={onNearEnd}
       loadingMore={loadingMore}
       footer={
-        <div className="flex items-center justify-between border-t border-outline bg-surface px-4 py-2 text-xs text-muted">
+        <div
+          className="flex flex-wrap items-center justify-between gap-2 border-t border-outline bg-surface px-4 py-2 text-xs text-muted"
+          data-testid="quality-grid-footer"
+        >
           <span data-testid="quality-grid-row-count">
-            {filteredCount.toLocaleString()} filtered
-            {rows.length < filteredCount
-              ? ` · ${rows.length.toLocaleString()} loaded`
+            필터{" "}
+            <span className="font-semibold text-on-surface">
+              {filteredCount.toLocaleString()}
+            </span>
+            건 · 로드{" "}
+            <span className="font-semibold text-on-surface">{rows.length.toLocaleString()}</span>
+            건
+            {tabSummary.warningCount > 0 || tabSummary.errorCount > 0
+              ? ` · 경고 ${tabSummary.warningCount.toLocaleString()} · 오류 ${tabSummary.errorCount.toLocaleString()}`
               : ""}
             {loadingMore ? " · loading…" : ""}
           </span>
