@@ -12,6 +12,7 @@ import type {
   DiscardMovePreviewRequest,
   MovePreviewResult,
 } from "../types/movePreview";
+import type { AutoSelectKeepersSummary } from "../types/autoSelectSummary";
 import type {
   UpdateReviewDecisionsRequest,
   UpdateReviewDecisionsResult,
@@ -53,6 +54,7 @@ export interface NovelGuardBridge {
   updateReviewDecisions(
     request: UpdateReviewDecisionsRequest,
   ): Promise<UpdateReviewDecisionsResult>;
+  summarizeAutoSelectKeepers(query: ReviewRowsQuery): Promise<AutoSelectKeepersSummary>;
   getAppSetting(key: AppSettingKey): Promise<AppSettingResponse>;
   setAppSetting(key: AppSettingKey, value: AppSettingValue): Promise<AppSettingResponse>;
   queryLogEntries(query: LogEntriesQuery): Promise<LogEntriesPage>;

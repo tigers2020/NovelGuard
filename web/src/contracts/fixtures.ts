@@ -29,6 +29,7 @@ export const validAppSnapshot: AppSnapshot = {
     scan: {
       state: "empty",
       lastRun: null,
+      exactAutoApprovedCount: 0,
       indexReady: false,
       deepAnalysisComplete: false,
       deepAnalysisStatus: "idle",
@@ -36,6 +37,8 @@ export const validAppSnapshot: AppSnapshot = {
     },
     resolve: {
       queueCount: 0,
+      moveReadyCount: 0,
+      reviewSignalCount: 0,
       groupCount: 0,
       conflictCount: 0,
       approvedCount: 0,

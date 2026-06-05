@@ -221,6 +221,11 @@ class BridgeApi:
 
         return result
 
+    def summarize_auto_select_keepers(self, query: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(query, dict) or not query.get("viewMode"):
+            raise PreviewApplyError("INVALID_REVIEW_COMMAND", "query.viewMode required")
+        return self._session.summarize_auto_select_keepers(query)
+
     def get_app_info(self) -> dict[str, Any]:
         payload = version.get_app_info()
 
