@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ReviewRow } from "../../../types/review";
 import {
+  countExecutableMovePreviewRows,
   hasExecutableMovePreviewRows,
   isExecutableMovePreviewRow,
   reviewOnlyBlockedReasonForFilter,
@@ -106,5 +107,22 @@ describe("hasExecutableMovePreviewRows", () => {
 
   it("returns false for empty rows", () => {
     expect(hasExecutableMovePreviewRows([])).toBe(false);
+  });
+});
+
+describe("countExecutableMovePreviewRows", () => {
+  it("counts only executable move_duplicate file rows", () => {
+    expect(
+      countExecutableMovePreviewRows([
+        fileRow({ id: "a", proposedAction: "keep" }),
+        fileRow({ id: "b", proposedAction: "move_duplicate" }),
+        fileRow({ id: "c", status: "excluded", proposedAction: "move_duplicate" }),
+        fileRow({ id: "d", rowKind: "group", proposedAction: "move_duplicate" }),
+      ]),
+    ).toBe(1);
+  });
+
+  it("returns 0 for empty rows", () => {
+    expect(countExecutableMovePreviewRows([])).toBe(0);
   });
 });
