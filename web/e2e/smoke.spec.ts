@@ -26,18 +26,15 @@ async function clickApplyPreviewRun(page: import("@playwright/test").Page) {
     .evaluate((el) => (el as HTMLButtonElement).click());
 }
 
-/** Pick a mock row with executable move_duplicate so preview reaches confirm step. */
-async function selectExecutableMoveRow(page: import("@playwright/test").Page) {
+/** Open move facet + Exact filter so current_query preview is enabled. */
+async function prepareExecutableMoveFilter(page: import("@playwright/test").Page) {
+  await page.getByTestId("resolve-type-filter-exact").click();
   await page.getByTestId("resolve-facet-move").click();
-  const row = page.getByTestId("grid-row-row-2");
-  await expect(row).toBeVisible({ timeout: 15_000 });
-  await row.scrollIntoViewIfNeeded();
-  await row.click();
-  await page.getByTestId("resolve-row-check-row-2").check();
+  await expect(page.getByTestId("batch-preview-open")).toBeEnabled({ timeout: 15_000 });
 }
 
 async function runApplyPreview(page: import("@playwright/test").Page) {
-  await selectExecutableMoveRow(page);
+  await prepareExecutableMoveFilter(page);
   await openApplyDialog(page);
   await clickApplyPreviewRun(page);
 }
@@ -240,7 +237,7 @@ test.describe("NovelGuard smoke", () => {
         "getMovePreview";
     });
     await openResolveWorkspace(page);
-    await selectExecutableMoveRow(page);
+    await prepareExecutableMoveFilter(page);
     await openApplyDialog(page);
     await clickApplyPreviewRun(page);
     await expect(page.getByTestId("apply-preview-error")).toBeVisible();

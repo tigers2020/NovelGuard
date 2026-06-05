@@ -9,11 +9,6 @@ export function VirtualizedReviewGrid({
   rows,
   selectedRowId,
   onSelectRow,
-  explicitRowIds,
-  onToggleExplicit,
-  allVisibleSelected,
-  someVisibleSelected,
-  onToggleSelectAllVisible,
   onNearEnd,
   loadingMore,
   sorting,
@@ -26,11 +21,6 @@ export function VirtualizedReviewGrid({
   rows: ReviewRow[];
   selectedRowId: string | null;
   onSelectRow: (row: ReviewRow) => void;
-  explicitRowIds?: ReadonlySet<string>;
-  onToggleExplicit?: (row: ReviewRow) => void;
-  allVisibleSelected?: boolean;
-  someVisibleSelected?: boolean;
-  onToggleSelectAllVisible?: () => void;
   onNearEnd?: () => void;
   loadingMore?: boolean;
   sorting: SortingState;
@@ -40,27 +30,7 @@ export function VirtualizedReviewGrid({
   mergeColumnVisibility?: (containerWidth: number) => VisibilityState;
   enableColumnResize?: boolean;
 }) {
-  const columns = useMemo(
-    () =>
-      buildReviewGridColumns(
-        explicitRowIds && onToggleExplicit
-          ? {
-              explicitRowIds,
-              onToggleExplicit,
-              allVisibleSelected,
-              someVisibleSelected,
-              onToggleSelectAllVisible,
-            }
-          : undefined,
-      ),
-    [
-      explicitRowIds,
-      onToggleExplicit,
-      allVisibleSelected,
-      someVisibleSelected,
-      onToggleSelectAllVisible,
-    ],
-  );
+  const columns = useMemo(() => buildReviewGridColumns(), []);
 
   return (
     <VirtualizedDataGrid
@@ -80,14 +50,6 @@ export function VirtualizedReviewGrid({
       enableColumnResize={enableColumnResize}
       onNearEnd={onNearEnd}
       loadingMore={loadingMore}
-      footer={
-        <div className="flex items-center justify-between border-t border-outline bg-surface px-4 py-2 text-xs text-muted">
-          <span>
-            {rows.length.toLocaleString()} loaded rows
-            {loadingMore ? " · loading…" : ""}
-          </span>
-        </div>
-      }
     />
   );
 }
