@@ -261,6 +261,35 @@ test.describe("NovelGuard smoke", () => {
     );
   });
 
+  test("NOV-22 resolve defaults to exact and preview needs no type-filter click", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await expect(page.getByTestId("resolve-type-filter-exact")).toHaveClass(/bg-primary/);
+    await expect(page.getByTestId("batch-preview-open")).toBeEnabled({ timeout: 15_000 });
+  });
+
+  test("NOV-22 verify first-entry preview opens apply dialog without checkbox", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await openApplyDialog(page);
+    await expect(page.getByTestId("apply-preview-run")).toBeVisible();
+  });
+
+  test("NOV-22 verify all types filter disables preview with tooltip", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await page.getByTestId("resolve-type-filter-all").click();
+    const preview = page.getByTestId("batch-preview-open");
+    await expect(preview).toBeDisabled();
+    await expect(preview).toHaveAttribute("title", /Exact만 선택하세요/);
+  });
+
+  test("NOV-22 verify manual all types switch still works", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await page.getByTestId("resolve-type-filter-all").click();
+    await expect(page.getByTestId("resolve-type-filter-all")).toHaveClass(/bg-primary/);
+    await page.getByTestId("resolve-type-filter-exact").click();
+    await expect(page.getByTestId("resolve-type-filter-exact")).toHaveClass(/bg-primary/);
+    await expect(page.getByTestId("batch-preview-open")).toBeEnabled({ timeout: 15_000 });
+  });
+
   test("NOV-24 facet collapsed by default and expands to five modes", async ({ page }) => {
     await openResolveWorkspace(page);
     const panel = page.getByTestId("resolve-facet-panel");
