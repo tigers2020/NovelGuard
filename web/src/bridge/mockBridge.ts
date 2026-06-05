@@ -270,11 +270,11 @@ function buildSnapshot(): AppSnapshot {
       scan: {
         state: state.pipelineRunning ? "running" : "success",
         lastRun: "2026-06-01 10:42",
+        exactAutoApprovedCount,
         indexReady: !state.pipelineRunning,
         deepAnalysisComplete: !state.pipelineRunning,
         deepAnalysisStatus: state.pipelineRunning ? "running" : "complete",
         deepAnalysisError: null,
-        exactAutoApprovedCount,
       },
       resolve: {
         queueCount: counts.queueCount,
@@ -499,6 +499,7 @@ export const mockBridge: NovelGuardBridge = {
       rejectApply("start_scan", "LIBRARY_BUSY");
     }
     stopScanSimulation();
+    exactAutoApprovedCount = 0;
     appendMockLog("INFO", "Mock scan started");
     state.pipelineRunning = true;
     exactAutoApprovedCount = 0;

@@ -176,7 +176,6 @@ export function ScanWorkspace({
             {scan.deepAnalysisError ? ` ${scan.deepAnalysisError}` : null}
           </p>
         )}
-
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <button
             type="button"

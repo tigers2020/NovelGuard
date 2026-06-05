@@ -93,6 +93,7 @@ class LibrarySession:
         self._pipeline_label = "대기 중"
         self._pipeline_cancellable = False
         self._scan_state = "empty"
+        self._exact_auto_approved_count = 0
         self._scan_last_run: str | None = None
         self._index_ready = False
         self._deep_analysis_complete = False
@@ -307,6 +308,7 @@ class LibrarySession:
             folder = self._index.folder_path
             if not folder or self._pipeline_running or self._apply_in_progress:
                 return
+            self._exact_auto_approved_count = 0
             self._backup_files = self._index.files()
             self._backup_folder = folder
             self._cancel_requested = False
@@ -363,6 +365,7 @@ class LibrarySession:
                 pipeline_background=self._pipeline_background_payload(),
                 scan_state=self._scan_state,
                 scan_last_run=self._scan_last_run,
+                exact_auto_approved_count=self._exact_auto_approved_count,
                 index_ready=self._index_ready,
                 deep_analysis_complete=self._deep_analysis_complete,
                 deep_analysis_status=self._deep_analysis_status,
@@ -374,7 +377,6 @@ class LibrarySession:
                 review_signal_count=self._review_signal_count,
                 approved_count=self._approved_count,
                 conflict_count=self._conflict_count,
-                exact_auto_approved_count=self._exact_auto_approved_count,
                 integrity_issue_count=self._integrity_issue_count,
                 encoding_issue_count=self._encoding_issue_count,
                 small_file_anomaly_count=self._small_file_anomaly_count,
@@ -1207,15 +1209,15 @@ class LibrarySession:
 
                 self._set_exact_index_progress("정확 중복 그룹 계산 중…", 88)
                 review_groups = find_exact_duplicate_groups(files)
+                exact_auto_approved_count = 0
                 if folder:
                     valid_group_ids = {group.group_id for group in review_groups}
                     valid_file_ids = {file_record.id for file_record in files}
                     self._index.prune_review_state(folder, valid_group_ids, valid_file_ids)
                     stored = self._index.load_review_state(folder)
-                    approved_n = persist_exact_non_keeper_approvals(
+                    exact_auto_approved_count = persist_exact_non_keeper_approvals(
                         folder, files, self._index, stored
                     )
-                    self._exact_auto_approved_count = approved_n
                     stored = self._index.load_review_state(folder)
                     self._set_exact_index_progress("검토 행 구성 중…", 91)
                     review_rows = rebuild_rows_with_review_state(files, stored)
@@ -1232,6 +1234,7 @@ class LibrarySession:
                     self._review_rows_cache = review_rows
                     self._refresh_duplicate_group_count()
                     self._refresh_resolve_counts()
+                    self._exact_auto_approved_count = exact_auto_approved_count
                     self._scan_state = "success"
                     self._scan_last_run = scan_timestamp()
                     self._library_revision += 1
