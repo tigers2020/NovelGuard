@@ -261,6 +261,18 @@ test.describe("NovelGuard smoke", () => {
     );
   });
 
+  test("NOV-24 facet collapsed by default and expands to five modes", async ({ page }) => {
+    await openResolveWorkspace(page);
+    const panel = page.getByTestId("resolve-facet-panel");
+    await expect(panel).toHaveAttribute("data-state", "collapsed");
+    await expandResolveFacet(page);
+    for (const mode of ["action", "groups", "move", "all", "conflicts"] as const) {
+      await expect(page.getByTestId(`resolve-facet-${mode}`)).toBeVisible();
+    }
+    await panel.getByRole("button", { name: /검토 보기|▾/ }).click();
+    await expect(panel).toHaveAttribute("data-state", "collapsed");
+  });
+
   test("NOV-20 scan resolve preview without checkbox selection", async ({ page }) => {
     await page.goto("/");
     await runScanToSuccess(page);
@@ -396,7 +408,7 @@ test.describe("NovelGuard smoke", () => {
     await expect(page.getByTestId("quality-tab-summary")).toBeVisible();
     await expect(page.getByTestId("quality-grid-row-count")).toBeVisible();
     await page.getByRole("button", { name: "인코딩" }).click();
-    await expect(page.getByTestId("quality-tab-summary")).toBeVisible();
+    await expect(page.getByTestId("quality-tab-active-summary")).toBeVisible();
     await page.getByRole("button", { name: "소형 파일" }).click();
     await expect(page.getByTestId("quality-grid-row-count")).toBeVisible();
   });
