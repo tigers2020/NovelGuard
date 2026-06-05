@@ -35,6 +35,12 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
   const [issueType, setIssueType] = useState<QualityIssueType>("integrity");
   const [sorting, setSorting] = useState<SortingState>([]);
   const [rows, setRows] = useState<QualityRow[]>([]);
+  const [filteredCount, setFilteredCount] = useState(0);
+  const [tabSummary, setTabSummary] = useState({
+    issueCount: 0,
+    warningCount: 0,
+    errorCount: 0,
+  });
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -102,6 +108,10 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
           sort: currentSort,
         });
         setNextCursor(page.pageInfo.nextCursor);
+        if (!append) {
+          setFilteredCount(page.pageInfo.totalFiltered);
+          setTabSummary(page.summary);
+        }
         setRows((prev) => (append ? [...prev, ...page.rows] : page.rows));
         if (!append) {
           const first = page.rows[0] ?? null;
@@ -113,6 +123,8 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
         if (!append) {
           setRows([]);
           setNextCursor(null);
+          setFilteredCount(0);
+          setTabSummary({ issueCount: 0, warningCount: 0, errorCount: 0 });
         }
       } finally {
         setLoading(false);
@@ -207,6 +219,10 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
             최종 검증
           </button>
         </div>
+        <p className="mt-2 text-xs text-muted" data-testid="quality-tab-summary">
+          필터 {filteredCount.toLocaleString()}건 · 이슈 {tabSummary.issueCount} · 경고{" "}
+          {tabSummary.warningCount} · 오류 {tabSummary.errorCount}
+        </p>
         {loading && !queryError && (
           <p className="mt-2 text-xs text-muted" data-testid="quality-grid-loading">
             Loading rows…
@@ -232,6 +248,7 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
       <div className="mt-4 grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_280px]">
         <VirtualizedQualityGrid
           rows={rows}
+          filteredCount={filteredCount}
           selectedRowId={selected?.id ?? null}
           onSelectRow={handleSelect}
           onNearEnd={handleNearEnd}

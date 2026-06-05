@@ -314,6 +314,18 @@ test.describe("NovelGuard smoke", () => {
     await expect(page.getByTestId("bridge-unavailable")).toBeVisible({ timeout: 15_000 });
   });
 
+  test("quality tab summary and filtered footer update on tab switch", async ({ page }) => {
+    await page.goto("/");
+    await page.getByTestId("work-mode-tab-quality").click();
+    await expect(page.getByTestId("quality-workspace")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("quality-tab-summary")).toBeVisible();
+    await expect(page.getByTestId("quality-grid-row-count")).toBeVisible();
+    await page.getByRole("button", { name: "인코딩" }).click();
+    await expect(page.getByTestId("quality-tab-summary")).toBeVisible();
+    await page.getByRole("button", { name: "소형 파일" }).click();
+    await expect(page.getByTestId("quality-grid-row-count")).toBeVisible();
+  });
+
   test("quality grid header sort shows sort indicator", async ({ page }) => {
     await page.goto("/");
     await page.getByTestId("work-mode-tab-quality").click();
