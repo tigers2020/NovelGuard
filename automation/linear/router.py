@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from typing import Any
 
@@ -56,6 +57,34 @@ def _issue_url(data: dict[str, Any]) -> str:
     return str(data.get("url") or "")
 
 
+def _label_names(data: dict[str, Any]) -> frozenset[str]:
+    labels = data.get("labels")
+    if not isinstance(labels, list):
+        return frozenset()
+    out: set[str] = set()
+    for item in labels:
+        if isinstance(item, dict):
+            name = item.get("name")
+            if name:
+                out.add(str(name))
+        elif item:
+            out.add(str(item))
+    return frozenset(out)
+
+
+def _auto_label_slug(data: dict[str, Any]) -> str:
+    auto = sorted(
+        name.removeprefix("auto:") for name in _label_names(data) if name.startswith("auto:")
+    )
+    if not auto:
+        return ""
+    slug = "-".join(auto)
+    if len(slug) > 24:
+        digest = hashlib.sha256(slug.encode()).hexdigest()[:8]
+        return f"h{digest}"
+    return slug
+
+
 def _state_changed(payload: dict[str, Any], data: dict[str, Any]) -> bool:
     updated_from = payload.get("updatedFrom")
     if not isinstance(updated_from, dict):
@@ -85,6 +114,13 @@ def _state_changed(payload: dict[str, Any], data: dict[str, Any]) -> bool:
     return False
 
 
+def _labels_changed(payload: dict[str, Any]) -> bool:
+    updated_from = payload.get("updatedFrom")
+    if not isinstance(updated_from, dict):
+        return False
+    return "labelIds" in updated_from or "labels" in updated_from
+
+
 def in_scope(data: dict[str, Any], *, project_names: set[str], team_names: set[str]) -> bool:
     project = _project_name(data)
     team = _team_name(data)
@@ -96,6 +132,16 @@ def in_scope(data: dict[str, Any], *, project_names: set[str], team_names: set[s
 
 
 _SKIP_CREATE_STATES = frozenset({"Done", "Canceled", "Cancelled", "Duplicate"})
+
+
+def _route_status_router(state: str, *, reason: str) -> LinearRoute:
+    return LinearRoute(
+        prompt_file="01-linear-status-changed-router.md",
+        commit=False,
+        verify="none",
+        git_prepare=False,
+        reason=reason,
+    )
 
 
 def route_linear_webhook(
@@ -121,8 +167,9 @@ def route_linear_webhook(
     state = _state_name(data)
 
     if action == "create":
-        state = _state_name(data)
         if state in _SKIP_CREATE_STATES:
+            return None
+        if state != "Backlog":
             return None
         return LinearRoute(
             prompt_file="00-linear-create-pr-to-spec.md",
@@ -135,35 +182,38 @@ def route_linear_webhook(
     if action != "update":
         return None
 
-    if not _state_changed(payload, data):
+    state_changed = _state_changed(payload, data)
+    labels_changed = _labels_changed(payload)
+    if not state_changed and not labels_changed:
         return None
 
+    if state_changed:
+        if state in ("Backlog", "Todo"):
+            return _route_status_router(state, reason=f"status→{state}")
+
+        if state == "In Progress":
+            return LinearRoute(
+                prompt_file="02-linear-in-progress-implement.md",
+                commit=True,
+                verify="none",
+                git_prepare=False,
+                reason="status→In Progress",
+            )
+
+        if state == "In Review":
+            return LinearRoute(
+                prompt_file="03-linear-in-review-verification.md",
+                commit=True,
+                verify="none",
+                git_prepare=False,
+                reason="status→In Review",
+            )
+
+        return None
+
+    # Label-only update: route 01 at Todo/Backlog; ignore In Progress / In Review.
     if state in ("Backlog", "Todo"):
-        return LinearRoute(
-            prompt_file="01-linear-status-changed-router.md",
-            commit=False,
-            verify="none",
-            git_prepare=False,
-            reason=f"status→{state}",
-        )
-
-    if state == "In Progress":
-        return LinearRoute(
-            prompt_file="02-linear-in-progress-implement.md",
-            commit=True,
-            verify="none",
-            git_prepare=False,
-            reason="status→In Progress",
-        )
-
-    if state == "In Review":
-        return LinearRoute(
-            prompt_file="03-linear-in-review-verification.md",
-            commit=True,
-            verify="none",
-            git_prepare=False,
-            reason="status→In Review",
-        )
+        return _route_status_router(state, reason=f"labels@{state}")
 
     return None
 
@@ -182,7 +232,11 @@ def build_job_payload(
 
     slug_state = state.lower().replace(" ", "-") if state else "unknown"
     prompt_prefix = (route.prompt_file or "job")[:2]
-    job_id = f"linear-{identifier}-{slug_state}-{prompt_prefix}-{state_id[:8] or action}"
+    label_slug = _auto_label_slug(data)
+    label_suffix = f"-{label_slug}" if label_slug else ""
+    job_id = (
+        f"linear-{identifier}-{slug_state}-{prompt_prefix}-{state_id[:8] or action}{label_suffix}"
+    )
 
     title = str(data.get("title") or "")
     task = (
@@ -217,4 +271,5 @@ def dedupe_key(webhook_payload: dict[str, Any], route: LinearRoute) -> str:
     data = _issue_data(webhook_payload)
     identifier = _issue_identifier(data)
     state = _state_name(data)
-    return f"{identifier}:{route.prompt_file}:{state}"
+    labels = ",".join(sorted(_label_names(data)))
+    return f"{identifier}:{route.prompt_file}:{state}:{labels}"
