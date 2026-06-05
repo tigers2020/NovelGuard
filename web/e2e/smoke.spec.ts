@@ -73,9 +73,13 @@ test.describe("NovelGuard smoke", () => {
     await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "collapsed");
   });
 
-  test("029 dock policy: collapse on Resolve, expand on Scan when files exist", async ({ page }) => {
+  test("029 dock policy: collapse on Resolve, restore Scan preference when files exist", async ({
+    page,
+  }) => {
     await page.goto("/");
     await page.getByTestId("work-mode-tab-scan").click();
+    await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "collapsed");
+    await page.getByTestId("scan-open-file-dock").evaluate((el) => (el as HTMLButtonElement).click());
     await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "expanded");
     await page.getByTestId("work-mode-tab-resolve").click();
     await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "collapsed");
@@ -104,6 +108,8 @@ test.describe("NovelGuard smoke", () => {
   test("PR-38 scan reveals expanded file dock", async ({ page }) => {
     await page.goto("/");
     await page.getByTestId("work-mode-tab-scan").click();
+    await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "collapsed");
+    await page.getByTestId("scan-open-file-dock").evaluate((el) => (el as HTMLButtonElement).click());
     await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "expanded");
     await page.getByTestId("shell-file-dock").getByRole("button", { name: /파일 목록/ }).click();
     await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "collapsed");

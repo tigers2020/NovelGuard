@@ -18,7 +18,9 @@ class _Args:
 
 
 def test_plain_always_wins():
-    assert resolve_display_mode(_Args(plain=True, tui=True), stdout_isatty=True, ci=False) == "plain"
+    assert (
+        resolve_display_mode(_Args(plain=True, tui=True), stdout_isatty=True, ci=False) == "plain"
+    )
 
 
 def test_ci_plain_unless_tui_forced():
@@ -48,7 +50,9 @@ def test_event_bus_thread_safe():
 
     def worker(n: int):
         for i in range(50):
-            bus.append(Event(ts=time.time(), source="worker", kind="t", summary=f"{n}-{i}", detail=None))
+            bus.append(
+                Event(ts=time.time(), source="worker", kind="t", summary=f"{n}-{i}", detail=None)
+            )
 
     threads = [threading.Thread(target=worker, args=(t,)) for t in range(4)]
     for th in threads:
@@ -73,7 +77,9 @@ def test_emit_tui_bus_only(capsys):
 
 
 def test_runtime_state_snapshot_isolated_copy():
-    init_runtime_state(webhook_enabled=True, host="127.0.0.1", port=8765, path="/linear/webhook", poll=15.0)
+    init_runtime_state(
+        webhook_enabled=True, host="127.0.0.1", port=8765, path="/linear/webhook", poll=15.0
+    )
     state = get_runtime_state()
     snap1 = state.snapshot()
     state.active_job_id = "job-1"

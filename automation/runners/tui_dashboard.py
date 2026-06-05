@@ -28,7 +28,7 @@ def ensure_rich_available() -> None:
 
         py = sys.executable
         raise RuntimeError(
-            f'Rich is required for --tui. Install into this Python: '
+            f"Rich is required for --tui. Install into this Python: "
             f'"{py}" -m pip install -e ".[automation]"'
         ) from exc
 
@@ -211,11 +211,7 @@ def _basename_branch(branch: str | None) -> str:
 
 
 def _filter_log_content(lines: list[str]) -> list[str]:
-    filtered = [
-        ln
-        for ln in lines
-        if ln.strip() and not ln.startswith(_LOG_META_PREFIXES)
-    ]
+    filtered = [ln for ln in lines if ln.strip() and not ln.startswith(_LOG_META_PREFIXES)]
     return filtered if filtered else lines
 
 
@@ -238,11 +234,7 @@ def _build_agent_panel(
     log_tail: list[str],
     log_age_s: float | None,
 ) -> str:
-    active = (
-        snapshot.cursor_running
-        or snapshot.verify_running
-        or snapshot.cursor_output_buffered
-    )
+    active = snapshot.cursor_running or snapshot.verify_running or snapshot.cursor_output_buffered
     if not active and not cursor_lines:
         return "idle"
 
@@ -297,11 +289,7 @@ def _build_agent_panel(
 def _agent_log_tail(snapshot: RuntimeStateSnapshot) -> tuple[list[str], float | None]:
     should_tail = bool(
         snapshot.log_path
-        and (
-            snapshot.cursor_output_buffered
-            or snapshot.cursor_running
-            or snapshot.verify_running
-        )
+        and (snapshot.cursor_output_buffered or snapshot.cursor_running or snapshot.verify_running)
     )
     if not should_tail:
         return [], None
