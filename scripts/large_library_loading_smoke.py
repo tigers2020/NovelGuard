@@ -9,6 +9,7 @@ import logging
 import statistics
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -53,7 +54,9 @@ def main() -> int:
     args = parser.parse_args()
 
     if not args.skip_generate and not args.folder.exists():
-        subprocess.check_call([sys.executable, str(ROOT / "scripts" / "generate_large_library_fixture.py")])
+        subprocess.check_call(
+            [sys.executable, str(ROOT / "scripts" / "generate_large_library_fixture.py")]
+        )
 
     if str(ROOT / "src") not in sys.path:
         sys.path.insert(0, str(ROOT / "src"))
@@ -64,7 +67,6 @@ def main() -> int:
     from application.app_settings import AppSettings
     from application.settings_store import SettingsStore
     from infrastructure.sqlite_library_index import SqliteLibraryIndex
-    import tempfile
 
     timings: dict[str, float] = {}
     timing_events: list[str] = []
@@ -109,16 +111,11 @@ def main() -> int:
         "status": "PASS",
         "timings": timings,
         "timing_event_kinds": sorted(
-            {
-                json.loads(event).get("event")
-                for event in timing_events
-                if event.startswith("{")
-            }
+            {json.loads(event).get("event") for event in timing_events if event.startswith("{")}
         ),
     }
     slo_fail = (
-        timings["query_file_rows_p95_ms"] > 5000
-        or timings["query_review_rows_first_ms"] > 10000
+        timings["query_file_rows_p95_ms"] > 5000 or timings["query_review_rows_first_ms"] > 10000
     )
     if slo_fail:
         report["status"] = "FAIL"
