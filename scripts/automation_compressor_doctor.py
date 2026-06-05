@@ -27,9 +27,17 @@ def main() -> int:
         "meta": {"route_reason": "doctor"},
     }
     raw = "Doctor smoke: preserve [LOCK] demo decision."
-    result = compress_job_context(cfg, payload=payload, raw_context=raw)
+    try:
+        result = compress_job_context(cfg, payload=payload, raw_context=raw)
+    except (ValueError, OSError, json.JSONDecodeError) as exc:
+        print(f"compressor doctor failed: {exc}", file=sys.stderr)
+        return 1
     print(json.dumps(result, indent=2, ensure_ascii=False))
-    return 0 if result.get("memory") else 1
+    memory = result.get("memory") or {}
+    if not memory.get("goal"):
+        print("memory.goal empty after compression", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

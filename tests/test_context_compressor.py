@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from automation.runners.context_compressor import (
+    _coerce_memory,
     compress_job_context,
     load_schema,
     memory_cache_path,
@@ -67,6 +68,59 @@ def test_compress_job_context_uses_cache(tmp_path: Path):
     assert first["memory"] == fake_memory
     assert second["cached"] is True
     assert memory_cache_path(tmp_path, payload["id"]).is_file()
+
+
+def test_coerce_memory_fills_missing_required_keys():
+    payload = {
+        "issue_identifier": "NOV-0",
+        "prompt_file": "linear/in-progress/implement.md",
+        "meta": {"route_reason": "doctor"},
+    }
+    raw = "Doctor smoke: preserve [LOCK] demo decision."
+    memory = _coerce_memory(
+        {"locked_decisions": ["[LOCK] demo decision"], "next_prompt": "Run doctor."},
+        payload=payload,
+        raw_context=raw,
+    )
+    assert memory["goal"] == "NOV-0"
+    assert memory["current_phase"] == "implement"
+    assert memory["locked_decisions"] == ["[LOCK] demo decision"]
+    assert memory["next_prompt"] == "Run doctor."
+
+
+def test_compress_coerces_partial_ollama_response(tmp_path: Path):
+    cfg = {
+        "context_compressor": {
+            "enabled": True,
+            "endpoint": "http://localhost:11434/api/generate",
+            "model": "gemma4:latest",
+            "cache_dir": str(tmp_path),
+            "max_input_chars": 5000,
+            "timeout_seconds": 30,
+            "num_ctx": 8192,
+            "top_p": 0.9,
+        }
+    }
+    payload = {
+        "id": "doctor-smoke",
+        "issue_identifier": "NOV-0",
+        "prompt_file": "linear/in-progress/implement.md",
+        "meta": {"route_reason": "doctor"},
+    }
+    raw = "Doctor smoke: preserve [LOCK] demo decision."
+    partial = {
+        "locked_decisions": ["[LOCK] demo decision"],
+        "next_prompt": "Preserve locked decision.",
+    }
+
+    with patch(
+        "automation.runners.context_compressor._ollama_generate_json",
+        return_value=partial,
+    ):
+        result = compress_job_context(cfg, payload=payload, raw_context=raw)
+
+    assert result["memory"]["goal"] == "NOV-0"
+    assert result["memory"]["locked_decisions"] == ["[LOCK] demo decision"]
 
 
 def test_compress_skipped_when_disabled():

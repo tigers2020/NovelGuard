@@ -15,15 +15,36 @@ _SCHEMA_PATH = (
 )
 
 _COMPRESSOR_PROMPT = """You are a strict context compressor for an automation coding pipeline.
-Return ONLY valid JSON matching the schema fields.
+Return ONLY one JSON object. Every key below is REQUIRED — use empty arrays [] when unknown.
 Preserve locked_decisions and destructive-action warnings verbatim.
 Do not invent files, labels, commits, test results, or status changes.
 Remove boilerplate and progress chatter.
 Keep next_prompt under 1200 characters.
 
+Required JSON shape:
+{schema_example}
+
 Input:
 {raw}
 """
+
+
+def _schema_example() -> str:
+    return json.dumps(
+        {
+            "goal": "one-line issue goal",
+            "current_phase": "implementation",
+            "locked_decisions": ["[LOCK] example decision"],
+            "must_keep_context": [],
+            "changed_files": [],
+            "relevant_tests": [],
+            "risks": [],
+            "unknowns": [],
+            "discarded_noise": [],
+            "next_prompt": "concise next action for the coding agent",
+        },
+        indent=2,
+    )
 
 
 def load_schema() -> dict[str, Any]:
@@ -52,6 +73,56 @@ def _cache_dir(cfg: dict[str, Any]) -> Path:
     return path
 
 
+def _coerce_memory(
+    memory: dict[str, Any],
+    *,
+    payload: dict[str, Any],
+    raw_context: str,
+) -> dict[str, Any]:
+    """Fill missing keys so small local models still produce valid memory."""
+    schema = load_schema()
+    props = schema.get("properties") or {}
+    issue = str(payload.get("issue_identifier") or "").strip()
+    route = str((payload.get("meta") or {}).get("route_reason") or "").strip()
+    prompt_file = str(payload.get("prompt_file") or "")
+    phase_hint = prompt_file.rsplit("/", 1)[-1].replace(".md", "") if prompt_file else ""
+    raw_line = raw_context.strip().split("\n", 1)[0].strip()
+
+    defaults: dict[str, Any] = {
+        "goal": issue or raw_line[:200] or "unknown job goal",
+        "current_phase": phase_hint or route or "unknown",
+        "locked_decisions": [],
+        "must_keep_context": [],
+        "changed_files": [],
+        "relevant_tests": [],
+        "risks": [],
+        "unknowns": [],
+        "discarded_noise": [],
+        "next_prompt": (raw_line or raw_context.strip())[:1200] or "Continue per phase prompt.",
+    }
+
+    out: dict[str, Any] = {}
+    for key in schema.get("required") or []:
+        val = memory.get(key) if isinstance(memory, dict) else None
+        if val is None or val == "":
+            val = defaults.get(key)
+        prop = props.get(key) or {}
+        if prop.get("type") == "array":
+            if isinstance(val, list):
+                out[key] = [str(x) for x in val if str(x).strip()]
+            elif isinstance(val, str) and val.strip():
+                out[key] = [val.strip()]
+            else:
+                out[key] = list(defaults.get(key) or [])
+        else:
+            out[key] = str(val).strip() if val is not None else str(defaults.get(key, ""))
+
+    next_prompt = str(out.get("next_prompt") or "")
+    if len(next_prompt) > 1200:
+        out["next_prompt"] = next_prompt[:1200]
+    return out
+
+
 def _ollama_generate_json(
     *,
     endpoint: str,
@@ -59,13 +130,14 @@ def _ollama_generate_json(
     prompt: str,
     options: dict[str, Any],
     timeout: float,
+    response_format: Any,
 ) -> dict[str, Any]:
     body = json.dumps(
         {
             "model": model,
             "prompt": prompt,
             "stream": False,
-            "format": "json",
+            "format": response_format,
             "options": options,
         }
     ).encode("utf-8")
@@ -115,19 +187,27 @@ def compress_job_context(
         return {"memory": memory, "cached": True, "source_hash": digest}
 
     clipped = raw_context[: int(comp.get("max_input_chars") or 12000)]
-    prompt = _COMPRESSOR_PROMPT.format(raw=clipped)
+    prompt = _COMPRESSOR_PROMPT.format(
+        schema_example=_schema_example(),
+        raw=clipped,
+    )
     options = {
         "temperature": 0,
         "num_ctx": int(comp.get("num_ctx") or 32768),
         "top_p": float(comp.get("top_p") or 0.9),
     }
-    memory = _ollama_generate_json(
+    schema = load_schema()
+    raw_memory = _ollama_generate_json(
         endpoint=str(comp.get("endpoint") or "http://localhost:11434/api/generate"),
         model=str(comp.get("model") or "gemma4:latest"),
         prompt=prompt,
         options=options,
         timeout=float(comp.get("timeout_seconds") or 180),
+        response_format=schema,
     )
+    if not isinstance(raw_memory, dict):
+        raise ValueError("context compressor returned non-object JSON")
+    memory = _coerce_memory(raw_memory, payload=payload, raw_context=clipped)
     _validate_memory(memory)
 
     cache_file.parent.mkdir(parents=True, exist_ok=True)
