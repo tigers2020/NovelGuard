@@ -79,7 +79,6 @@ def build_snapshot(
     review_signal_count: int = 0,
     approved_count: int = 0,
     conflict_count: int = 0,
-    exact_auto_approved_count: int = 0,
     integrity_issue_count: int = 0,
     encoding_issue_count: int = 0,
     small_file_anomaly_count: int = 0,
