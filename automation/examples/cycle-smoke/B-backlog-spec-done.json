@@ -1,0 +1,16 @@
+{
+  "action": "update",
+  "type": "Issue",
+  "webhookId": "smoke-b-grill",
+  "updatedFrom": {
+    "labelIds": []
+  },
+  "data": {
+    "identifier": "NOV-SMOKE",
+    "url": "https://linear.app/example/issue/NOV-SMOKE",
+    "teamId": "97047174-6453-4458-b170-a9bf5f7b52e0",
+    "projectId": "20965ebc-3ea7-4787-9310-f15ad9019007",
+    "stateId": "180fc254-f066-4fad-a425-7ebab180d4c6",
+    "labelIds": ["bffa5b70-6009-4c1c-8f6a-f7fd62e79621"]
+  }
+}

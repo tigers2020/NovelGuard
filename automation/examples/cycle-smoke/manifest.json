@@ -1,0 +1,82 @@
+{
+  "issue": "NOV-SMOKE",
+  "default_max_chars": 24000,
+  "groups": [
+    {
+      "id": "state_changed",
+      "cases": [
+        {
+          "id": "A3-in-progress",
+          "fixture": "A3-in-progress.json",
+          "expect_prompt": "linear/in-progress/implement.md",
+          "expect_reason_contains": "status→In Progress"
+        },
+        {
+          "id": "A4-pure-in-review",
+          "fixture": "A4-pure-in-review.json",
+          "expect_prompt": "linear/in-review/verify.md",
+          "expect_reason_contains": "status→In Review"
+        },
+        {
+          "id": "A-combined-in-review-impl-done",
+          "fixture": "A-combined-in-review-impl-done.json",
+          "expect_prompt": "linear/in-review/verify.md",
+          "expect_reason_contains": "impl-done→verify"
+        },
+        {
+          "id": "A1-in-progress-impl-done",
+          "fixture": "A1-in-progress-impl-done.json",
+          "expect_prompt": "linear/in-review/verify.md",
+          "expect_reason_contains": "impl-done→verify"
+        }
+      ]
+    },
+    {
+      "id": "labels_only",
+      "cases": [
+        {
+          "id": "B3-impl-done-diff",
+          "fixture": "B3-impl-done-diff.json",
+          "expect_prompt": "linear/in-review/verify.md",
+          "expect_reason_contains": "impl-done→verify"
+        },
+        {
+          "id": "B1-todo-list-done",
+          "fixture": "B1-todo-list-done.json",
+          "expect_prompt": "linear/in-progress/implement.md",
+          "expect_reason_contains": "todo-list-done→implement"
+        },
+        {
+          "id": "B2-plan-done",
+          "fixture": "B2-plan-done.json",
+          "expect_prompt": "linear/todo/write-todo-list.md"
+        },
+        {
+          "id": "B2-research-done",
+          "fixture": "B2-research-done.json",
+          "expect_prompt": "linear/todo/write-spec.md"
+        },
+        {
+          "id": "B-backlog-spec-done",
+          "fixture": "B-backlog-spec-done.json",
+          "expect_prompt": "linear/backlog/grill-plan.md"
+        }
+      ]
+    },
+    {
+      "id": "terminal",
+      "cases": [
+        {
+          "id": "ignore-verify-done",
+          "fixture": "ignore-verify-done.json",
+          "expect_route": null
+        },
+        {
+          "id": "ignore-done-status",
+          "fixture": "ignore-done-status.json",
+          "expect_route": null
+        }
+      ]
+    }
+  ]
+}
