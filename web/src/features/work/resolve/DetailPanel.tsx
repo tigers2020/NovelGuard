@@ -99,8 +99,8 @@ export function DetailPanel({
             role="status"
           >
             {rowType === "near"
-              ? "Near duplicate 그룹은 검토 전용입니다. 이동 미리보기·적용은 Exact 그룹에서만 가능합니다."
-              : "Relation 그룹은 검토 전용입니다. 이동 미리보기·적용은 Exact 그룹에서만 가능합니다."}
+              ? "Near duplicate는 검토 후 승인하면 이동 미리보기·적용이 가능합니다. 자동 선정·승인 후 미리보기를 확인하세요."
+              : "Relation 그룹은 검토 후 승인하면 이동 미리보기·적용이 가능합니다. 자동 선정·승인 후 미리보기를 확인하세요."}
           </div>
         )}
 

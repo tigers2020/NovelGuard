@@ -1758,6 +1758,72 @@ def test_real_apply_moves_duplicate_file(
     assert snap["work"]["resolve"]["hasPendingApply"] is False
 
 
+def test_apply_succeeds_for_approved_near_after_preview(
+    tmp_path: Path, tmp_path_factory: pytest.TempPathFactory
+) -> None:
+    (tmp_path / "alpha.txt").write_text(_near_similar_body("alpha"), encoding="utf-8")
+    (tmp_path / "beta.txt").write_text(_near_similar_body("beta"), encoding="utf-8")
+    audit_file = tmp_path_factory.mktemp("audit") / "near-apply-audit.jsonl"
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session, audit_log_path=audit_file)
+    api.start_scan()
+    _scan_until_idle(api)
+    near_page = api.query_review_rows(
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["near"]}}
+    )
+    file_rows = [row for row in near_page["rows"] if row["rowKind"] == "file"]
+    if len(file_rows) < 2:
+        pytest.skip("near duplicate group not detected in fixture")
+    summary = api.summarize_auto_select_keepers(
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["near"]}}
+    )
+    if summary["keeperRowIds"]:
+        api.update_review_decisions(
+            {
+                "selection": {"type": "explicit_rows", "rowIds": summary["keeperRowIds"]},
+                "command": "setKeeper",
+            }
+        )
+    api.update_review_decisions(
+        {
+            "selection": {
+                "type": "current_query",
+                "query": {
+                    "viewMode": "all",
+                    "limit": 50,
+                    "filters": {"types": ["near"], "status": ["unreviewed"]},
+                },
+                "excludeRowIds": [],
+            },
+            "command": "approve",
+        }
+    )
+    refreshed = api.query_review_rows(
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["near"]}}
+    )
+    move_row = next(
+        (
+            row
+            for row in refreshed["rows"]
+            if row.get("rowKind") == "file" and row.get("proposedAction") == "move_duplicate"
+        ),
+        None,
+    )
+    if move_row is None:
+        pytest.skip("no near move_duplicate rows after approve")
+    sel = {"type": "explicit_rows", "rowIds": [move_row["id"]]}
+    preview = api.get_move_preview(sel)
+    validate_move_preview(preview)
+    assert preview["summary"]["operationCount"] >= 1
+    api.apply_resolved_actions({"selection": sel, "previewToken": preview["previewToken"]})
+    src_name = move_row["name"]
+    assert not (tmp_path / src_name).exists()
+    assert (tmp_path / "duplicate" / src_name).exists()
+    snap = api.get_snapshot()
+    assert snap["work"]["resolve"]["hasPendingApply"] is False
+
+
 def test_apply_stale_after_file_change(tmp_path: Path) -> None:
     api = _duplicate_api(tmp_path)
     page = api.query_review_rows({"viewMode": "all", "limit": 50})
@@ -2139,6 +2205,25 @@ def test_get_near_duplicate_group_detail(tmp_path: Path) -> None:
     assert detail["evidence"]["matchKind"] == "near_ngram_v1"
 
 
+def test_preview_skips_unapproved_near_duplicate_rows(tmp_path: Path) -> None:
+    (tmp_path / "alpha.txt").write_text(_near_similar_body("alpha"), encoding="utf-8")
+    (tmp_path / "beta.txt").write_text(_near_similar_body("beta"), encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    near_page = api.query_review_rows(
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["near"]}}
+    )
+    file_row = next((row for row in near_page["rows"] if row["rowKind"] == "file"), None)
+    if file_row is None:
+        return
+    preview = api.get_move_preview({"type": "explicit_rows", "rowIds": [file_row["id"]]})
+    validate_move_preview(preview)
+    assert preview["summary"]["operationCount"] == 0
+
+
 def test_approve_near_group_member_persists(tmp_path: Path) -> None:
     (tmp_path / "alpha.txt").write_text(_near_similar_body("alpha"), encoding="utf-8")
     (tmp_path / "beta.txt").write_text(_near_similar_body("beta"), encoding="utf-8")
@@ -2217,7 +2302,8 @@ def test_preview_allows_near_approved_move_duplicate(tmp_path: Path) -> None:
         pytest.skip("no near move_duplicate rows after approve")
     preview = api.get_move_preview({"type": "explicit_rows", "rowIds": [move_rows[0]["id"]]})
     validate_move_preview(preview)
-    assert preview["summary"]["operationCount"] >= 0
+    assert preview["summary"]["operationCount"] >= 1
+    assert preview["rows"][0]["action"] == "move_duplicate"
 
 
 def test_summarize_auto_select_keepers_counts_unreviewed_file_rows(tmp_path: Path) -> None:
@@ -2525,7 +2611,7 @@ def test_get_relation_group_detail(tmp_path: Path) -> None:
     assert detail["evidence"]["matchKind"] == "relation_filename_v1"
 
 
-def test_preview_rejects_relation_rows(tmp_path: Path) -> None:
+def test_preview_skips_unapproved_relation_rows(tmp_path: Path) -> None:
     (tmp_path / "Novel 01.txt").write_text("x", encoding="utf-8")
     (tmp_path / "Novel 02.txt").write_text("y", encoding="utf-8")
     session = create_library_session(MemoryLibraryIndex())
@@ -2540,9 +2626,43 @@ def test_preview_rejects_relation_rows(tmp_path: Path) -> None:
     file_row = next((row for row in relation_page["rows"] if row["rowKind"] == "file"), None)
     if file_row is None:
         return
-    with pytest.raises(PreviewApplyError) as exc_info:
-        api.get_move_preview({"type": "explicit_rows", "rowIds": [file_row["id"]]})
-    assert exc_info.value.reason == "RELATION_APPLY_UNSUPPORTED"
+    preview = api.get_move_preview({"type": "explicit_rows", "rowIds": [file_row["id"]]})
+    validate_move_preview(preview)
+    assert preview["summary"]["operationCount"] == 0
+
+
+def test_preview_accepts_approved_relation_rows(tmp_path: Path) -> None:
+    (tmp_path / "Novel 01.txt").write_text("x", encoding="utf-8")
+    (tmp_path / "Novel 02.txt").write_text("y", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.set_app_setting("include_relation", True)  # type: ignore[arg-type]
+    api.start_scan()
+    _scan_until_idle(api)
+    relation_page = api.query_review_rows(
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["relation"]}}
+    )
+    file_row = next(
+        (
+            row
+            for row in relation_page["rows"]
+            if row["rowKind"] == "file" and row.get("proposedAction") == "move_duplicate"
+        ),
+        None,
+    )
+    if file_row is None:
+        return
+    api.update_review_decisions(
+        {
+            "selection": {"type": "explicit_rows", "rowIds": [file_row["id"]]},
+            "command": "approve",
+        }
+    )
+    preview = api.get_move_preview({"type": "explicit_rows", "rowIds": [file_row["id"]]})
+    validate_move_preview(preview)
+    assert preview["summary"]["operationCount"] >= 1
+    assert preview["rows"][0]["action"] == "move_duplicate"
 
 
 def _encoding_issue_row(api: BridgeApi) -> dict:

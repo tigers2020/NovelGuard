@@ -56,18 +56,10 @@ class BuildPreviewPlanUseCase:
             if row.get("rowKind") != "file":
                 continue
             status = row.get("status")
-            if status in ("excluded", "conflict"):
+            if status != "approved":
                 continue
             action = row.get("proposedAction")
-            if status == "approved" and action != "move_duplicate":
-                continue
-            if action in ("keep", "ignore", "delete"):
-                continue
-            if action == "move_organized":
-                blocked_count += 1
-                continue
             if action != "move_duplicate":
-                blocked_count += 1
                 continue
 
             file_record = self._session.file_record_for_review_row(row)

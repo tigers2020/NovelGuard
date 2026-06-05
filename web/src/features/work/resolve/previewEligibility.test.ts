@@ -26,6 +26,23 @@ describe("isExecutableMovePreviewRow", () => {
     expect(isExecutableMovePreviewRow(fileRow())).toBe(true);
   });
 
+  it("accepts approved near and relation move_duplicate rows", () => {
+    expect(isExecutableMovePreviewRow(fileRow({ type: "near" }))).toBe(true);
+    expect(isExecutableMovePreviewRow(fileRow({ type: "relation" }))).toBe(true);
+  });
+
+  it("rejects unapproved move_duplicate rows", () => {
+    expect(isExecutableMovePreviewRow(fileRow({ status: "unreviewed" }))).toBe(false);
+  });
+
+  it("rejects move_only type even when approved", () => {
+    expect(
+      isExecutableMovePreviewRow(
+        fileRow({ type: "move_only", proposedAction: "move_duplicate" }),
+      ),
+    ).toBe(false);
+  });
+
   it("rejects group rows", () => {
     expect(isExecutableMovePreviewRow(fileRow({ rowKind: "group" }))).toBe(false);
   });

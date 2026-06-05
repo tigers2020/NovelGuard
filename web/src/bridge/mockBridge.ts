@@ -216,13 +216,28 @@ export function prepareMockE2eFinalizeReady(): void {
   }
 }
 
+/** E2E only: seed approved move_duplicate rows so move preview CTA is enabled. */
+export function prepareMockE2eMovePreviewReady(): void {
+  persistMockExactNonKeeperApprovals(getAllReviewRows());
+  const seedIds = new Set(["row-2", "row-19"]);
+  const toApprove = getAllReviewRows().filter((row) => seedIds.has(row.id));
+  if (toApprove.length > 0) {
+    applyMockReviewCommand(toApprove, "approve");
+    libraryRevision += 1;
+    clearPendingPreview();
+    emitSnapshotInvalidation("libraryRevision", { libraryRevision });
+  }
+}
+
 if (typeof window !== "undefined") {
   const testWindow = window as unknown as {
     __NOVELGUARD_TEST_BUMP_REVISION__?: () => void;
     __NOVELGUARD_TEST_PREPARE_FINALIZE_READY__?: () => void;
+    __NOVELGUARD_TEST_PREPARE_MOVE_PREVIEW_READY__?: () => void;
   };
   testWindow.__NOVELGUARD_TEST_BUMP_REVISION__ = bumpLibraryRevisionForTest;
   testWindow.__NOVELGUARD_TEST_PREPARE_FINALIZE_READY__ = prepareMockE2eFinalizeReady;
+  testWindow.__NOVELGUARD_TEST_PREPARE_MOVE_PREVIEW_READY__ = prepareMockE2eMovePreviewReady;
 }
 
 function mergedReviewRows(): ReviewRow[] {
@@ -333,44 +348,26 @@ function buildMockPreviewPlan(selection: SelectionScope): {
 } {
   const selectedRows = resolveSelectedRows(selection);
   const rows: MovePreviewRow[] = [];
-  let blockedCount = 0;
 
   for (const row of selectedRows) {
     if (row.rowKind !== "file") continue;
-    if (row.status === "excluded" || row.status === "conflict") {
-      continue;
-    }
-    const action = row.proposedAction;
-    if (row.status === "approved" && action !== "move_duplicate") {
-      continue;
-    }
-    if (action === "keep" || action === "ignore") continue;
-    if (action === "move_organized") {
-      blockedCount += 1;
-      continue;
-    }
-    if (action === "move_duplicate") {
-      rows.push({ id: row.id, action: "move_duplicate" });
-    } else {
-      blockedCount += 1;
-    }
+    if (row.status !== "approved") continue;
+    if (row.type !== "exact" && row.type !== "near" && row.type !== "relation") continue;
+    if (row.proposedAction !== "move_duplicate") continue;
+    rows.push({ id: row.id, action: "move_duplicate" });
   }
 
   const operations = rows.map((r) => ({ rowId: r.id, action: r.action }));
   const planFingerprint = sha256HexUtf8(JSON.stringify(operations));
 
-  const summary: {
-    rowCount: number;
-    operationCount: number;
-    conflictCount?: number;
-    blockedCount?: number;
-  } = {
-    rowCount: rows.length,
-    operationCount: rows.length,
+  return {
+    rows,
+    summary: {
+      rowCount: rows.length,
+      operationCount: rows.length,
+    },
+    planFingerprint,
   };
-  if (blockedCount > 0) summary.blockedCount = blockedCount;
-
-  return { rows, summary, planFingerprint };
 }
 
 function resolveSelectionIds(selection: SelectionScope): string[] {

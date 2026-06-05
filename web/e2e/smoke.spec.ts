@@ -8,12 +8,22 @@ async function expandResolveFacet(page: import("@playwright/test").Page) {
   }
 }
 
-async function openResolveWorkspace(page: import("@playwright/test").Page) {
+async function openResolveWorkspace(
+  page: import("@playwright/test").Page,
+  options?: { prepareMovePreview?: boolean },
+) {
   await page.goto("/");
   await page.evaluate(() => {
     localStorage.removeItem("novelguard.reviewGrid.sizing.v1");
   });
   await page.reload();
+  if (options?.prepareMovePreview !== false) {
+    await page.evaluate(() => {
+      (
+        window as unknown as { __NOVELGUARD_TEST_PREPARE_MOVE_PREVIEW_READY__?: () => void }
+      ).__NOVELGUARD_TEST_PREPARE_MOVE_PREVIEW_READY__?.();
+    });
+  }
   await page.getByTestId("work-mode-tab-resolve").click();
   await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "collapsed");
   await expect(page.getByTestId("resolve-facet-panel")).toHaveAttribute("data-state", "collapsed");
@@ -300,14 +310,22 @@ test.describe("NovelGuard smoke", () => {
   });
 
   test("NOV-19 preview disabled when filter has no executable rows", async ({ page }) => {
-    await openResolveWorkspace(page);
+    await openResolveWorkspace(page, { prepareMovePreview: false });
     await page.getByTestId("resolve-type-filter-near").click();
     const preview = page.getByTestId("batch-preview-open");
     await expect(preview).toBeDisabled();
     await expect(preview).toHaveAttribute(
       "title",
-      /검토 전용이며 일괄 적용할 수 없습니다/,
+      /승인된 이동 대상이 없습니다/,
     );
+  });
+
+  test("NOV-35 preview enables on near filter when approved move row loaded", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await page.getByTestId("resolve-type-filter-near").click();
+    await expandResolveFacet(page);
+    await page.getByTestId("resolve-facet-move").click();
+    await expect(page.getByTestId("batch-preview-open")).toBeEnabled({ timeout: 15_000 });
   });
 
   test("NOV-22 resolve defaults to exact and preview needs no type-filter click", async ({ page }) => {
@@ -322,12 +340,12 @@ test.describe("NovelGuard smoke", () => {
     await expect(page.getByTestId("apply-preview-run")).toBeVisible();
   });
 
-  test("NOV-22 verify all types filter disables preview with tooltip", async ({ page }) => {
+  test("NOV-22 verify all types filter enables preview when approved rows loaded", async ({ page }) => {
     await openResolveWorkspace(page);
     await page.getByTestId("resolve-type-filter-all").click();
-    const preview = page.getByTestId("batch-preview-open");
-    await expect(preview).toBeDisabled();
-    await expect(preview).toHaveAttribute("title", /Exact만 선택하세요/);
+    await expandResolveFacet(page);
+    await page.getByTestId("resolve-facet-move").click();
+    await expect(page.getByTestId("batch-preview-open")).toBeEnabled({ timeout: 15_000 });
   });
 
   test("NOV-22 verify manual all types switch still works", async ({ page }) => {

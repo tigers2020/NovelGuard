@@ -29,15 +29,25 @@ export function getAllReviewRows(count = 1284): ReviewRow[] {
   if (cachedRows) return cachedRows;
 
   cachedRows = Array.from({ length: count }, (_, index) => {
-    // row-2 / row-3: exact pair for apply + post-scan auto-approve E2E (near rows are preview-blocked).
-    const type = index === 1 || index === 2 ? "exact" : TYPES[index % TYPES.length];
+    // row-2 / row-3: exact pair for apply + post-scan auto-approve E2E.
+    // row-19 / row-20: near/relation move_duplicate for NOV-35 preview eligibility.
+    const type =
+      index === 1 || index === 2
+        ? "exact"
+        : index === 18
+          ? "near"
+          : index === 19
+            ? "relation"
+            : TYPES[index % TYPES.length];
     // row-6: encoding-only quality/repair parity (integrity OK, non–UTF-8).
     const integrity = index === 5 ? "OK" : INTEGRITIES[index % INTEGRITIES.length];
     const encoding = index === 5 ? "CP949?" : ENCODINGS[index % ENCODINGS.length];
     const status =
-      index === 1 || index === 2 ? "unreviewed" : STATUSES[index % STATUSES.length];
+      index === 18 ? "approved" : index === 1 || index === 2 ? "unreviewed" : STATUSES[index % STATUSES.length];
     const proposedAction =
-      index === 1 || index === 2 ? "move_duplicate" : ACTIONS[index % ACTIONS.length];
+      index === 1 || index === 2 || index === 18 || index === 19
+        ? "move_duplicate"
+        : ACTIONS[index % ACTIONS.length];
     const groupId =
       type === "move_only"
         ? undefined
