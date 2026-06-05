@@ -377,7 +377,6 @@ class LibrarySession:
                 review_signal_count=self._review_signal_count,
                 approved_count=self._approved_count,
                 conflict_count=self._conflict_count,
-                exact_auto_approved_count=self._exact_auto_approved_count,
                 integrity_issue_count=self._integrity_issue_count,
                 encoding_issue_count=self._encoding_issue_count,
                 small_file_anomaly_count=self._small_file_anomaly_count,
