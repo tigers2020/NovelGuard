@@ -300,8 +300,7 @@ def build_job_payload(
     label_slug = _auto_label_slug(data)
     label_suffix = f"-{label_slug}" if label_slug else ""
     job_id = (
-        f"linear-{identifier}-{slug_state}-{prompt_stem}-"
-        f"{state_id[:8] or action}{label_suffix}"
+        f"linear-{identifier}-{slug_state}-{prompt_stem}-" f"{state_id[:8] or action}{label_suffix}"
     )
 
     title = str(data.get("title") or "")

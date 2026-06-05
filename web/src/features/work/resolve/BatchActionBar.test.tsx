@@ -40,23 +40,19 @@ describe("BatchActionBar", () => {
     expect(screen.getByTestId("batch-partial-load-warning").textContent).toContain("일부만 로드됨");
   });
 
-  it("renders auto-select button disabled when autoSelectDisabled", () => {
+  it("shows review-only banner when guidance provided", () => {
     render(
       <BatchActionBar
         filteredCount={10}
         loadedCount={10}
+        reviewOnlyGuidance="Near 중복은 검토 전용이며 일괄 적용할 수 없습니다."
         onExcludeAllFiltered={noop}
         onAutoSelectKeepers={noop}
-        autoSelectDisabled
-        autoSelectDisabledReason="미검토 파일 행이 없습니다."
         onPreview={noop}
       />,
     );
 
-    const button = screen.getByTestId("batch-auto-select-keepers");
-    expect(button).toBeTruthy();
-    expect((button as HTMLButtonElement).disabled).toBe(true);
-    expect(button.getAttribute("title")).toBe("미검토 파일 행이 없습니다.");
+    expect(screen.getByTestId("batch-review-only-banner").textContent).toContain("검토 전용");
   });
 
   it("hides partial warning when loaded equals filtered", () => {
@@ -71,5 +67,34 @@ describe("BatchActionBar", () => {
     );
 
     expect(screen.queryByTestId("batch-partial-load-warning")).toBeNull();
+  });
+
+  it("shows review-only banner when guidance is set", () => {
+    render(
+      <BatchActionBar
+        filteredCount={10}
+        loadedCount={10}
+        reviewOnlyGuidance="Exact (이동) 탭에서만 가능합니다."
+        onExcludeAllFiltered={noop}
+        onAutoSelectKeepers={noop}
+        onPreview={noop}
+      />,
+    );
+
+    expect(screen.getByTestId("batch-review-only-banner").textContent).toContain("Exact (이동)");
+  });
+
+  it("hides review-only banner when guidance is unset", () => {
+    render(
+      <BatchActionBar
+        filteredCount={10}
+        loadedCount={10}
+        onExcludeAllFiltered={noop}
+        onAutoSelectKeepers={noop}
+        onPreview={noop}
+      />,
+    );
+
+    expect(screen.queryByTestId("batch-review-only-banner")).toBeNull();
   });
 });

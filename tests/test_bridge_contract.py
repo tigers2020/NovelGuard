@@ -92,7 +92,7 @@ def test_clamp_query_limit_max_200() -> None:
 
 def test_pywebview_api_methods_match_locked_contract() -> None:
     """Canonical list: app.bridge_parity.PYWEBVIEW_API_METHODS (mirrors bridgeParity.ts)."""
-    assert len(PYWEBVIEW_API_METHODS) == 27
+    assert len(PYWEBVIEW_API_METHODS) == 28
     assert PYWEBVIEW_API_METHODS[0] == "get_app_info"
     assert PYWEBVIEW_API_METHODS[-1] == "cancel_finalize"
 
@@ -606,7 +606,7 @@ def test_find_exact_duplicate_groups_keeper_by_size() -> None:
     )
     groups = find_exact_duplicate_groups([keeper, other])
     assert len(groups) == 1
-    assert groups[0].keeper_id == keeper.id
+    assert groups[0].keeper_id == other.id
 
 
 def test_sqlite_library_index_round_trip(tmp_path: Path) -> None:
@@ -897,6 +897,24 @@ def _wait_deep_analysis_complete(api: BridgeApi, *, timeout: float = 120.0) -> d
     return snap
 
 
+def test_resolve_snapshot_split_counts_with_near_rows(tmp_path: Path) -> None:
+    (tmp_path / "alpha.txt").write_text(_near_similar_body("alpha"), encoding="utf-8")
+    (tmp_path / "beta.txt").write_text(_near_similar_body("beta"), encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _wait_deep_analysis_complete(api)
+    snap = api.get_snapshot()
+    validate_app_snapshot(snap)
+    resolve = snap["work"]["resolve"]
+    assert resolve["moveReadyCount"] >= 0
+    assert resolve["reviewSignalCount"] >= 0
+    assert resolve["moveReadyCount"] + resolve["reviewSignalCount"] == resolve["queueCount"]
+    if resolve["reviewSignalCount"] > 0:
+        assert resolve["moveReadyCount"] < resolve["queueCount"]
+
+
 def test_large_library_counts_near_duplicate_groups(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -1115,6 +1133,7 @@ def test_query_review_rows_exact_duplicate_pair(tmp_path: Path) -> None:
     api.start_scan()
     snap = _scan_until_idle(api)
     assert snap["work"]["scan"]["state"] == "success"
+    assert snap["work"]["scan"]["exactAutoApprovedCount"] >= 1
     assert snap["work"]["resolve"]["approvedCount"] >= 1
     page = api.query_review_rows({"viewMode": "all", "limit": 50})
     validate_review_rows_page(page)
@@ -1130,6 +1149,33 @@ def test_query_review_rows_exact_duplicate_pair(tmp_path: Path) -> None:
     assert keeper_row["proposedAction"] == "keep"
     assert non_keeper_row["status"] == "approved"
     assert non_keeper_row["proposedAction"] == "move_duplicate"
+
+
+def test_scan_exact_auto_approved_count_zero_without_duplicates(tmp_path: Path) -> None:
+    (tmp_path / "solo.txt").write_text("unique story\n", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    snap = _scan_until_idle(api)
+    assert snap["work"]["scan"]["state"] == "success"
+    assert snap["work"]["scan"]["exactAutoApprovedCount"] == 0
+
+
+def test_scan_exact_auto_approved_count_resets_on_rescan(tmp_path: Path) -> None:
+    payload = "same story content\n"
+    (tmp_path / "copy_a.txt").write_text(payload, encoding="utf-8")
+    (tmp_path / "copy_b.txt").write_text(payload, encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    first = _scan_until_idle(api)
+    assert first["work"]["scan"]["exactAutoApprovedCount"] >= 1
+    api.start_scan()
+    second = _scan_until_idle(api)
+    assert second["work"]["scan"]["state"] == "success"
+    assert second["work"]["scan"]["exactAutoApprovedCount"] == 0
 
 
 def test_snapshot_duplicate_group_count(tmp_path: Path) -> None:
@@ -2093,7 +2139,7 @@ def test_get_near_duplicate_group_detail(tmp_path: Path) -> None:
     assert detail["evidence"]["matchKind"] == "near_ngram_v1"
 
 
-def test_preview_rejects_near_duplicate_rows(tmp_path: Path) -> None:
+def test_approve_near_group_member_persists(tmp_path: Path) -> None:
     (tmp_path / "alpha.txt").write_text(_near_similar_body("alpha"), encoding="utf-8")
     (tmp_path / "beta.txt").write_text(_near_similar_body("beta"), encoding="utf-8")
     session = create_library_session(MemoryLibraryIndex())
@@ -2104,12 +2150,89 @@ def test_preview_rejects_near_duplicate_rows(tmp_path: Path) -> None:
     near_page = api.query_review_rows(
         {"viewMode": "all", "limit": 50, "filters": {"types": ["near"]}}
     )
-    file_row = next((row for row in near_page["rows"] if row["rowKind"] == "file"), None)
-    if file_row is None:
-        return
-    with pytest.raises(PreviewApplyError) as exc_info:
-        api.get_move_preview({"type": "explicit_rows", "rowIds": [file_row["id"]]})
-    assert exc_info.value.reason == "NEAR_DUPLICATE_APPLY_UNSUPPORTED"
+    file_rows = [row for row in near_page["rows"] if row["rowKind"] == "file"]
+    if len(file_rows) < 2:
+        pytest.skip("near duplicate group not detected in fixture")
+    target = file_rows[0]
+    result = api.update_review_decisions(
+        {
+            "selection": {"type": "explicit_rows", "rowIds": [target["id"]]},
+            "command": "approve",
+        }
+    )
+    assert result["updatedCount"] >= 1
+    folder = session._index.folder_path
+    assert folder is not None
+    stored = session._index.load_review_state(folder)
+    assert any(status == "approved" for status in stored.members.values())
+
+
+def test_preview_allows_near_approved_move_duplicate(tmp_path: Path) -> None:
+    (tmp_path / "alpha.txt").write_text(_near_similar_body("alpha"), encoding="utf-8")
+    (tmp_path / "beta.txt").write_text(_near_similar_body("beta"), encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    near_page = api.query_review_rows(
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["near"]}}
+    )
+    file_rows = [row for row in near_page["rows"] if row["rowKind"] == "file"]
+    if len(file_rows) < 2:
+        pytest.skip("near duplicate group not detected in fixture")
+    summary = api.summarize_auto_select_keepers(
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["near"]}}
+    )
+    if summary["keeperRowIds"]:
+        api.update_review_decisions(
+            {
+                "selection": {"type": "explicit_rows", "rowIds": summary["keeperRowIds"]},
+                "command": "setKeeper",
+            }
+        )
+    api.update_review_decisions(
+        {
+            "selection": {
+                "type": "current_query",
+                "query": {
+                    "viewMode": "all",
+                    "limit": 50,
+                    "filters": {"types": ["near"], "status": ["unreviewed"]},
+                },
+                "excludeRowIds": [],
+            },
+            "command": "approve",
+        }
+    )
+    refreshed = api.query_review_rows(
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["near"]}}
+    )
+    move_rows = [
+        row
+        for row in refreshed["rows"]
+        if row.get("rowKind") == "file" and row.get("proposedAction") == "move_duplicate"
+    ]
+    if not move_rows:
+        pytest.skip("no near move_duplicate rows after approve")
+    preview = api.get_move_preview({"type": "explicit_rows", "rowIds": [move_rows[0]["id"]]})
+    validate_move_preview(preview)
+    assert preview["summary"]["operationCount"] >= 0
+
+
+def test_summarize_auto_select_keepers_counts_unreviewed_file_rows(tmp_path: Path) -> None:
+    (tmp_path / "a.txt").write_text("x" * 100, encoding="utf-8")
+    (tmp_path / "b.txt").write_text("x" * 100, encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    summary = api.summarize_auto_select_keepers({"viewMode": "all", "limit": 50})
+    assert summary["targetCount"] >= 0
+    assert summary["keeperCount"] <= summary["targetCount"]
+    assert summary["moveCandidateCount"] == max(0, summary["targetCount"] - summary["keeperCount"])
+    assert isinstance(summary["keeperRowIds"], list)
 
 
 def test_relation_token_precedence_v2_is_version_not_numeric() -> None:

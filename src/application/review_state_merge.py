@@ -161,7 +161,9 @@ def _merge_non_exact_row(
             updated["proposedAction"] = "keep" if is_keeper else "move_duplicate"
             updated["targetFolder"] = None if is_keeper else "duplicate/"
         else:
-            updated["proposedAction"] = row.get("proposedAction", "keep" if is_keeper else "move_duplicate")
+            updated["proposedAction"] = row.get(
+                "proposedAction", "keep" if is_keeper else "move_duplicate"
+            )
             if not is_keeper and updated["proposedAction"] == "move_duplicate":
                 updated["targetFolder"] = row.get("targetFolder", "duplicate/")
             elif is_keeper:

@@ -23,17 +23,16 @@ import { REVIEW_GRID_SIZING_KEY } from "./resolve/reviewGridColumns";
 import { mergeReviewColumnVisibility } from "./resolve/reviewGridLayout";
 import { DetailPanel } from "./resolve/DetailPanel";
 import { BatchActionBar } from "./resolve/BatchActionBar";
-import { AutoSelectKeepersConfirmDialog } from "./resolve/AutoSelectKeepersConfirmDialog";
-import {
-  buildAutoSelectKeepersStats,
-  fileIdFromReviewRow,
-  pickPolicyKeeperFileId,
-} from "./resolve/autoSelectKeepers";
+import { AutoSelectConfirmDialog } from "./resolve/AutoSelectConfirmDialog";
 import { BulkFilterConfirmDialog } from "./resolve/BulkFilterConfirmDialog";
+import type { AutoSelectKeepersSummary } from "../../types/autoSelectSummary";
 import {
+  countExecutableMovePreviewRows,
   hasExecutableMovePreviewRows,
   reviewOnlyBlockedReasonForFilter,
+  reviewOnlyGuidanceBannerForFilter,
 } from "./resolve/previewEligibility";
+import { previewCtaLabel } from "./resolve/previewCtaCopy";
 import {
   bulkMutationChunkCursors,
   bulkMutationTargetCount,
@@ -86,8 +85,12 @@ export function ResolveAndOrganizeWorkspace({
   const [detailMutating, setDetailMutating] = useState(false);
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
   const [bulkExcludeConfirmOpen, setBulkExcludeConfirmOpen] = useState(false);
-  const [autoSelectConfirmOpen, setAutoSelectConfirmOpen] = useState(false);
   const [bulkMutating, setBulkMutating] = useState(false);
+  const [autoSelectConfirmOpen, setAutoSelectConfirmOpen] = useState(false);
+  const [autoSelectSummary, setAutoSelectSummary] = useState<AutoSelectKeepersSummary | null>(
+    null,
+  );
+  const [autoSelectMutating, setAutoSelectMutating] = useState(false);
   const [isWideLayout, setIsWideLayout] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches,
   );
@@ -276,7 +279,12 @@ export function ResolveAndOrganizeWorkspace({
   const hasExecutableRows = useMemo(() => hasExecutableMovePreviewRows(rows), [rows]);
 
   const reviewOnlyBlockedReason = useMemo(
-    () => reviewOnlyBlockedReasonForFilter(rowTypeFilter),
+    () => reviewOnlyBlockedReasonForFilter(rowTypeFilter, rows),
+    [rowTypeFilter, rows],
+  );
+
+  const reviewOnlyGuidance = useMemo(
+    () => reviewOnlyGuidanceBannerForFilter(rowTypeFilter),
     [rowTypeFilter],
   );
 
@@ -286,20 +294,81 @@ export function ResolveAndOrganizeWorkspace({
       return "현재 필터에 표시된 항목이 없습니다.";
     }
     if (!hasExecutableRows) {
-      return "현재 필터에 이동 미리보기 가능한 항목이 없습니다. Exact 이동 대상을 승인한 뒤 다시 시도하세요.";
+      return "현재 필터에 이동 미리보기 가능한 항목이 없습니다. 미검토 자동 선정·승인 후 다시 시도하세요.";
     }
     return undefined;
   }, [filteredCount, hasExecutableRows, reviewOnlyBlockedReason]);
 
-  const unreviewedFileCount = useMemo(
-    () => rows.filter((row) => row.rowKind === "file" && row.status === "unreviewed").length,
+  const executableCount = useMemo(
+    () => countExecutableMovePreviewRows(rows),
     [rows],
   );
 
-  const autoSelectStats = useMemo(() => buildAutoSelectKeepersStats(rows), [rows]);
+  const previewCtaText = useMemo(
+    () =>
+      previewCtaLabel({
+        filter: rowTypeFilter,
+        executableCount,
+        moveReadyCount: resolve.moveReadyCount,
+      }),
+    [rowTypeFilter, executableCount, resolve.moveReadyCount],
+  );
 
-  const autoSelectDisabledReason =
-    unreviewedFileCount === 0 ? "미검토 파일 행이 없습니다." : undefined;
+  const showPreviewCta = rowTypeFilter === "exact";
+
+  const openAutoSelectConfirm = useCallback(async () => {
+    try {
+      setQueryError(null);
+      const summary = await bridge.summarizeAutoSelectKeepers(currentQuery);
+      setAutoSelectSummary(summary);
+      setAutoSelectConfirmOpen(true);
+    } catch (err) {
+      setQueryError(err instanceof Error ? err.message : "Auto-select summary failed");
+    }
+  }, [bridge, currentQuery]);
+
+  const runAutoSelectKeepersAndApprove = useCallback(async () => {
+    const targetCount = autoSelectSummary?.targetCount ?? 0;
+    if (targetCount === 0) return;
+    setAutoSelectMutating(true);
+    try {
+      setQueryError(null);
+      const cursors = bulkMutationChunkCursors(targetCount);
+      for (const cursor of cursors) {
+        const chunkQuery = {
+          ...currentQuery,
+          cursor,
+          filters: { ...currentQuery.filters, status: ["unreviewed"] as const },
+        };
+        const chunkSummary = await bridge.summarizeAutoSelectKeepers(chunkQuery);
+        if (chunkSummary.keeperRowIds.length > 0) {
+          await bridge.updateReviewDecisions({
+            selection: {
+              type: "explicit_rows",
+              rowIds: chunkSummary.keeperRowIds,
+            },
+            command: "setKeeper",
+          });
+        }
+        await bridge.updateReviewDecisions({
+          selection: {
+            type: "current_query",
+            query: chunkQuery,
+            excludeRowIds: [],
+          },
+          command: "approve",
+        });
+      }
+      await refreshSnapshot();
+      await loadAllFiltered();
+    } catch (err) {
+      setQueryError(err instanceof Error ? err.message : "Review update failed");
+    } finally {
+      setAutoSelectMutating(false);
+      setAutoSelectConfirmOpen(false);
+      setAutoSelectSummary(null);
+    }
+  }, [autoSelectSummary, bridge, currentQuery, loadAllFiltered, refreshSnapshot]);
 
   const runDetailReviewCommand = useCallback(
     async (
@@ -349,70 +418,6 @@ export function ResolveAndOrganizeWorkspace({
       setBulkExcludeConfirmOpen(false);
     }
   }, [bridge, currentQuery, filteredCount, loadAllFiltered, refreshSnapshot]);
-
-  const runBulkAutoSelectKeepers = useCallback(async () => {
-    const unreviewedFileRows = rows.filter(
-      (row) => row.rowKind === "file" && row.status === "unreviewed",
-    );
-    const targetCount = bulkMutationTargetCount(unreviewedFileRows.length);
-    if (targetCount === 0) return;
-
-    setBulkMutating(true);
-    try {
-      setQueryError(null);
-
-      const membersByGroup = new Map<string, ReviewRow[]>();
-      for (const row of unreviewedFileRows) {
-        if (!row.groupId) continue;
-        const members = membersByGroup.get(row.groupId) ?? [];
-        members.push(row);
-        membersByGroup.set(row.groupId, members);
-      }
-
-      for (const members of membersByGroup.values()) {
-        const policyKeeperId = pickPolicyKeeperFileId(members);
-        if (!policyKeeperId) continue;
-        const skeletonKeeperRow = members.find((row) => row.proposedAction === "keep");
-        const currentKeeperId = skeletonKeeperRow
-          ? fileIdFromReviewRow(skeletonKeeperRow.id)
-          : policyKeeperId;
-        if (currentKeeperId === policyKeeperId) continue;
-        const keeperRow = members.find((row) => fileIdFromReviewRow(row.id) === policyKeeperId);
-        if (!keeperRow) continue;
-        await bridge.updateReviewDecisions({
-          selection: { type: "explicit_rows", rowIds: [keeperRow.id] },
-          command: "setKeeper",
-        });
-      }
-
-      const approveQuery: ReviewRowsQuery = {
-        ...currentQuery,
-        filters: {
-          ...currentQuery.filters,
-          status: ["unreviewed"],
-        },
-      };
-      const cursors = bulkMutationChunkCursors(targetCount);
-      for (const cursor of cursors) {
-        await bridge.updateReviewDecisions({
-          selection: {
-            type: "current_query",
-            query: { ...approveQuery, cursor },
-            excludeRowIds: [],
-          },
-          command: "approve",
-        });
-      }
-
-      await refreshSnapshot();
-      await loadAllFiltered();
-    } catch (err) {
-      setQueryError(err instanceof Error ? err.message : "Review update failed");
-    } finally {
-      setBulkMutating(false);
-      setAutoSelectConfirmOpen(false);
-    }
-  }, [bridge, currentQuery, loadAllFiltered, refreshSnapshot, rows]);
 
   const handleSetKeeper = (member: DuplicateGroupMemberDetail) => {
     if (member.isKeeper) return;
@@ -468,7 +473,8 @@ export function ResolveAndOrganizeWorkspace({
             </div>
           )}
           <ResolveGridToolbar
-            queueCount={resolve.queueCount}
+            moveReadyCount={resolve.moveReadyCount}
+            reviewSignalCount={resolve.reviewSignalCount}
             groupCount={resolve.groupCount}
             conflictCount={resolve.conflictCount}
             approvedCount={resolve.approvedCount}
@@ -480,6 +486,11 @@ export function ResolveAndOrganizeWorkspace({
             queryError={queryError}
             onRetry={() => void loadAllFiltered()}
             onOpenFinalize={onOpenFinalize}
+            showPreviewCta={showPreviewCta}
+            onPreview={() => onOpenPreview(previewSelection)}
+            previewDisabled={Boolean(previewBlockedReason)}
+            previewDisabledReason={previewBlockedReason}
+            previewLabel={previewCtaText}
           />
           <VirtualizedReviewGrid
             rows={rows}
@@ -564,15 +575,31 @@ export function ResolveAndOrganizeWorkspace({
         filteredCount={filteredCount}
         loadedCount={rows.length}
         loadingAll={loadingAll}
+        reviewOnlyGuidance={reviewOnlyGuidance}
         onExcludeAllFiltered={() => setBulkExcludeConfirmOpen(true)}
+        onAutoSelectKeepers={() => void openAutoSelectConfirm()}
+        autoSelectDisabled={bulkMutating || autoSelectMutating || filteredCount === 0}
+        autoSelectDisabledReason={
+          filteredCount === 0 ? "현재 필터에 미검토 파일 행이 없습니다." : undefined
+        }
         bulkQueryDisabled={Boolean(reviewOnlyBlockedReason)}
         bulkQueryDisabledReason={reviewOnlyBlockedReason}
-        onAutoSelectKeepers={() => setAutoSelectConfirmOpen(true)}
-        autoSelectDisabled={unreviewedFileCount === 0 || bulkMutating}
-        autoSelectDisabledReason={autoSelectDisabledReason}
         onPreview={() => onOpenPreview(previewSelection)}
         previewDisabled={Boolean(previewBlockedReason)}
         previewDisabledReason={previewBlockedReason}
+        previewLabel={previewCtaText}
+      />
+
+      <AutoSelectConfirmDialog
+        open={autoSelectConfirmOpen}
+        summary={autoSelectSummary}
+        filteredCount={filteredCount}
+        mutating={autoSelectMutating}
+        onCancel={() => {
+          setAutoSelectConfirmOpen(false);
+          setAutoSelectSummary(null);
+        }}
+        onConfirm={() => void runAutoSelectKeepersAndApprove()}
       />
 
       <BulkFilterConfirmDialog
@@ -581,14 +608,6 @@ export function ResolveAndOrganizeWorkspace({
         mutating={bulkMutating}
         onCancel={() => setBulkExcludeConfirmOpen(false)}
         onConfirm={() => void runBulkExcludeFiltered()}
-      />
-
-      <AutoSelectKeepersConfirmDialog
-        open={autoSelectConfirmOpen}
-        stats={autoSelectStats}
-        mutating={bulkMutating}
-        onCancel={() => setAutoSelectConfirmOpen(false)}
-        onConfirm={() => void runBulkAutoSelectKeepers()}
       />
     </main>
   );

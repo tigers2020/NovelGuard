@@ -25,13 +25,12 @@ def find_exact_duplicate_groups(files: list[FileRecord]) -> list[DuplicateGroup]
             if len(members) < 2 or not content_hash:
                 continue
             keeper_id = pick_keeper_file_id(members)
-            keeper = next(member for member in members if member.id == keeper_id)
             group_id = f"dup-{content_hash[:16]}"
             groups.append(
                 DuplicateGroup(
                     group_id=group_id,
                     member_ids=tuple(m.id for m in members),
-                    keeper_id=keeper.id,
+                    keeper_id=keeper_id,
                 )
             )
     return groups

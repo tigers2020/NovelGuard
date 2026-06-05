@@ -26,8 +26,7 @@ def build_near_review_rows(
         members = [files_by_id[mid] for mid in group.member_file_ids if mid in files_by_id]
         if len(members) < 2:
             continue
-        keeper_id = pick_keeper_file_id(members)
-        keeper = next(member for member in members if member.id == keeper_id)
+        keeper = files_by_id[pick_keeper_file_id(members)]
         rows.append(
             {
                 "id": near_group_row_id(group.group_id),
@@ -53,8 +52,8 @@ def build_near_review_rows(
                     "path": member.relative_path,
                     "sizeBytes": member.size_bytes,
                     "keeperLabel": keeper.name,
-                    "proposedAction": "keep" if member.id == keeper_id else "move_duplicate",
-                    "targetFolder": None if member.id == keeper_id else "duplicate/",
+                    "proposedAction": "keep" if member.id == keeper.id else "move_duplicate",
+                    "targetFolder": None if member.id == keeper.id else "duplicate/",
                     "hasChildren": False,
                     "groupId": group.group_id,
                     "confidence": group.max_similarity,

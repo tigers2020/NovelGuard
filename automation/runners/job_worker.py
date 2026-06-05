@@ -85,10 +85,33 @@ def _prompts_dir(cfg: dict[str, Any]) -> Path:
     return prompts_dir
 
 
+# Queued jobs may still reference pre-reorg filenames (see prompts/archive/README.md).
+_LEGACY_PROMPT_ALIASES: dict[str, str] = {
+    "00-linear-create-pr-to-spec.md": "linear/backlog/create-research.md",
+    "02-linear-in-progress-implement.md": "linear/in-progress/implement.md",
+    "03-linear-in-review-verification.md": "linear/in-review/verify.md",
+}
+
+
+def _resolve_prompt_file(prompts_dir: Path, prompt_file: str) -> str:
+    """Resolve legacy prompt paths to linear/ or archive/ when the direct file is gone."""
+    direct = prompts_dir / prompt_file
+    if direct.is_file():
+        return prompt_file
+    alias = _LEGACY_PROMPT_ALIASES.get(prompt_file)
+    if alias and (prompts_dir / alias).is_file():
+        return alias
+    archived = prompts_dir / "archive" / prompt_file
+    if archived.is_file():
+        return f"archive/{prompt_file}"
+    return prompt_file
+
+
 def render_prompt(cfg: dict[str, Any], payload: dict[str, Any], branch: str) -> str:
     prompts_dir = _prompts_dir(cfg)
     if payload.get("prompt_file"):
-        template_path = prompts_dir / str(payload["prompt_file"])
+        rel = _resolve_prompt_file(prompts_dir, str(payload["prompt_file"]))
+        template_path = prompts_dir / rel
     else:
         template_path = prompts_dir / f"{payload['kind']}.md"
     if not template_path.is_file():
@@ -413,10 +436,10 @@ def run_once(cfg: dict[str, Any], *, quiet_idle: bool = False) -> bool:
 
     prefix = str(record.payload.get("branch_prefix") or "ai/job-")
     planned_branch = f"{prefix}{record.payload['id']}"
-    prompt = render_prompt(cfg, record.payload, planned_branch)
 
     write_lock(locks_dir, row_id=record.row_id, job_id=job_id)
     try:
+        prompt = render_prompt(cfg, record.payload, planned_branch)
         emit_mod.emit_or_print(
             "worker",
             "running",
