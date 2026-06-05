@@ -29,30 +29,35 @@ def main() -> None:
 
     verify_packaging = project_root / "scripts" / "verify_packaging.py"
     fixture_smoke = project_root / "scripts" / "fixture_library_smoke.py"
+    large_library_smoke = project_root / "scripts" / "large_library_loading_smoke.py"
     launch_smoke = project_root / "scripts" / "launch_packaged_smoke.py"
     packaged_exe = project_root / "dist" / "NovelGuard" / "NovelGuard.exe"
     web_dir = project_root / "web"
     steps: list[tuple[list[str], str]] = [
-        ([sys.executable, "-m", "pytest"], "1/9 python -m pytest"),
-        ([sys.executable, "-m", "ruff", "check", "."], "2/9 python -m ruff check ."),
-        ([sys.executable, "-m", "mypy", "src"], "3/9 python -m mypy src"),
-        ([sys.executable, "-m", "black", "--check", "."], "4/9 python -m black --check ."),
-        ([npm, "run", "lint"], "5/9 npm run lint"),
-        ([npm, "run", "test"], "6/9 npm run test (web vitest)"),
+        ([sys.executable, "-m", "pytest"], "1/10 python -m pytest"),
+        ([sys.executable, "-m", "ruff", "check", "."], "2/10 python -m ruff check ."),
+        ([sys.executable, "-m", "mypy", "src"], "3/10 python -m mypy src"),
+        ([sys.executable, "-m", "black", "--check", "."], "4/10 python -m black --check ."),
+        ([npm, "run", "lint"], "5/10 npm run lint"),
+        ([npm, "run", "test"], "6/10 npm run test (web vitest)"),
         (
             [sys.executable, str(verify_packaging)],
-            "7/9 packaging verification (static; no PyInstaller run)",
+            "7/10 packaging verification (static; no PyInstaller run)",
         ),
         (
             [sys.executable, str(fixture_smoke)],
-            "8/9 fixture library smoke (headless)",
+            "8/10 fixture library smoke (headless)",
+        ),
+        (
+            [sys.executable, str(large_library_smoke)],
+            "9/10 large-library loading smoke (synthetic 7k)",
         ),
     ]
     if packaged_exe.is_file():
         steps.append(
             (
                 [sys.executable, str(launch_smoke)],
-                "9/9 packaged exe launch smoke",
+                "10/10 packaged exe launch smoke",
             )
         )
 

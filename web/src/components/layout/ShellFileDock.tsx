@@ -22,6 +22,7 @@ import { deriveShellFileDockState } from "./shellFileDockState";
 
 const SEARCH_DEBOUNCE_MS = 220;
 const PAGE_LIMIT = 100;
+const RETRY_DELAYS_MS = [1000, 3000, 5000] as const;
 
 type SortState = {
   field: FileRowSortField;
@@ -63,9 +64,13 @@ export function ShellFileDock({
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [queryError, setQueryError] = useState<string | null>(null);
+  const [degraded, setDegraded] = useState(false);
   const [isSelectingFolder, setIsSelectingFolder] = useState(false);
 
   const pipelineBusy = Boolean(pipeline.background?.active);
+  const deepAnalysisRunning = snapshot.work.scan.deepAnalysisStatus === "running";
+  const isExpectedSlow = pipelineBusy || deepAnalysisRunning;
+  const showDegradedBanner = degraded || isExpectedSlow;
 
   const columns = useMemo(() => columnsForPreset(columnPreset), [columnPreset]);
   const rowClass =
@@ -108,22 +113,35 @@ export function ShellFileDock({
       }
       try {
         setQueryError(null);
-        const page = await bridge.queryFileRows(buildQuery(cursor));
-        setRows((prev) => (append ? [...prev, ...page.rows] : page.rows));
-        setFilteredCount(page.pageInfo.totalFiltered);
-        setNextCursor(page.pageInfo.nextCursor);
-        setHasMore(page.pageInfo.hasMore);
+        for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
+          try {
+            const page = await bridge.queryFileRows(buildQuery(cursor));
+            setRows((prev) => (append ? [...prev, ...page.rows] : page.rows));
+            setFilteredCount(page.pageInfo.totalFiltered);
+            setNextCursor(page.pageInfo.nextCursor);
+            setHasMore(page.pageInfo.hasMore);
+            setDegraded(false);
+            return;
+          } catch (err) {
+            const isTimeout = err instanceof BridgeCallError && err.code === "timeout";
+            if (!isTimeout) {
+              throw err;
+            }
+            setDegraded(true);
+            setQueryError(null);
+            if (attempt >= RETRY_DELAYS_MS.length) {
+              return;
+            }
+            await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
+          }
+        }
       } catch (err) {
         const message =
-          err instanceof BridgeCallError && err.code === "timeout"
-            ? pipelineBusy
-              ? "백그라운드 분석 중 파일 목록 로드가 지연되었습니다. 잠시 후 다시 시도하세요."
-              : `Bridge call timed out: query_file_rows`
-            : err instanceof BridgeCallError && err.reason
-              ? err.reason
-              : err instanceof Error
-                ? err.message
-                : "Failed to load files";
+          err instanceof BridgeCallError && err.reason
+            ? err.reason
+            : err instanceof Error
+              ? err.message
+              : "Failed to load files";
         setQueryError(message);
         if (!append) {
           setRows([]);
@@ -136,7 +154,7 @@ export function ShellFileDock({
         setLoadingMore(false);
       }
     },
-    [bridge, buildQuery, expanded, pipelineBusy],
+    [bridge, buildQuery, expanded],
   );
 
   const handleSelectFolder = async () => {
@@ -264,6 +282,15 @@ export function ShellFileDock({
               밀도: {density === "comfortable" ? "보통" : "촘촘"}
             </button>
           </div>
+
+          {showDegradedBanner && library.fileCount > 0 && (
+            <p className="py-2 text-sm text-amber-600" data-testid="shell-file-dock-degraded">
+              백그라운드 분석 중 — 목록 일부만 표시됨
+              <span className="block text-xs text-muted-foreground">
+                계속 불러오는 중입니다. 이미 불러온 항목은 유지됩니다.
+              </span>
+            </p>
+          )}
 
           {library.fileCount === 0 ? (
             <div className="py-4 text-sm text-on-surface-variant">
