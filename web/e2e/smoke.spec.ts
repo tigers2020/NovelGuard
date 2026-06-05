@@ -293,6 +293,20 @@ test.describe("NovelGuard smoke", () => {
     expect(filtered).toBeGreaterThan(200);
   });
 
+  test("NOV-23 wide detail drawer closed on entry, opens on row select", async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 900 });
+    await openResolveWorkspace(page);
+    const drawer = page.getByTestId("resolve-detail-drawer");
+    await expect(drawer).toHaveAttribute("data-state", "closed");
+    const firstRow = page.getByTestId(/^grid-row-/).first();
+    await expect(firstRow).toBeVisible({ timeout: 15_000 });
+    await firstRow.click();
+    await expect(drawer).toHaveAttribute("data-state", "open");
+    await expect(page.getByTestId("detail-panel")).toBeVisible();
+    await page.getByTestId("detail-panel-close").click();
+    await expect(drawer).toHaveAttribute("data-state", "closed");
+  });
+
   test("NOV-20 scan resolve preview without checkbox selection", async ({ page }) => {
     await page.goto("/");
     await runScanToSuccess(page);

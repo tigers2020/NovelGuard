@@ -180,13 +180,10 @@ export function ResolveAndOrganizeWorkspace({
           const rebound = accumulated.find((r) => r.id === preserveRowId) ?? null;
           setSelectedRow(rebound);
           void loadDetail(rebound);
-        } else if (accumulated.length > 0) {
-          const next = accumulated[0];
-          setSelectedRow(next);
-          void loadDetail(next);
         } else {
           setSelectedRow(null);
           setDetail(null);
+          setDetailError(null);
         }
       } catch (err) {
         if (seq !== loadSeqRef.current) return;
@@ -241,7 +238,19 @@ export function ResolveAndOrganizeWorkspace({
     });
   };
 
+  const clearDetailSelection = useCallback(() => {
+    detailSeqRef.current += 1;
+    setSelectedRow(null);
+    setDetail(null);
+    setDetailError(null);
+    setDetailLoading(false);
+  }, []);
+
   const selectMasterRow = (row: ReviewRow) => {
+    if (selectedRow?.id === row.id) {
+      clearDetailSelection();
+      return;
+    }
     setSelectedRow(row);
     if (!isWideLayout) {
       setDetailSheetOpen(true);
@@ -414,24 +423,35 @@ export function ResolveAndOrganizeWorkspace({
           />
         </div>
         {isWideLayout && (
-          <DetailPanel
-            className="w-[min(360px,36%)] shrink-0 border-l border-outline"
-            selectedRow={selectedRow}
-            detail={detail}
-            loading={detailLoading}
-            error={detailError}
-            mutating={detailMutating}
-            onSetKeeper={handleSetKeeper}
-            onMarkConflict={handleMarkConflict}
-            onReset={handleReset}
-            onRefreshDetail={() => {
-              if (detail?.status === "not_found") {
-                void loadAllFiltered(selectedRow?.id ?? null);
-              } else {
-                void loadDetail(selectedRow);
-              }
-            }}
-          />
+          <div
+            data-testid="resolve-detail-drawer"
+            data-state={selectedRow ? "open" : "closed"}
+            className={`shrink-0 overflow-hidden border-l border-outline transition-[max-width] duration-300 ease-out ${
+              selectedRow ? "max-w-[min(360px,36vw)]" : "max-w-0 border-l-0"
+            }`}
+          >
+            {selectedRow && (
+              <DetailPanel
+                className="h-full w-[min(360px,36vw)]"
+                selectedRow={selectedRow}
+                detail={detail}
+                loading={detailLoading}
+                error={detailError}
+                mutating={detailMutating}
+                onSetKeeper={handleSetKeeper}
+                onMarkConflict={handleMarkConflict}
+                onReset={handleReset}
+                onRefreshDetail={() => {
+                  if (detail?.status === "not_found") {
+                    void loadAllFiltered(selectedRow?.id ?? null);
+                  } else {
+                    void loadDetail(selectedRow);
+                  }
+                }}
+                onClose={clearDetailSelection}
+              />
+            )}
+          </div>
         )}
       </div>
 
