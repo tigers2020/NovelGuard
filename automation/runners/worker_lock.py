@@ -23,6 +23,15 @@ def pid_alive(pid: int) -> bool:
     return _pid_alive(pid)
 
 
+def resolve_locks_dir(cfg: dict[str, Any]) -> Path:
+    locks_dir = Path(cfg.get("locks", {}).get("dir", "automation/locks"))
+    if not locks_dir.is_absolute():
+        from automation.runners.config import repo_root
+
+        locks_dir = repo_root() / locks_dir
+    return locks_dir
+
+
 def parse_pid_lock_file(lock_path: Path) -> int | None:
     try:
         text = lock_path.read_text(encoding="utf-8")
@@ -163,11 +172,7 @@ def release_daemon_lock(locks_dir: Path) -> None:
 
 def release_stale_locks(cfg: dict[str, Any]) -> list[str]:
     """Clear dead PID repo/worker/daemon locks before processing."""
-    locks_dir = Path(cfg.get("locks", {}).get("dir", "automation/locks"))
-    if not locks_dir.is_absolute():
-        from automation.runners.config import repo_root
-
-        locks_dir = repo_root() / locks_dir
+    locks_dir = resolve_locks_dir(cfg)
     cleared: list[str] = []
     repo_lock_name = str(
         ((cfg.get("repos") or {}).get("novelguard") or {}).get("lock_name") or "NovelGuard.lock"

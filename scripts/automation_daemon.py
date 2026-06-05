@@ -26,15 +26,6 @@ if TYPE_CHECKING:
     from automation.runners.event_bus import EventBus
 
 
-def _locks_dir(cfg: dict) -> Path:
-    from automation.runners.config import repo_root
-
-    locks_dir = Path(cfg.get("locks", {}).get("dir", "automation/locks"))
-    if not locks_dir.is_absolute():
-        locks_dir = repo_root() / locks_dir
-    return locks_dir
-
-
 def _install_signal_handlers(*, startup_ignore_seconds: float, debug: bool) -> None:
     """Ignore spurious startup SIGINT (Windows/Cursor) and optionally trace sources."""
     startup_time = time.monotonic()
@@ -134,34 +125,65 @@ def _ignore_startup_keyboard_interrupt(
     return True
 
 
-def _start_webhook_background(host: str, port: int, *, debug: bool = False) -> None:
+def _start_webhook_background(
+    host: str,
+    port: int,
+    *,
+    debug: bool = False,
+    restart_delay: float = 3.0,
+    stop_event: threading.Event | None = None,
+) -> None:
     """Start webhook HTTP server without threading.Thread.start() (hangs on Py3.14/Windows)."""
 
     def _run() -> None:
-        try:
-            if debug:
-                print("[daemon] webhook thread: importing server", flush=True)
-            from automation.linear.webhook_server import serve
+        from automation.runners.emit import emit_or_print
 
-            if debug:
-                print("[daemon] webhook thread: serving", flush=True)
-            serve(host=host, port=port)
-        except BaseException as exc:
-            from automation.runners.emit import emit_or_print, is_tui_mode
+        while stop_event is None or not stop_event.is_set():
+            try:
+                if debug:
+                    print("[daemon] webhook thread: importing server", flush=True)
+                from automation.linear.webhook_server import serve
+
+                if debug:
+                    print("[daemon] webhook thread: serving", flush=True)
+                serve(host=host, port=port)
+                if stop_event is not None and stop_event.is_set():
+                    break
+                summary = "webhook server exited"
+                detail = None
+            except BaseException as exc:
+                if stop_event is not None and stop_event.is_set():
+                    break
+                summary = str(exc)
+                detail = traceback.format_exc()
+
             from automation.runners.runtime_state import get_runtime_state
 
-            if is_tui_mode():
+            try:
+                get_runtime_state().webhook_status = "crashed"
+            except RuntimeError:
+                pass
+            emit_or_print(
+                "daemon",
+                "webhook.crashed",
+                summary,
+                detail=detail,
+                plain_prefix=f"[daemon] webhook crashed: {summary}",
+            )
+            if restart_delay > 0:
                 emit_or_print(
                     "daemon",
-                    "webhook.crashed",
-                    str(exc),
-                    detail=traceback.format_exc(),
+                    "webhook.restarting",
+                    f"restart in {restart_delay:g}s",
+                    plain_prefix=f"[daemon] restarting webhook in {restart_delay:g}s",
                 )
-                get_runtime_state().webhook_status = "crashed"
+                if stop_event is not None:
+                    if stop_event.wait(timeout=restart_delay):
+                        break
+                else:
+                    time.sleep(restart_delay)
             else:
-                print("[daemon] FATAL: webhook background crashed", file=sys.stderr, flush=True)
-                traceback.print_exc()
-            raise
+                time.sleep(0)
 
     import _thread
 
@@ -313,6 +335,7 @@ def main(argv: list[str] | None = None) -> int:
         acquire_daemon_lock,
         release_daemon_lock,
         release_stale_locks,
+        resolve_locks_dir,
     )
 
     os.environ["NOVELGUARD_AUTOMATION_DAEMON"] = "1"
@@ -326,7 +349,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[daemon] script={script_path}", flush=True)
     print("[daemon] starting...", flush=True)
 
-    if sys.version_info >= (3, 14):
+    if sys.platform == "win32" and sys.version_info >= (3, 14):
         print(
             "[daemon] WARN: Python 3.14 on Windows can be flaky for automation; "
             "recreate venv with: py -3.12 -m venv .venv",
@@ -359,8 +382,9 @@ def main(argv: list[str] | None = None) -> int:
     port = int(linear.get("webhook_port") or 8765)
     path = str(linear.get("webhook_path") or "/linear/webhook")
 
-    locks_dir = _locks_dir(cfg)
+    locks_dir = resolve_locks_dir(cfg)
     webhook_enabled = False
+    webhook_stop_event = threading.Event()
 
     try:
         acquire_daemon_lock(locks_dir)
@@ -393,9 +417,9 @@ def main(argv: list[str] | None = None) -> int:
             plain_prefix=f"[daemon] cleared stale locks: {', '.join(cleared)}",
         )
 
-    from automation.runners.job_worker import _locks_dir as worker_locks_dir, _queue
+    from automation.runners.job_worker import _queue
 
-    recovered = _queue(cfg).recover_orphaned_running(worker_locks_dir(cfg))
+    recovered = _queue(cfg).recover_orphaned_running(locks_dir)
     if recovered:
         emit_or_print(
             "daemon",
@@ -415,7 +439,12 @@ def main(argv: list[str] | None = None) -> int:
                 f"http://{host}:{port}{path}",
                 plain_prefix=f"[daemon] starting webhook http://{host}:{port}{path}",
             )
-            _start_webhook_background(host, port, debug=args.debug_interrupts)
+            _start_webhook_background(
+                host,
+                port,
+                debug=args.debug_interrupts,
+                stop_event=webhook_stop_event,
+            )
             webhook_enabled = True
             get_runtime_state().webhook_status = "running"
             emit_or_print(
@@ -586,6 +615,7 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         from automation.runners.worker_context import set_stop_event
 
+        webhook_stop_event.set()
         set_stop_event(None)
         release_daemon_lock(locks_dir)
 

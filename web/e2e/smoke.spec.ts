@@ -1,5 +1,13 @@
 import { test, expect } from "@playwright/test";
 
+async function expandResolveFacet(page: import("@playwright/test").Page) {
+  const panel = page.getByTestId("resolve-facet-panel");
+  if ((await panel.getAttribute("data-state")) === "collapsed") {
+    await panel.getByRole("button", { name: /검토 보기|▸/ }).click();
+    await expect(panel).toHaveAttribute("data-state", "expanded");
+  }
+}
+
 async function openResolveWorkspace(page: import("@playwright/test").Page) {
   await page.goto("/");
   await page.evaluate(() => {
@@ -8,6 +16,7 @@ async function openResolveWorkspace(page: import("@playwright/test").Page) {
   await page.reload();
   await page.getByTestId("work-mode-tab-resolve").click();
   await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "collapsed");
+  await expect(page.getByTestId("resolve-facet-panel")).toHaveAttribute("data-state", "collapsed");
   await expect(page.getByTestId("resolve-review-grid")).toBeVisible({ timeout: 15_000 });
 }
 
@@ -29,6 +38,7 @@ async function clickApplyPreviewRun(page: import("@playwright/test").Page) {
 /** Open move facet + Exact filter so current_query preview is enabled. */
 async function prepareExecutableMoveFilter(page: import("@playwright/test").Page) {
   await page.getByTestId("resolve-type-filter-exact").click();
+  await expandResolveFacet(page);
   await page.getByTestId("resolve-facet-move").click();
   await expect(page.getByTestId("batch-preview-open")).toBeEnabled({ timeout: 15_000 });
 }
@@ -257,6 +267,61 @@ test.describe("NovelGuard smoke", () => {
     await expect(page.getByTestId("batch-preview-open")).toBeEnabled({ timeout: 15_000 });
   });
 
+  test("NOV-22 verify first-entry preview opens apply dialog without checkbox", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await openApplyDialog(page);
+    await expect(page.getByTestId("apply-preview-run")).toBeVisible();
+  });
+
+  test("NOV-22 verify all types filter disables preview with tooltip", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await page.getByTestId("resolve-type-filter-all").click();
+    const preview = page.getByTestId("batch-preview-open");
+    await expect(preview).toBeDisabled();
+    await expect(preview).toHaveAttribute("title", /Exact만 선택하세요/);
+  });
+
+  test("NOV-22 verify manual all types switch still works", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await page.getByTestId("resolve-type-filter-all").click();
+    await expect(page.getByTestId("resolve-type-filter-all")).toHaveClass(/bg-primary/);
+    await page.getByTestId("resolve-type-filter-exact").click();
+    await expect(page.getByTestId("resolve-type-filter-exact")).toHaveClass(/bg-primary/);
+    await expect(page.getByTestId("batch-preview-open")).toBeEnabled({ timeout: 15_000 });
+  });
+
+  test("NOV-24 facet collapsed by default and expands to five modes", async ({ page }) => {
+    await openResolveWorkspace(page);
+    const panel = page.getByTestId("resolve-facet-panel");
+    await expect(panel).toHaveAttribute("data-state", "collapsed");
+    await expandResolveFacet(page);
+    for (const mode of ["action", "groups", "move", "all", "conflicts"] as const) {
+      await expect(page.getByTestId(`resolve-facet-${mode}`)).toBeVisible();
+    }
+    await panel.getByRole("button", { name: /검토 보기|▾/ }).click();
+    await expect(panel).toHaveAttribute("data-state", "collapsed");
+  });
+
+  test("NOV-21 auto-loads all filtered rows without scroll", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await expandResolveFacet(page);
+    await page.getByTestId("resolve-facet-all").click();
+    await expect(page.getByTestId("batch-loading-all")).toBeHidden({ timeout: 30_000 });
+    const countLine = page
+      .getByTestId("batch-exclude-all-filtered")
+      .locator("xpath=ancestor::div[contains(@class,'border-t')]")
+      .getByText(/필터.*로드/);
+    await expect(countLine).toBeVisible();
+    const text = await countLine.innerText();
+    const filterMatch = text.match(/필터\s+([\d,]+)/);
+    const loadMatch = text.match(/로드\s+([\d,]+)/);
+    expect(filterMatch && loadMatch).toBeTruthy();
+    const filtered = Number(filterMatch![1].replace(/,/g, ""));
+    const loaded = Number(loadMatch![1].replace(/,/g, ""));
+    expect(loaded).toBe(filtered);
+    expect(filtered).toBeGreaterThan(200);
+  });
+
   test("NOV-20 scan resolve preview without checkbox selection", async ({ page }) => {
     await page.goto("/");
     await runScanToSuccess(page);
@@ -392,7 +457,7 @@ test.describe("NovelGuard smoke", () => {
     await expect(page.getByTestId("quality-tab-summary")).toBeVisible();
     await expect(page.getByTestId("quality-grid-row-count")).toBeVisible();
     await page.getByRole("button", { name: "인코딩" }).click();
-    await expect(page.getByTestId("quality-tab-summary")).toBeVisible();
+    await expect(page.getByTestId("quality-tab-active-summary")).toBeVisible();
     await page.getByRole("button", { name: "소형 파일" }).click();
     await expect(page.getByTestId("quality-grid-row-count")).toBeVisible();
   });

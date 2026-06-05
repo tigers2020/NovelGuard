@@ -3,6 +3,7 @@ import type { ReviewRow } from "../../../types/review";
 import {
   hasExecutableMovePreviewRows,
   isExecutableMovePreviewRow,
+  reviewOnlyBlockedReasonForFilter,
 } from "./previewEligibility";
 
 function fileRow(overrides: Partial<ReviewRow> = {}): ReviewRow {
@@ -36,6 +37,18 @@ describe("isExecutableMovePreviewRow", () => {
     expect(isExecutableMovePreviewRow(fileRow({ proposedAction: "keep" }))).toBe(false);
     expect(isExecutableMovePreviewRow(fileRow({ proposedAction: "ignore" }))).toBe(false);
     expect(isExecutableMovePreviewRow(fileRow({ proposedAction: "move_organized" }))).toBe(false);
+  });
+});
+
+describe("reviewOnlyBlockedReasonForFilter", () => {
+  it("returns undefined for exact filter", () => {
+    expect(reviewOnlyBlockedReasonForFilter("exact")).toBeUndefined();
+  });
+
+  it("blocks near, relation, and all filters with distinct reasons", () => {
+    expect(reviewOnlyBlockedReasonForFilter("near")).toMatch(/Near 중복/);
+    expect(reviewOnlyBlockedReasonForFilter("relation")).toMatch(/Relation 그룹/);
+    expect(reviewOnlyBlockedReasonForFilter("all")).toMatch(/Exact만 선택하세요/);
   });
 });
 

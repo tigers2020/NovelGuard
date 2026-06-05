@@ -13,6 +13,10 @@ import { reviewRowGroupId } from "../../types/review";
 import type { ReviewDecisionCommand } from "../../types/reviewDecisions";
 import type { SelectionScope } from "../../types/selection";
 import { FacetPanel } from "./resolve/FacetPanel";
+import {
+  loadResolveFacetExpanded,
+  persistResolveFacetExpanded,
+} from "./resolve/resolveFacetStorage";
 import { ResolveGridToolbar } from "./resolve/ResolveGridToolbar";
 import { VirtualizedReviewGrid } from "./resolve/VirtualizedReviewGrid";
 import { REVIEW_GRID_SIZING_KEY } from "./resolve/reviewGridColumns";
@@ -20,11 +24,15 @@ import { mergeReviewColumnVisibility } from "./resolve/reviewGridLayout";
 import { DetailPanel } from "./resolve/DetailPanel";
 import { BatchActionBar } from "./resolve/BatchActionBar";
 import { BulkFilterConfirmDialog } from "./resolve/BulkFilterConfirmDialog";
-import { hasExecutableMovePreviewRows } from "./resolve/previewEligibility";
+import {
+  hasExecutableMovePreviewRows,
+  reviewOnlyBlockedReasonForFilter,
+} from "./resolve/previewEligibility";
 import {
   bulkMutationChunkCursors,
   bulkMutationTargetCount,
 } from "../../constants/reviewBulk";
+import { MAX_QUERY_LIMIT } from "../../contracts/reviewPageContract";
 
 function loadColumnSizing(): Record<string, number> {
   try {
@@ -48,12 +56,19 @@ export function ResolveAndOrganizeWorkspace({
   const resolve = snapshot.work.resolve;
 
   const [viewMode, setViewMode] = useState<ReviewViewMode>("action");
+  const [facetExpanded, setFacetExpanded] = useState(() => loadResolveFacetExpanded());
+
+  const handleFacetExpandedChange = (next: boolean) => {
+    setFacetExpanded(next);
+    persistResolveFacetExpanded(next);
+  };
   const [rowTypeFilter, setRowTypeFilter] = useState<"exact" | "near" | "relation" | "all">("exact");
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [filteredCount, setFilteredCount] = useState(0);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingAll, setLoadingAll] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [selectedRow, setSelectedRow] = useState<ReviewRow | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
@@ -70,6 +85,7 @@ export function ResolveAndOrganizeWorkspace({
     () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches,
   );
   const detailSeqRef = useRef(0);
+  const loadSeqRef = useRef(0);
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");
@@ -96,7 +112,7 @@ export function ResolveAndOrganizeWorkspace({
       viewMode,
       filters: { search: search || undefined, types: rowTypeFilterTypes },
       cursor: null,
-      limit: 100,
+      limit: MAX_QUERY_LIMIT,
       sort: primary
         ? { field: primary.id, direction: primary.desc ? "desc" : "asc" }
         : undefined,
@@ -132,39 +148,60 @@ export function ResolveAndOrganizeWorkspace({
     [bridge],
   );
 
-  const loadPage = useCallback(
-    async (cursor: string | null, append: boolean, preserveRowId?: string | null) => {
-      if (append) setLoadingMore(true);
-      else setLoading(true);
+  const loadAllFiltered = useCallback(
+    async (preserveRowId?: string | null) => {
+      const seq = ++loadSeqRef.current;
+      setLoading(true);
+      setLoadingAll(true);
+      setQueryError(null);
+      setRows([]);
+      setNextCursor(null);
+
+      let cursor: string | null = null;
+      let accumulated: ReviewRow[] = [];
+
       try {
-        setQueryError(null);
-        const page = await bridge.queryReviewRows({
-          ...currentQuery,
-          cursor,
-        });
-        setFilteredCount(page.pageInfo.totalFiltered);
-        setNextCursor(page.pageInfo.nextCursor);
-        setRows((prev) => (append ? [...prev, ...page.rows] : page.rows));
-        if (!append && page.rows.length > 0) {
-          const next =
-            preserveRowId != null
-              ? (page.rows.find((r) => r.id === preserveRowId) ?? page.rows[0])
-              : page.rows[0];
+        while (true) {
+          if (seq !== loadSeqRef.current) return;
+          const page = await bridge.queryReviewRows({ ...currentQuery, cursor });
+          if (seq !== loadSeqRef.current) return;
+
+          accumulated = accumulated.concat(page.rows);
+          cursor = page.pageInfo.nextCursor;
+
+          setRows(accumulated);
+          setFilteredCount(page.pageInfo.totalFiltered);
+          setNextCursor(cursor);
+
+          if (!cursor || accumulated.length >= page.pageInfo.totalFiltered) break;
+        }
+
+        if (seq !== loadSeqRef.current) return;
+        setNextCursor(null);
+
+        if (preserveRowId != null) {
+          const rebound = accumulated.find((r) => r.id === preserveRowId) ?? null;
+          setSelectedRow(rebound);
+          void loadDetail(rebound);
+        } else if (accumulated.length > 0) {
+          const next = accumulated[0];
           setSelectedRow(next);
           void loadDetail(next);
-        } else if (!append) {
+        } else {
           setSelectedRow(null);
           setDetail(null);
         }
       } catch (err) {
+        if (seq !== loadSeqRef.current) return;
         setQueryError(err instanceof Error ? err.message : "Failed to load rows");
-        if (!append) {
-          setRows([]);
-          setFilteredCount(0);
-        }
+        setRows([]);
+        setFilteredCount(0);
+        setNextCursor(null);
       } finally {
-        setLoading(false);
-        setLoadingMore(false);
+        if (seq === loadSeqRef.current) {
+          setLoading(false);
+          setLoadingAll(false);
+        }
       }
     },
     [bridge, currentQuery, loadDetail],
@@ -172,16 +209,37 @@ export function ResolveAndOrganizeWorkspace({
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
-      void loadPage(null, false);
+      void loadAllFiltered();
     });
     return () => cancelAnimationFrame(frame);
-  }, [loadPage]);
+  }, [loadAllFiltered]);
+
+  const loadPage = useCallback(
+    async (cursor: string | null) => {
+      setLoadingMore(true);
+      try {
+        const page = await bridge.queryReviewRows({
+          ...currentQuery,
+          cursor,
+        });
+        setFilteredCount(page.pageInfo.totalFiltered);
+        setNextCursor(page.pageInfo.nextCursor);
+        setRows((prev) => [...prev, ...page.rows]);
+      } catch (err) {
+        setQueryError(err instanceof Error ? err.message : "Failed to load rows");
+      } finally {
+        setLoadingMore(false);
+      }
+    },
+    [bridge, currentQuery],
+  );
 
   const loadingMoreRef = useRef(false);
   const handleNearEnd = () => {
-    if (!nextCursor || loadingMore || loadingMoreRef.current) return;
+    if (loadingAll || loading || !nextCursor || rows.length >= filteredCount) return;
+    if (loadingMore || loadingMoreRef.current) return;
     loadingMoreRef.current = true;
-    void loadPage(nextCursor, true).finally(() => {
+    void loadPage(nextCursor).finally(() => {
       loadingMoreRef.current = false;
     });
   };
@@ -201,18 +259,10 @@ export function ResolveAndOrganizeWorkspace({
 
   const hasExecutableRows = useMemo(() => hasExecutableMovePreviewRows(rows), [rows]);
 
-  const reviewOnlyBlockedReason = useMemo(() => {
-    if (rowTypeFilter === "near") {
-      return "Near 중복은 검토 전용이며 일괄 적용할 수 없습니다.";
-    }
-    if (rowTypeFilter === "relation") {
-      return "Relation 그룹은 검토 전용이며 일괄 적용할 수 없습니다.";
-    }
-    if (rowTypeFilter === "all") {
-      return "현재 필터에 검토 전용 유형이 포함되어 있습니다. Exact만 선택하세요.";
-    }
-    return undefined;
-  }, [rowTypeFilter]);
+  const reviewOnlyBlockedReason = useMemo(
+    () => reviewOnlyBlockedReasonForFilter(rowTypeFilter),
+    [rowTypeFilter],
+  );
 
   const previewBlockedReason = useMemo(() => {
     if (reviewOnlyBlockedReason) return reviewOnlyBlockedReason;
@@ -237,14 +287,14 @@ export function ResolveAndOrganizeWorkspace({
         setQueryError(null);
         await bridge.updateReviewDecisions({ selection, command, keeperFileId });
         await refreshSnapshot();
-        await loadPage(null, false, preserveRowId);
+        await loadAllFiltered(preserveRowId);
       } catch (err) {
         setQueryError(err instanceof Error ? err.message : "Review update failed");
       } finally {
         setDetailMutating(false);
       }
     },
-    [bridge, loadPage, refreshSnapshot, selectedRow?.id],
+    [bridge, loadAllFiltered, refreshSnapshot, selectedRow?.id],
   );
 
   const runBulkExcludeFiltered = useCallback(async () => {
@@ -265,14 +315,14 @@ export function ResolveAndOrganizeWorkspace({
         });
       }
       await refreshSnapshot();
-      await loadPage(null, false);
+      await loadAllFiltered();
     } catch (err) {
       setQueryError(err instanceof Error ? err.message : "Review update failed");
     } finally {
       setBulkMutating(false);
       setBulkExcludeConfirmOpen(false);
     }
-  }, [bridge, currentQuery, filteredCount, loadPage, refreshSnapshot]);
+  }, [bridge, currentQuery, filteredCount, loadAllFiltered, refreshSnapshot]);
 
   const handleSetKeeper = (member: DuplicateGroupMemberDetail) => {
     if (member.isKeeper) return;
@@ -305,7 +355,12 @@ export function ResolveAndOrganizeWorkspace({
       data-testid="resolve-workspace"
     >
       <div className="relative z-0 flex min-h-0 min-w-0 flex-1 overflow-hidden">
-        <FacetPanel viewMode={viewMode} onViewModeChange={setViewMode} />
+        <FacetPanel
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          expanded={facetExpanded}
+          onExpandedChange={handleFacetExpandedChange}
+        />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {!isWideLayout && selectedRow && (
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-outline bg-surface px-3 py-2">
@@ -333,7 +388,7 @@ export function ResolveAndOrganizeWorkspace({
             onSearchChange={setSearch}
             loading={loading}
             queryError={queryError}
-            onRetry={() => void loadPage(null, false)}
+            onRetry={() => void loadAllFiltered()}
             onOpenFinalize={onOpenFinalize}
           />
           <VirtualizedReviewGrid
@@ -366,7 +421,7 @@ export function ResolveAndOrganizeWorkspace({
             onReset={handleReset}
             onRefreshDetail={() => {
               if (detail?.status === "not_found") {
-                void loadPage(null, false, selectedRow?.id ?? null);
+                void loadAllFiltered(selectedRow?.id ?? null);
               } else {
                 void loadDetail(selectedRow);
               }
@@ -394,7 +449,7 @@ export function ResolveAndOrganizeWorkspace({
             onReset={handleReset}
             onRefreshDetail={() => {
               if (detail?.status === "not_found") {
-                void loadPage(null, false, selectedRow?.id ?? null);
+                void loadAllFiltered(selectedRow?.id ?? null);
               } else {
                 void loadDetail(selectedRow);
               }
@@ -407,6 +462,7 @@ export function ResolveAndOrganizeWorkspace({
       <BatchActionBar
         filteredCount={filteredCount}
         loadedCount={rows.length}
+        loadingAll={loadingAll}
         onExcludeAllFiltered={() => setBulkExcludeConfirmOpen(true)}
         bulkQueryDisabled={Boolean(reviewOnlyBlockedReason)}
         bulkQueryDisabledReason={reviewOnlyBlockedReason}

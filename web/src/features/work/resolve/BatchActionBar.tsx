@@ -1,6 +1,7 @@
 export function BatchActionBar({
   filteredCount,
   loadedCount,
+  loadingAll = false,
   onExcludeAllFiltered,
   bulkQueryDisabled = false,
   bulkQueryDisabledReason,
@@ -10,6 +11,7 @@ export function BatchActionBar({
 }: {
   filteredCount: number;
   loadedCount: number;
+  loadingAll?: boolean;
   onExcludeAllFiltered: () => void;
   bulkQueryDisabled?: boolean;
   bulkQueryDisabledReason?: string;
@@ -21,12 +23,24 @@ export function BatchActionBar({
 
   return (
     <div className="relative z-30 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-outline bg-surface px-4 py-3">
-      <p className="text-sm text-on-surface-variant">
-        필터{" "}
-        <span className="font-semibold text-on-surface">{filteredCount.toLocaleString()}</span>
-        건 · 로드{" "}
-        <span className="font-semibold text-on-surface">{loadedCount.toLocaleString()}</span>건
-      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-sm text-on-surface-variant">
+          필터{" "}
+          <span className="font-semibold text-on-surface">{filteredCount.toLocaleString()}</span>
+          건 · 로드{" "}
+          <span className="font-semibold text-on-surface">{loadedCount.toLocaleString()}</span>건
+        </p>
+        {loadingAll && (
+          <span data-testid="batch-loading-all" className="text-xs text-primary">
+            전체 로드 중…
+          </span>
+        )}
+        {!loadingAll && loadedCount < filteredCount && (
+          <span data-testid="batch-partial-load-warning" className="text-xs text-warn">
+            일부만 로드됨
+          </span>
+        )}
+      </div>
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
