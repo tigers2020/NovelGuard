@@ -389,7 +389,9 @@ def process_job(cfg: dict[str, Any], record: JobRecord, *, prompt: str) -> dict[
                     monitor_stop = threading.Event()
                     stall_cancelled = threading.Event()
 
-                    def on_line(stream: str, line: str, *, _tracker: CursorOutputTracker = tracker) -> None:
+                    def on_line(
+                        stream: str, line: str, *, _tracker: CursorOutputTracker = tracker
+                    ) -> None:
                         _tracker.note_line(stream, line)
                         if state is not None:
                             state.cursor_output_buffered = False
@@ -440,8 +442,7 @@ def process_job(cfg: dict[str, Any], record: JobRecord, *, prompt: str) -> dict[
                     break
 
                 log_file.write(
-                    f"\n--- stdout ---\n{cursor.stdout}\n\n"
-                    f"--- stderr ---\n{cursor.stderr}\n"
+                    f"\n--- stdout ---\n{cursor.stdout}\n\n" f"--- stderr ---\n{cursor.stderr}\n"
                 )
 
             if state is not None:

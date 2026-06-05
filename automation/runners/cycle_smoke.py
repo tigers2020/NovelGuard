@@ -33,6 +33,7 @@ _WORKER_PLACEHOLDERS = (
     "{{NEXT_PROMPT}}",
 )
 
+
 def smoke_config() -> dict[str, Any]:
     """CI-safe minimal config when automation/config.yaml is absent."""
     return {

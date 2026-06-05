@@ -10,9 +10,7 @@ from typing import Any
 
 from automation.runners.config import repo_root
 
-_SCHEMA_PATH = (
-    Path(__file__).resolve().parents[1] / "schemas" / "context_memory.schema.json"
-)
+_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "schemas" / "context_memory.schema.json"
 
 _COMPRESSOR_PROMPT = """You are a strict context compressor for an automation coding pipeline.
 Return ONLY one JSON object. Every key below is REQUIRED — use empty arrays [] when unknown.

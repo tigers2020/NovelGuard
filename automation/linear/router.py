@@ -226,7 +226,9 @@ def _route_label_only_execution(
                 reason=f"labels@{state} (impl-done→verify)",
             )
 
-    newly_done = [label_id for label_id in done_ids if label_id in current and label_id not in before]
+    newly_done = [
+        label_id for label_id in done_ids if label_id in current and label_id not in before
+    ]
     if (
         newly_done
         and not has_label_key(data, cfg, "impl_done")
@@ -392,8 +394,7 @@ def build_job_payload(
     label_slug = _auto_label_slug(issue_label_ids(data))
     label_suffix = f"-{label_slug}" if label_slug else ""
     job_id = (
-        f"linear-{identifier}-{slug_state}-{prompt_stem}-"
-        f"{state_id[:8] or action}{label_suffix}"
+        f"linear-{identifier}-{slug_state}-{prompt_stem}-" f"{state_id[:8] or action}{label_suffix}"
     )
 
     task = f"{identifier}: {route.reason}"

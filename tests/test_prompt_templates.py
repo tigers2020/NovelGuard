@@ -32,4 +32,6 @@ def test_legacy_write_todo_list_still_exists():
 def test_linear_prompt_file_size_budget():
     for path in PROMPTS.rglob("*.md"):
         chars = len(path.read_text(encoding="utf-8"))
-        assert chars < 3500, f"{path.name} too large ({chars} chars); target <3500 after compact brief"
+        assert (
+            chars < 3500
+        ), f"{path.name} too large ({chars} chars); target <3500 after compact brief"
