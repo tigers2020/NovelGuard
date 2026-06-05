@@ -290,6 +290,27 @@ test.describe("NovelGuard smoke", () => {
     await expect(page.getByTestId("batch-preview-open")).toBeEnabled({ timeout: 15_000 });
   });
 
+  test("NOV-29 review-only banner on near, relation, and all filters", async ({ page }) => {
+    await openResolveWorkspace(page);
+    const banner = page.getByTestId("batch-review-only-banner");
+
+    for (const filter of ["near", "relation", "all"] as const) {
+      await page.getByTestId(`resolve-type-filter-${filter}`).click();
+      await expect(banner).toBeVisible();
+      await expect(banner).toContainText(/Exact \(이동\) 탭/);
+      await expect(banner).toContainText(/검토 전용/);
+      await expect(page.getByTestId("batch-preview-open")).toBeDisabled();
+    }
+  });
+
+  test("NOV-29 review-only banner hidden on exact filter", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await page.getByTestId("resolve-type-filter-near").click();
+    await expect(page.getByTestId("batch-review-only-banner")).toBeVisible();
+    await page.getByTestId("resolve-type-filter-exact").click();
+    await expect(page.getByTestId("batch-review-only-banner")).toHaveCount(0);
+  });
+
   test("NOV-24 facet collapsed by default and expands to five modes", async ({ page }) => {
     await openResolveWorkspace(page);
     const panel = page.getByTestId("resolve-facet-panel");

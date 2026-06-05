@@ -28,6 +28,7 @@ import {
   countExecutableMovePreviewRows,
   hasExecutableMovePreviewRows,
   reviewOnlyBlockedReasonForFilter,
+  reviewOnlyGuidanceBannerForFilter,
 } from "./resolve/previewEligibility";
 import { previewCtaLabel } from "./resolve/previewCtaCopy";
 import {
@@ -275,6 +276,11 @@ export function ResolveAndOrganizeWorkspace({
     [rowTypeFilter],
   );
 
+  const reviewOnlyGuidance = useMemo(
+    () => reviewOnlyGuidanceBannerForFilter(rowTypeFilter),
+    [rowTypeFilter],
+  );
+
   const previewBlockedReason = useMemo(() => {
     if (reviewOnlyBlockedReason) return reviewOnlyBlockedReason;
     if (filteredCount === 0) {
@@ -508,7 +514,7 @@ export function ResolveAndOrganizeWorkspace({
         filteredCount={filteredCount}
         loadedCount={rows.length}
         loadingAll={loadingAll}
-        reviewOnlyGuidance={reviewOnlyBlockedReason}
+        reviewOnlyGuidance={reviewOnlyGuidance}
         onExcludeAllFiltered={() => setBulkExcludeConfirmOpen(true)}
         bulkQueryDisabled={Boolean(reviewOnlyBlockedReason)}
         bulkQueryDisabledReason={reviewOnlyBlockedReason}

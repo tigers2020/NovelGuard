@@ -18,6 +18,10 @@ const baseProps = {
   onOpenFinalize: vi.fn(),
 };
 
+function renderToolbar(rowTypeFilter: "exact" | "near" | "relation" | "all" = "exact") {
+  render(<ResolveGridToolbar {...baseProps} rowTypeFilter={rowTypeFilter} />);
+}
+
 describe("ResolveGridToolbar", () => {
   afterEach(() => {
     cleanup();
@@ -54,5 +58,20 @@ describe("ResolveGridToolbar", () => {
     expect(screen.getByTestId("resolve-preview-primary").textContent).toContain(
       "Exact 3건",
     );
+  });
+});
+
+describe("ResolveGridToolbar type filter labels (NOV-29)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("shows KO tab hints for exact, near, and relation filters", () => {
+    renderToolbar();
+
+    expect(screen.getByTestId("resolve-type-filter-exact").textContent).toBe("Exact (이동)");
+    expect(screen.getByTestId("resolve-type-filter-near").textContent).toBe("Near (참고)");
+    expect(screen.getByTestId("resolve-type-filter-relation").textContent).toBe("Relation (참고)");
+    expect(screen.getByTestId("resolve-type-filter-all").textContent).toBe("All types");
   });
 });
