@@ -28,3 +28,7 @@ export function isExecutableMovePreviewRow(row: ReviewRow): boolean {
 export function hasExecutableMovePreviewRows(rows: readonly ReviewRow[]): boolean {
   return rows.some(isExecutableMovePreviewRow);
 }
+
+export function countExecutableMovePreviewRows(rows: readonly ReviewRow[]): number {
+  return rows.filter(isExecutableMovePreviewRow).length;
+}

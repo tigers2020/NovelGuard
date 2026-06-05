@@ -46,6 +46,15 @@ function assertRequiredFields(snapshot: Record<string, unknown>): void {
   if (!isRecord(resolve) || typeof resolve.libraryRevision !== "number") {
     throw new SnapshotContractError("ResolveSnapshot.libraryRevision must be a number");
   }
+  for (const key of ["moveReadyCount", "reviewSignalCount"] as const) {
+    if (typeof resolve[key] !== "number") {
+      throw new SnapshotContractError(`ResolveSnapshot.${key} must be a number`);
+    }
+  }
+  const scan = work.scan;
+  if (isRecord(scan) && typeof scan.exactAutoApprovedCount !== "number") {
+    throw new SnapshotContractError("ScanSnapshot.exactAutoApprovedCount must be a number");
+  }
 }
 
 /** Runtime guard: no unbounded row arrays on snapshot payloads. */
