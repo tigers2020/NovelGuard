@@ -1,4 +1,4 @@
-> **DEPRECATED** — not wired in `automation/linear/router.py`. Use `00-linear-create-pr-to-spec.md` for issue create automation. Kept for manual reference only; consider `automation/prompts/archive/`.
+> **DEPRECATED** — not wired in `automation/linear/router.py`. Use `linear/backlog/create-research.md`. Kept for manual reference only; see `automation/prompts/archive/`.
 
 @AGENTS.md @.cursor/rules/00-automation-core.mdc @.cursor/rules/10-runner-safety.mdc
 
