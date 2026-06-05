@@ -20,6 +20,52 @@ export function resetMockReviewState(): void {
   memberState.clear();
 }
 
+function pickMockKeeperFileId(members: ReviewRow[]): string | null {
+  const files = members.filter((row) => row.rowKind === "file");
+  if (files.length === 0) return null;
+  const keeper = [...files].sort((a, b) => {
+    const sizeDiff = (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0);
+    if (sizeDiff !== 0) return sizeDiff;
+    return String(b.name).localeCompare(String(a.name), "en-US");
+  })[0];
+  return fileIdFromRowId(keeper.id);
+}
+
+/** Mirror backend `persist_exact_non_keeper_approvals` after post-scan (NOV-17/NOV-20). */
+export function persistMockExactNonKeeperApprovals(rows: ReviewRow[]): number {
+  const byGroup = new Map<string, ReviewRow[]>();
+  for (const row of rows) {
+    if (row.rowKind !== "file" || row.type !== "exact" || !row.groupId) continue;
+    const list = byGroup.get(row.groupId) ?? [];
+    list.push(row);
+    byGroup.set(row.groupId, list);
+  }
+
+  let updated = 0;
+  for (const members of byGroup.values()) {
+    if (members.length < 2) continue;
+    const groupId = members[0].groupId;
+    if (!groupId) continue;
+
+    const groupEntry = groupState.get(groupId);
+    const keeperOverride = groupEntry?.keeperFileId;
+    const keeperId =
+      keeperOverride && members.some((row) => fileIdFromRowId(row.id) === keeperOverride)
+        ? keeperOverride
+        : pickMockKeeperFileId(members);
+    if (!keeperId) continue;
+
+    for (const row of members) {
+      const fileId = fileIdFromRowId(row.id);
+      if (!fileId || fileId === keeperId) continue;
+      if (memberState.has(fileId)) continue;
+      memberState.set(fileId, "approved");
+      updated += 1;
+    }
+  }
+  return updated;
+}
+
 export function applyMockReviewState(rows: ReviewRow[]): ReviewRow[] {
   return rows.map((row) => {
     const groupId = row.groupId;

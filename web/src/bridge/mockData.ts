@@ -134,7 +134,9 @@ export function filterReviewRows(rows: ReviewRow[], query: ReviewRowsQuery): Rev
     if (query.viewMode === "conflicts" && row.status !== "conflict") return false;
     if (query.viewMode === "groups" && row.type === "move_only") return false;
     if (query.viewMode === "move" && !row.proposedAction.includes("move")) return false;
-    if (query.viewMode === "action" && row.status !== "unreviewed" && row.status !== "conflict") {
+    if (query.viewMode === "action") {
+      if (row.status === "unreviewed" || row.status === "conflict") return true;
+      if (row.status === "approved" && row.proposedAction === "move_duplicate") return true;
       return false;
     }
 

@@ -5,16 +5,26 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
+import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
+from automation.runners import emit as emit_mod
 from automation.runners.config import load_config, repo_path, repo_root
-from automation.runners.cursor_runner import PROMPT_DELIVERY, run_prompt
+from automation.runners.cursor_runner import (
+    PROMPT_DELIVERY,
+    is_cursor_proc_running,
+    run_prompt,
+    run_prompt_streaming,
+)
 from automation.runners.queue import JobQueue, JobRecord
+from automation.runners.runtime_state import get_runtime_state
+from automation.runners.worker_context import get_cancel_event, stop_requested
 from automation.runners.worker_lock import (
     clear_lock,
     clear_stale_file_lock,
@@ -156,13 +166,27 @@ def _command_lists(cfg: dict[str, Any], payload: dict[str, Any], repo: Path) -> 
     return commands
 
 
+def _runtime_state_or_none():
+    try:
+        return get_runtime_state()
+    except RuntimeError:
+        return None
+
+
 def run_verify(
     cfg: dict[str, Any],
     payload: dict[str, Any],
     repo: Path,
 ) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
+    state = _runtime_state_or_none()
+    if state is not None and emit_mod.is_tui_mode():
+        state.active_stage = "verify"
+        state.verify_running = True
+
     for cmd in _command_lists(cfg, payload, repo):
+        if emit_mod.is_tui_mode():
+            emit_mod.emit_or_print("verify", "verify.start", " ".join(cmd))
         proc = subprocess.run(
             cmd,
             cwd=repo,
@@ -171,14 +195,29 @@ def run_verify(
             encoding="utf-8",
             errors="replace",
         )
-        results.append(
-            {
-                "command": cmd,
-                "returncode": proc.returncode,
-                "stdout_tail": (proc.stdout or "")[-4000:],
-                "stderr_tail": (proc.stderr or "")[-4000:],
-            }
-        )
+        row = {
+            "command": cmd,
+            "returncode": proc.returncode,
+            "stdout_tail": (proc.stdout or "")[-4000:],
+            "stderr_tail": (proc.stderr or "")[-4000:],
+        }
+        results.append(row)
+        if emit_mod.is_tui_mode():
+            emit_mod.emit_or_print(
+                "verify",
+                "verify.done",
+                f"exit {proc.returncode}: {' '.join(cmd)}",
+            )
+            if proc.returncode != 0:
+                emit_mod.emit_or_print(
+                    "verify",
+                    "verify.fail",
+                    f"exit {proc.returncode}: {' '.join(cmd)}",
+                )
+
+    if state is not None and emit_mod.is_tui_mode():
+        state.verify_running = False
+
     return results
 
 
@@ -227,21 +266,77 @@ def process_job(cfg: dict[str, Any], record: JobRecord, *, prompt: str) -> dict[
 
     with repo_lock(lock_path):
         branch = planned_branch
+        state = _runtime_state_or_none()
+        tui = emit_mod.is_tui_mode()
+
         if git_prepare:
+            if state is not None and tui:
+                state.active_stage = "git_prepare"
             branch = prepare_branch(repo, payload, cfg, repo_key)
         result["branch"] = branch
 
-        cursor = run_prompt(repo, prompt, cfg)
-        log_path.write_text(
-            f"delivery: {PROMPT_DELIVERY}\n"
-            f"command: {cursor.command}\n"
-            f"stdin_file: {cursor.stdin_path or prompt_log}\n"
-            f"returncode: {cursor.returncode}\n"
-            f"prompt_log: {prompt_log}\n\n"
-            f"--- stdout ---\n{cursor.stdout}\n\n"
-            f"--- stderr ---\n{cursor.stderr}\n",
-            encoding="utf-8",
-        )
+        if state is not None and tui:
+            state.active_branch = branch
+            state.active_stage = "cursor"
+            state.cursor_running = True
+            state.log_path = str(log_path)
+            state.cursor_output_buffered = False
+
+        if tui:
+            last_line_at = time.time()
+            buffered_monitor_stop = threading.Event()
+
+            def on_line(_stream: str, line: str) -> None:
+                nonlocal last_line_at
+                last_line_at = time.time()
+                if state is not None:
+                    state.cursor_output_buffered = False
+                emit_mod.emit_or_print("cursor", "cursor.line", line)
+
+            def _buffered_monitor() -> None:
+                while not buffered_monitor_stop.wait(5.0):
+                    if not is_cursor_proc_running():
+                        break
+                    if time.time() - last_line_at >= 30.0 and state is not None:
+                        state.cursor_output_buffered = True
+
+            monitor_thread = threading.Thread(target=_buffered_monitor, daemon=True)
+            monitor_thread.start()
+
+            try:
+                with log_path.open("w", encoding="utf-8") as log_file:
+                    log_file.write(f"prompt_log: {prompt_log}\n\n")
+                    log_file.flush()
+                    cursor = run_prompt_streaming(
+                        repo,
+                        prompt,
+                        cfg,
+                        on_line=on_line,
+                        cancel_event=get_cancel_event(),
+                        log_file=log_file,
+                    )
+                    log_file.write(
+                        f"\n--- stdout ---\n{cursor.stdout}\n\n"
+                        f"--- stderr ---\n{cursor.stderr}\n"
+                    )
+            finally:
+                buffered_monitor_stop.set()
+                monitor_thread.join(timeout=1.0)
+                if state is not None:
+                    state.cursor_running = False
+        else:
+            cursor = run_prompt(repo, prompt, cfg)
+            log_path.write_text(
+                f"delivery: {PROMPT_DELIVERY}\n"
+                f"command: {cursor.command}\n"
+                f"stdin_file: {cursor.stdin_path or prompt_log}\n"
+                f"returncode: {cursor.returncode}\n"
+                f"prompt_log: {prompt_log}\n\n"
+                f"--- stdout ---\n{cursor.stdout}\n\n"
+                f"--- stderr ---\n{cursor.stderr}\n",
+                encoding="utf-8",
+            )
+
         result["cursor"] = {
             "command": cursor.command,
             "returncode": cursor.returncode,
@@ -249,6 +344,7 @@ def process_job(cfg: dict[str, Any], record: JobRecord, *, prompt: str) -> dict[
             "delivery": PROMPT_DELIVERY,
             "stdin_path": cursor.stdin_path,
             "log_path": str(log_path),
+            "interrupted": cursor.interrupted,
         }
 
         if git_prepare:
@@ -281,12 +377,41 @@ def run_once(cfg: dict[str, Any], *, quiet_idle: bool = False) -> bool:
     record = queue.claim_next()
     if record is None:
         if not quiet_idle:
-            print("No queued jobs.")
+            emit_mod.emit_or_print(
+                "worker",
+                "idle",
+                "No queued jobs.",
+                plain_prefix="No queued jobs.",
+            )
         return False
 
     job_id = str(record.payload.get("id") or "")
     prompt_file = record.payload.get("prompt_file") or record.payload.get("kind")
-    print(f"[worker] claimed job {job_id} ({prompt_file})", flush=True)
+    emit_mod.emit_or_print(
+        "worker",
+        "claimed",
+        f"job {job_id} ({prompt_file})",
+        plain_prefix=f"[worker] claimed job {job_id} ({prompt_file})",
+    )
+
+    state = _runtime_state_or_none()
+    if state is not None and emit_mod.is_tui_mode():
+        state.active_job_id = job_id
+        state.active_stage = "claimed"
+        state.job_started_at = time.time()
+        issue_id = str(record.payload.get("issue_identifier") or "").strip()
+        if not issue_id:
+            match = re.search(r"NOV-\d+", job_id)
+            if match:
+                issue_id = match.group(0)
+        if issue_id:
+            state.active_issue = issue_id
+        try:
+            state.active_repo_path = str(
+                repo_path(cfg, str(record.payload.get("repo") or "novelguard"))
+            )
+        except KeyError:
+            pass
 
     prefix = str(record.payload.get("branch_prefix") or "ai/job-")
     planned_branch = f"{prefix}{record.payload['id']}"
@@ -294,9 +419,13 @@ def run_once(cfg: dict[str, Any], *, quiet_idle: bool = False) -> bool:
 
     write_lock(locks_dir, row_id=record.row_id, job_id=job_id)
     try:
-        print(
-            "[worker] running cursor-agent — may take several minutes; Ctrl+C requeues job",
-            flush=True,
+        emit_mod.emit_or_print(
+            "worker",
+            "running",
+            "cursor-agent — may take several minutes; Ctrl+C requeues job",
+            plain_prefix=(
+                "[worker] running cursor-agent — may take several minutes; Ctrl+C requeues job"
+            ),
         )
         result = process_job(cfg, record, prompt=prompt)
         status = "succeeded" if result.get("status") == "succeeded" else "failed"
@@ -306,11 +435,34 @@ def run_once(cfg: dict[str, Any], *, quiet_idle: bool = False) -> bool:
             result=result,
             log_path=result.get("log_path"),
         )
-        print(json.dumps(result, indent=2, ensure_ascii=False))
+        if emit_mod.is_tui_mode():
+            verify_ok = result.get("verify_ok", False)
+            log_path = result.get("log_path", "")
+            emit_mod.emit_or_print(
+                "worker",
+                "worker.complete",
+                f"{status} verify_ok={verify_ok} log={log_path}",
+            )
+            if state is not None:
+                state.active_stage = "complete"
+                state.last_job_status = status
+                state.last_job_finished_at = time.time()
+                state.active_job_id = None
+        else:
+            print(json.dumps(result, indent=2, ensure_ascii=False))
         return status == "succeeded"
     except KeyboardInterrupt:
+        if stop_requested() and is_cursor_proc_running():
+            from automation.runners.cursor_runner import request_cancel
+
+            request_cancel()
         queue.requeue_row(record.row_id)
-        print(f"[worker] interrupted — requeued {job_id}", flush=True)
+        emit_mod.emit_or_print(
+            "worker",
+            "interrupted",
+            f"requeued {job_id}",
+            plain_prefix=f"[worker] interrupted — requeued {job_id}",
+        )
         raise
     except Exception as exc:
         err = {"status": "failed", "error": str(exc), "job_id": job_id}

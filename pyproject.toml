@@ -24,6 +24,7 @@ gui = [
 ]
 automation = [
     "pyyaml>=6.0",
+    "rich>=13.0",
 ]
 
 [tool.setuptools.packages.find]
