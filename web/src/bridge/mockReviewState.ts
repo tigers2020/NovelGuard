@@ -1,21 +1,23 @@
-import type { ReviewRow } from "../types/review";
+import type { AutoSelectKeepersSummary } from "../types/autoSelectSummary";
+import type { ReviewRow, ReviewRowsQuery } from "../types/review";
 import type { ReviewDecisionCommand } from "../types/reviewDecisions";
+import { filterReviewRows } from "./mockData";
 
 const groupState = new Map<string, { keeperFileId?: string; groupStatus?: string }>();
 const memberState = new Map<string, string>();
 
 function fileIdFromRowId(rowId: string): string | null {
+  if (rowId.startsWith("file:")) {
+    const rest = rowId.slice(5);
+    if (rest.length < 64) return null;
+    const candidate = rest.slice(-64);
+    if (!/^[0-9a-f]{64}$/i.test(candidate)) return null;
+    return candidate;
+  }
   if (rowId.startsWith("row-")) {
     return rowId;
   }
-  if (!rowId.startsWith("file:")) {
-    return null;
-  }
-  const rest = rowId.slice(5);
-  if (rest.length < 64) return null;
-  const candidate = rest.slice(-64);
-  if (!/^[0-9a-f]{64}$/i.test(candidate)) return null;
-  return candidate.toLowerCase();
+  return null;
 }
 
 export function resetMockReviewState(): void {
@@ -26,76 +28,64 @@ export function resetMockReviewState(): void {
 function pickMockKeeperFileId(members: ReviewRow[]): string | null {
   const files = members.filter((row) => row.rowKind === "file");
   if (files.length === 0) return null;
-  const keeper = [...files].sort((left, right) => {
-    const sizeDiff = (right.sizeBytes ?? 0) - (left.sizeBytes ?? 0);
+  const keeper = [...files].sort((a, b) => {
+    const sizeDiff = (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0);
     if (sizeDiff !== 0) return sizeDiff;
-    const pathDiff = String(right.path ?? right.name).localeCompare(
-      String(left.path ?? left.name),
-      "en-US",
-    );
+    const pathDiff = String(b.path ?? b.name).localeCompare(String(a.path ?? a.name), "en-US");
     if (pathDiff !== 0) return pathDiff;
-    return String(fileIdFromRowId(right.id) ?? "").localeCompare(
-      String(fileIdFromRowId(left.id) ?? ""),
-      "en-US",
-    );
+    return String(b.id).localeCompare(String(a.id), "en-US");
   })[0];
   return fileIdFromRowId(keeper.id);
 }
 
-function nonExactMembersByGroup(rows: ReviewRow[]): Map<string, ReviewRow[]> {
-  const members = new Map<string, ReviewRow[]>();
-  for (const row of rows) {
-    if (row.rowKind !== "file" || !row.groupId) continue;
-    if (row.type !== "near" && row.type !== "relation") continue;
-    const list = members.get(row.groupId) ?? [];
+export function summarizeMockAutoSelectKeepers(
+  rows: ReviewRow[],
+  query: ReviewRowsQuery,
+): AutoSelectKeepersSummary {
+  const mergedQuery: ReviewRowsQuery = {
+    ...query,
+    filters: {
+      ...query.filters,
+      status: ["unreviewed"],
+    },
+  };
+  const fileRows = filterReviewRows(rows, mergedQuery).filter(
+    (row) => row.rowKind === "file" && row.status === "unreviewed" && row.status !== "conflict",
+  );
+
+  const byGroup = new Map<string, ReviewRow[]>();
+  for (const row of fileRows) {
+    if (!row.groupId) continue;
+    const list = byGroup.get(row.groupId) ?? [];
     list.push(row);
-    members.set(row.groupId, list);
-  }
-  return members;
-}
-
-function mergeMockNonExactRow(row: ReviewRow, groupMembers: ReviewRow[]): ReviewRow {
-  const groupId = row.groupId;
-  if (!groupId) return row;
-
-  const groupEntry = groupState.get(groupId);
-  const keeperOverride = groupEntry?.keeperFileId;
-  const groupStatus = groupEntry?.groupStatus;
-  const memberIds = groupMembers
-    .map((member) => fileIdFromRowId(member.id))
-    .filter((fileId): fileId is string => Boolean(fileId));
-
-  const keeperId =
-    keeperOverride && memberIds.includes(keeperOverride)
-      ? keeperOverride
-      : pickMockKeeperFileId(groupMembers);
-
-  if (row.rowKind === "group") {
-    return {
-      ...row,
-      status: (groupStatus as ReviewRow["status"]) ?? row.status,
-      proposedAction: "keep",
-    };
+    byGroup.set(row.groupId, list);
   }
 
-  const fileId = fileIdFromRowId(row.id);
-  const memberStatus = fileId ? memberState.get(fileId) : undefined;
-  const effectiveStatus =
-    (memberStatus as ReviewRow["status"] | undefined) ??
-    (groupStatus as ReviewRow["status"] | undefined) ??
-    row.status;
+  const keeperRowIds: string[] = [];
+  let exactCount = 0;
+  let nearCount = 0;
+  let relationCount = 0;
 
-  const updated: ReviewRow = { ...row, status: effectiveStatus };
-  if (!keeperId) return updated;
-
-  const isKeeper = fileId === keeperId;
-  if (effectiveStatus === "approved") {
-    updated.proposedAction = isKeeper ? "keep" : "move_duplicate";
-    updated.targetFolder = isKeeper ? undefined : "duplicate/";
-  } else if (!isKeeper && updated.proposedAction === "move_duplicate") {
-    updated.targetFolder = row.targetFolder ?? "duplicate/";
+  for (const groupRows of byGroup.values()) {
+    const keeperId = pickMockKeeperFileId(groupRows);
+    const keeperRow = groupRows.find((row) => fileIdFromRowId(row.id) === keeperId);
+    if (keeperRow) keeperRowIds.push(keeperRow.id);
+    const rowType = groupRows[0]?.type;
+    const size = groupRows.length;
+    if (rowType === "exact") exactCount += size;
+    else if (rowType === "near") nearCount += size;
+    else if (rowType === "relation") relationCount += size;
   }
-  return updated;
+
+  return {
+    targetCount: fileRows.length,
+    keeperCount: keeperRowIds.length,
+    moveCandidateCount: Math.max(0, fileRows.length - keeperRowIds.length),
+    exactCount,
+    nearCount,
+    relationCount,
+    keeperRowIds,
+  };
 }
 
 /** Mirror backend `persist_exact_non_keeper_approvals` after post-scan (NOV-17/NOV-20). */
@@ -134,15 +124,28 @@ export function persistMockExactNonKeeperApprovals(rows: ReviewRow[]): number {
 }
 
 export function applyMockReviewState(rows: ReviewRow[]): ReviewRow[] {
-  const nonExactMembers = nonExactMembersByGroup(rows);
+  const membersByGroup = new Map<string, ReviewRow[]>();
+  for (const row of rows) {
+    if (row.rowKind !== "file" || !row.groupId) continue;
+    const list = membersByGroup.get(row.groupId) ?? [];
+    list.push(row);
+    membersByGroup.set(row.groupId, list);
+  }
+
+  const keeperByGroup = new Map<string, string | null>();
+  for (const [groupId, members] of membersByGroup) {
+    const override = groupState.get(groupId)?.keeperFileId;
+    keeperByGroup.set(
+      groupId,
+      override && members.some((row) => fileIdFromRowId(row.id) === override)
+        ? override
+        : pickMockKeeperFileId(members),
+    );
+  }
 
   return rows.map((row) => {
     const groupId = row.groupId;
     if (!groupId) return row;
-
-    if (row.type === "near" || row.type === "relation") {
-      return mergeMockNonExactRow(row, nonExactMembers.get(groupId) ?? [row]);
-    }
 
     const groupEntry = groupState.get(groupId);
     const keeperOverride = groupEntry?.keeperFileId;
@@ -167,8 +170,41 @@ export function applyMockReviewState(rows: ReviewRow[]): ReviewRow[] {
     if (keeperOverride && row.keeperLabel) {
       updated.keeperLabel = row.keeperLabel;
     }
+
+    const keeperId = keeperByGroup.get(groupId);
+    if (!keeperId || !fileId) return updated;
+    const isKeeper = fileId === keeperId;
+    if (row.type === "exact") {
+      updated.proposedAction = isKeeper ? "keep" : "move_duplicate";
+      updated.targetFolder = isKeeper ? undefined : "duplicate/";
+    } else if (row.type === "near" || row.type === "relation") {
+      if (effectiveStatus === "approved") {
+        updated.proposedAction = isKeeper ? "keep" : "move_duplicate";
+        updated.targetFolder = isKeeper ? undefined : "duplicate/";
+      } else {
+        updated.proposedAction = isKeeper ? "keep" : "ignore";
+        updated.targetFolder = undefined;
+      }
+    }
     return updated;
   });
+}
+
+const UNRESOLVED_STATUSES = new Set(["unreviewed", "conflict"]);
+
+export function resolveInsightCounts(rows: ReviewRow[]): {
+  moveReadyCount: number;
+  reviewSignalCount: number;
+} {
+  let moveReadyCount = 0;
+  let reviewSignalCount = 0;
+  for (const row of rows) {
+    if (row.rowKind !== "file") continue;
+    if (row.status !== "unreviewed" && row.status !== "conflict") continue;
+    if (row.type === "exact") moveReadyCount += 1;
+    else if (row.type === "near" || row.type === "relation") reviewSignalCount += 1;
+  }
+  return { moveReadyCount, reviewSignalCount };
 }
 
 export function fileRowStatusCounts(rows: ReviewRow[]): {
@@ -183,7 +219,7 @@ export function fileRowStatusCounts(rows: ReviewRow[]): {
     if (row.rowKind !== "file") continue;
     if (row.status === "approved") approvedCount += 1;
     else if (row.status === "conflict") conflictCount += 1;
-    if (row.status === "unreviewed" || row.status === "conflict") queueCount += 1;
+    if (UNRESOLVED_STATUSES.has(row.status)) queueCount += 1;
   }
   return { queueCount, approvedCount, conflictCount };
 }
@@ -198,6 +234,9 @@ export function applyMockReviewCommand(
     const groupId = row.groupId;
     if (!groupId) continue;
 
+    if (command !== "reset" && row.status === "conflict") continue;
+    if (command === "approve" && row.rowKind !== "file") continue;
+
     if (command === "reset") {
       if (row.rowKind === "group") {
         if (groupState.delete(groupId)) updated += 1;
@@ -209,7 +248,8 @@ export function applyMockReviewCommand(
     }
 
     if (command === "setKeeper") {
-      const keeper = row.rowKind === "file" ? fileIdFromRowId(row.id) : keeperFileId;
+      const keeper =
+        row.rowKind === "file" ? fileIdFromRowId(row.id) : keeperFileId;
       if (!keeper) continue;
       const entry = groupState.get(groupId);
       if (entry?.groupStatus === "approved") {
@@ -232,7 +272,6 @@ export function applyMockReviewCommand(
             ? "conflict"
             : null;
     if (!status) continue;
-    if (status === "approved" && row.status === "conflict") continue;
 
     if (row.rowKind === "group") {
       groupState.set(groupId, { ...groupState.get(groupId), groupStatus: status });

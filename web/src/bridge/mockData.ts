@@ -29,14 +29,21 @@ export function getAllReviewRows(count = 1284): ReviewRow[] {
   if (cachedRows) return cachedRows;
 
   cachedRows = Array.from({ length: count }, (_, index) => {
-    // row-2: exact + move_duplicate for apply E2E (near rows are preview-blocked).
-    const type = index === 1 ? "exact" : TYPES[index % TYPES.length];
+    // row-2 / row-3: exact pair for apply + post-scan auto-approve E2E (near rows are preview-blocked).
+    const type = index === 1 || index === 2 ? "exact" : TYPES[index % TYPES.length];
     // row-6: encoding-only quality/repair parity (integrity OK, non–UTF-8).
     const integrity = index === 5 ? "OK" : INTEGRITIES[index % INTEGRITIES.length];
     const encoding = index === 5 ? "CP949?" : ENCODINGS[index % ENCODINGS.length];
-    const status = STATUSES[index % STATUSES.length];
-    const proposedAction = ACTIONS[index % ACTIONS.length];
-    const groupId = type === "move_only" ? undefined : `group-${String((index % 37) + 1).padStart(2, "0")}`;
+    const status =
+      index === 1 || index === 2 ? "unreviewed" : STATUSES[index % STATUSES.length];
+    const proposedAction =
+      index === 1 || index === 2 ? "move_duplicate" : ACTIONS[index % ACTIONS.length];
+    const groupId =
+      type === "move_only"
+        ? undefined
+        : index === 1 || index === 2
+          ? "group-exact-e2e"
+          : `group-${String((index % 37) + 1).padStart(2, "0")}`;
 
     return {
       id: `row-${index + 1}`,

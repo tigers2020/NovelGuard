@@ -1,4 +1,4 @@
-"""Canonical keeper selection for duplicate groups (NOV-32/NOV-33)."""
+"""Canonical keeper selection for duplicate groups (NOV-32 / NOV-33)."""
 
 from __future__ import annotations
 
