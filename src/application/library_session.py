@@ -5,11 +5,13 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import Callable
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Literal
 
 from application import scan_pipeline_constants
 from application.app_settings import AppSettings, InvalidSettingValueError
+from application.bridge_timing import lock_wait_scope, log_phase_end, log_phase_start
 from application.dto_mapper import (
     build_snapshot,
     scan_timestamp,
@@ -141,6 +143,16 @@ class LibrarySession:
         self._relation_groups_by_id: dict[str, RelationGroup] = {}
         self._settings = settings or AppSettings()
 
+    @contextmanager
+    def _lock_scope(self, caller: str):
+        with lock_wait_scope(
+            self._lock,
+            caller=caller,
+            holder_pipeline_phase=self._pipeline_phase,
+            holder_background_phase=self._background_phase,
+        ):
+            yield
+
     @property
     def index(self) -> LibraryIndexPort:
         return self._index
@@ -151,7 +163,7 @@ class LibrarySession:
         *,
         rebind_sqlite: bool,
     ) -> None:
-        with self._lock:
+        with self._lock_scope("LibrarySession.apply_library_runtime"):
             if rebind_sqlite:
                 from infrastructure.sqlite_library_index import SqliteLibraryIndex
 
@@ -167,21 +179,21 @@ class LibrarySession:
             )
 
     def audit_log_path(self) -> Path:
-        with self._lock:
+        with self._lock_scope("LibrarySession.audit_log_path"):
             if self._runtime_paths is None:
                 raise RuntimeError("Library runtime paths not configured")
             path: Path = self._runtime_paths.audit_log_path
             return path
 
     def finalize_save_root(self) -> Path:
-        with self._lock:
+        with self._lock_scope("LibrarySession.finalize_save_root"):
             if self._runtime_paths is None:
                 raise RuntimeError("Library runtime paths not configured")
             path: Path = self._runtime_paths.finalize_save_root
             return path
 
     def repair_backup_root(self) -> Path:
-        with self._lock:
+        with self._lock_scope("LibrarySession.repair_backup_root"):
             if self._runtime_paths is None:
                 raise RuntimeError("Library runtime paths not configured")
             path: Path = self._runtime_paths.repair_backup_root
@@ -219,7 +231,7 @@ class LibrarySession:
         if self._on_library_selected is not None:
             self._on_library_selected(self, folder)
 
-        with self._lock:
+        with self._lock_scope("LibrarySession.select_folder"):
             self._index.replace_files(folder, [])
             self._index.replace_quality_issues(folder, [])
             self._index.clear_review_state(folder)
@@ -245,7 +257,7 @@ class LibrarySession:
         if self._on_library_selected is not None:
             self._on_library_selected(self, folder)
 
-        with self._lock:
+        with self._lock_scope("LibrarySession.restore_last_library_folder"):
             self._index.activate_library_folder(folder)
             files = self._index.files()
             self._backup_files = None
@@ -304,7 +316,7 @@ class LibrarySession:
 
     def start_scan(self, options: dict[str, Any] | None = None) -> None:
         _ = options
-        with self._lock:
+        with self._lock_scope("LibrarySession.start_scan"):
             folder = self._index.folder_path
             if not folder or self._pipeline_running or self._apply_in_progress:
                 return
@@ -327,7 +339,7 @@ class LibrarySession:
             self._scan_thread.start()
 
     def cancel_run(self) -> None:
-        with self._lock:
+        with self._lock_scope("LibrarySession.cancel_run"):
             if not self._pipeline_running:
                 return
             self._cancel_requested = True
@@ -335,7 +347,7 @@ class LibrarySession:
     def set_work_mode(self, mode: str) -> None:
         if mode not in _WORK_MODES:
             raise ValueError(f"INVALID_WORK_MODE:{mode}")
-        with self._lock:
+        with self._lock_scope("LibrarySession.set_work_mode"):
             self._active_mode = mode
 
     def _scan_options_labels(self) -> list[str]:
@@ -350,7 +362,7 @@ class LibrarySession:
         return self._index.file_count(), self._index.total_bytes()
 
     def get_snapshot(self) -> dict[str, Any]:
-        with self._lock:
+        with self._lock_scope("LibrarySession.get_snapshot"):
             file_count, total_bytes = self._snapshot_library_metrics()
             return build_snapshot(
                 folder_path=self._index.folder_path,
@@ -391,12 +403,12 @@ class LibrarySession:
             )
 
     def query_review_rows(self, query: dict[str, Any]) -> dict[str, Any]:
-        with self._lock:
+        with self._lock_scope("LibrarySession.query_review_rows"):
             limit = _clamp_query_limit(query)
             return query_review_page(self._review_rows_cache, query, limit=limit)
 
     def query_quality_rows(self, query: dict[str, Any]) -> dict[str, Any]:
-        with self._lock:
+        with self._lock_scope("LibrarySession.query_quality_rows"):
             limit = _clamp_query_limit(query)
             return query_quality_page(self._quality_rows_cache, query, limit=limit)
 
@@ -412,7 +424,7 @@ class LibrarySession:
         )
         from application.near_group_detail import build_near_group_detail
 
-        with self._lock:
+        with self._lock_scope("LibrarySession.get_duplicate_group_detail"):
             quality_by_path = index_quality_rows_by_path(self._quality_rows_cache)
             if group_id.startswith("relation:"):
                 from application.relation_group_detail import build_relation_group_detail
@@ -442,7 +454,7 @@ class LibrarySession:
             )
 
     def get_quality_issue_detail(self, issue_id: str) -> dict[str, Any]:
-        with self._lock:
+        with self._lock_scope("LibrarySession.get_quality_issue_detail"):
             return build_quality_issue_detail(
                 issue_id,
                 quality_rows=self._quality_rows_cache,
@@ -452,12 +464,12 @@ class LibrarySession:
             )
 
     def get_app_setting(self, key: str) -> dict[str, Any]:
-        with self._lock:
+        with self._lock_scope("LibrarySession.get_app_setting"):
             value, source = self._settings.get_value(key)
             return {"key": key, "value": value, "source": source}
 
     def set_app_setting(self, key: str, value: Any) -> dict[str, Any]:
-        with self._lock:
+        with self._lock_scope("LibrarySession.set_app_setting"):
             if key == SETTINGS_KEY_SCAN_EXTENSION_FILTER:
                 if not isinstance(value, str):
                     raise InvalidSettingValueError("scan.extensionFilter requires str")
@@ -466,11 +478,11 @@ class LibrarySession:
             return {"key": key, "value": stored, "source": source}
 
     def query_log_entries(self, query: dict[str, Any]) -> dict[str, Any]:
-        with self._lock:
+        with self._lock_scope("LibrarySession.query_log_entries"):
             return query_log_entries(query)
 
     def get_logs_artifacts(self, *, packaging_log_path: Path | None = None) -> dict[str, Any]:
-        with self._lock:
+        with self._lock_scope("LibrarySession.get_logs_artifacts"):
             audit_path: Path | None = None
             finalize_root: Path | None = None
             if self._runtime_paths is not None:
@@ -486,17 +498,17 @@ class LibrarySession:
             )
 
     def near_groups_by_id(self) -> dict[str, NearDuplicateGroup]:
-        with self._lock:
+        with self._lock_scope("LibrarySession.near_groups_by_id"):
             return dict(self._near_groups_by_id)
 
     def relation_groups_by_id(self) -> dict[str, RelationGroup]:
-        with self._lock:
+        with self._lock_scope("LibrarySession.relation_groups_by_id"):
             return dict(self._relation_groups_by_id)
 
     def summarize_auto_select_keepers(self, query: dict[str, Any]) -> dict[str, Any]:
         from application.auto_select_summary import summarize_auto_select_keepers as summarize
 
-        with self._lock:
+        with self._lock_scope("LibrarySession.summarize_auto_select_keepers"):
             return summarize(
                 self._review_rows_cache,
                 query,
@@ -504,42 +516,42 @@ class LibrarySession:
             )
 
     def library_revision(self) -> int:
-        with self._lock:
+        with self._lock_scope("LibrarySession.library_revision"):
             return self._library_revision
 
     def has_pending_apply(self) -> bool:
-        with self._lock:
+        with self._lock_scope("LibrarySession.has_pending_apply"):
             return self._has_pending_apply
 
     def set_has_pending_apply(self, value: bool) -> None:
-        with self._lock:
+        with self._lock_scope("LibrarySession.set_has_pending_apply"):
             self._has_pending_apply = value
 
     def set_has_pending_quality_repair(self, value: bool) -> None:
-        with self._lock:
+        with self._lock_scope("LibrarySession.set_has_pending_quality_repair"):
             self._has_pending_quality_repair = value
 
     def has_pending_quality_repair(self) -> bool:
-        with self._lock:
+        with self._lock_scope("LibrarySession.has_pending_quality_repair"):
             return self._has_pending_quality_repair
 
     def repair_session_id(self) -> str:
         import hashlib
 
-        with self._lock:
+        with self._lock_scope("LibrarySession.repair_session_id"):
             folder = self._index.folder_path or ""
         return hashlib.sha256(folder.encode("utf-8")).hexdigest()[:16]
 
     def quality_issues(self) -> list[Any]:
-        with self._lock:
+        with self._lock_scope("LibrarySession.quality_issues"):
             return list(self._index.quality_issues())
 
     def file_record_for_quality_issue(self, issue: Any) -> FileRecord | None:
-        with self._lock:
+        with self._lock_scope("LibrarySession.file_record_for_quality_issue"):
             return self._files_by_id.get(issue.file_id)
 
     def reanalyze_quality_for_file_ids(self, file_ids: list[str]) -> None:
-        with self._lock:
+        with self._lock_scope("LibrarySession.reanalyze_quality_for_file_ids"):
             folder = self._index.folder_path
             if not folder:
                 return
@@ -558,23 +570,23 @@ class LibrarySession:
             self._apply_quality_cache(merged)
 
     def first_file_id(self) -> str | None:
-        with self._lock:
+        with self._lock_scope("LibrarySession.first_file_id"):
             files = self._index.files()
             return files[0].id if files else None
 
     def library_root_path(self) -> Path | None:
-        with self._lock:
+        with self._lock_scope("LibrarySession.library_root_path"):
             folder = self._index.folder_path
             return Path(folder) if folder else None
 
     def review_rows_snapshot(self) -> list[dict[str, Any]]:
-        with self._lock:
+        with self._lock_scope("LibrarySession.review_rows_snapshot"):
             return list(self._review_rows_cache)
 
     def file_record_for_review_row(self, row: dict[str, Any]) -> FileRecord | None:
         from application.review_state_merge import _file_id_from_row_id
 
-        with self._lock:
+        with self._lock_scope("LibrarySession.file_record_for_review_row"):
             row_id = str(row.get("id", ""))
             file_id = _file_id_from_row_id(row_id)
             if file_id:
@@ -589,7 +601,7 @@ class LibrarySession:
             return None
 
     def increment_library_revision(self) -> None:
-        with self._lock:
+        with self._lock_scope("LibrarySession.increment_library_revision"):
             self._library_revision += 1
 
     def build_review_members_by_group(self) -> dict[str, set[str]]:
@@ -614,7 +626,7 @@ class LibrarySession:
     ) -> dict[str, Any]:
         from application.review_decisions import UpdateReviewDecisionsUseCase
 
-        with self._lock:
+        with self._lock_scope("LibrarySession.update_review_decisions"):
             use_case = UpdateReviewDecisionsUseCase(self, self._index)
             updated = use_case.execute(
                 selection,
@@ -638,54 +650,54 @@ class LibrarySession:
             }
 
     def set_apply_in_progress(self, value: bool) -> None:
-        with self._lock:
+        with self._lock_scope("LibrarySession.set_apply_in_progress"):
             self._apply_in_progress = value
 
     def is_apply_or_scan_busy(self) -> bool:
-        with self._lock:
+        with self._lock_scope("LibrarySession.is_apply_or_scan_busy"):
             return self._apply_in_progress or self._pipeline_running or self._post_scan_running
 
     def configure_finalize(self, runner: Any) -> None:
-        with self._lock:
+        with self._lock_scope("LibrarySession.configure_finalize"):
             self._finalize_runner = runner
 
     def scan_state(self) -> str:
-        with self._lock:
+        with self._lock_scope("LibrarySession.scan_state"):
             return self._scan_state
 
     def queue_count(self) -> int:
-        with self._lock:
+        with self._lock_scope("LibrarySession.queue_count"):
             return self._queue_count
 
     def conflict_count(self) -> int:
-        with self._lock:
+        with self._lock_scope("LibrarySession.conflict_count"):
             return self._conflict_count
 
     def approved_count(self) -> int:
-        with self._lock:
+        with self._lock_scope("LibrarySession.approved_count"):
             return self._approved_count
 
     def encoding_issue_count(self) -> int:
-        with self._lock:
+        with self._lock_scope("LibrarySession.encoding_issue_count"):
             return self._encoding_issue_count
 
     def integrity_issue_count(self) -> int:
-        with self._lock:
+        with self._lock_scope("LibrarySession.integrity_issue_count"):
             return self._integrity_issue_count
 
     def small_file_anomaly_count(self) -> int:
-        with self._lock:
+        with self._lock_scope("LibrarySession.small_file_anomaly_count"):
             return self._small_file_anomaly_count
 
     def refresh_resolve_counts(self) -> None:
-        with self._lock:
+        with self._lock_scope("LibrarySession.refresh_resolve_counts"):
             self._refresh_resolve_counts()
 
     def finalize_session_id(self) -> str:
         return self.repair_session_id()
 
     def set_finalize_counts(self, blocker_count: int, warning_count: int) -> None:
-        with self._lock:
+        with self._lock_scope("LibrarySession.set_finalize_counts"):
             self._finalize_blocker_count = blocker_count
             self._finalize_warning_count = warning_count
 
@@ -696,7 +708,7 @@ class LibrarySession:
         last_status: str,
         report_path: str | None,
     ) -> None:
-        with self._lock:
+        with self._lock_scope("LibrarySession.set_finalize_last_run"):
             self._finalize_last_report_id = report_id
             self._finalize_last_status = last_status
             self._finalize_last_report_path = report_path
@@ -706,7 +718,7 @@ class LibrarySession:
     def preview_finalize_cleanup(self) -> dict[str, Any]:
         from infrastructure.finalize_cleanup import LocalFinalizeCleanupAdapter
 
-        with self._lock:
+        with self._lock_scope("LibrarySession.preview_finalize_cleanup"):
             if not self._index.folder_path:
                 raise RuntimeError("NO_LIBRARY")
             if self._apply_in_progress or self._pipeline_running:
@@ -718,7 +730,7 @@ class LibrarySession:
     def get_finalize_summary(self, audit_log_path: Path | None = None) -> dict[str, Any]:
         from application.finalize_summary import build_finalize_summary
 
-        with self._lock:
+        with self._lock_scope("LibrarySession.get_finalize_summary"):
             if audit_log_path is not None:
                 resolved_audit = audit_log_path
             elif self._runtime_paths is not None:
@@ -741,7 +753,7 @@ class LibrarySession:
             )
 
     def run_finalize_verification(self, request: dict[str, Any]) -> dict[str, Any]:
-        with self._lock:
+        with self._lock_scope("LibrarySession.run_finalize_verification"):
             if not self._index.folder_path:
                 raise RuntimeError("NO_LIBRARY")
             if self._apply_in_progress or self._pipeline_running:
@@ -766,12 +778,12 @@ class LibrarySession:
             try:
 
                 def on_step(step: str, pct: int, label: str) -> None:
-                    with self._lock:
+                    with self._lock_scope("LibrarySession.on_step"):
                         self._pipeline_percent = pct
                         self._pipeline_label = label
 
                 def cancel_check() -> bool:
-                    with self._lock:
+                    with self._lock_scope("LibrarySession.cancel_check"):
                         return self._cancel_requested
 
                 result = runner.run(
@@ -787,7 +799,7 @@ class LibrarySession:
         thread.start()
         thread.join()
 
-        with self._lock:
+        with self._lock_scope("LibrarySession.cancel_check"):
             self._pipeline_running = False
             self._pipeline_cancellable = False
             self._pipeline_phase = "idle"
@@ -808,7 +820,7 @@ class LibrarySession:
             return result
 
     def cancel_finalize(self) -> None:
-        with self._lock:
+        with self._lock_scope("LibrarySession.cancel_finalize"):
             if self._pipeline_phase == "finalize" and self._pipeline_running:
                 self._cancel_requested = True
 
@@ -819,7 +831,7 @@ class LibrarySession:
         return read_finalize_report(root, self.finalize_session_id(), report_id)
 
     def refresh_index_from_disk(self) -> None:
-        with self._lock:
+        with self._lock_scope("LibrarySession.refresh_index_from_disk"):
             folder = self._index.folder_path
             if not folder:
                 return
@@ -837,7 +849,7 @@ class LibrarySession:
             cancel_check=cancel_check,
             out=collected.append,
         )
-        with self._lock:
+        with self._lock_scope("LibrarySession.cancel_check"):
             self._index.replace_files(folder, collected)
             self._rebuild_review_index(collected)
             self._rebuild_quality_index(folder, collected)
@@ -1060,7 +1072,7 @@ class LibrarySession:
         self._total_quality_issue_count = len(self._quality_rows_cache)
 
     def _set_pipeline_progress(self, percent: int, label: str) -> None:
-        with self._lock:
+        with self._lock_scope("LibrarySession._set_pipeline_progress"):
             self._pipeline_percent = percent
             self._pipeline_label = label
 
@@ -1073,7 +1085,7 @@ class LibrarySession:
         step_total: int,
         block_pipeline: bool = True,
     ) -> None:
-        with self._lock:
+        with self._lock_scope("LibrarySession._set_background_progress"):
             self._background_active = True
             self._background_phase = phase
             self._background_label = label
@@ -1090,7 +1102,7 @@ class LibrarySession:
             self._pipeline_cancellable = False
 
     def _clear_background_progress(self) -> None:
-        with self._lock:
+        with self._lock_scope("LibrarySession._clear_background_progress"):
             self._background_active = False
             self._background_phase = "idle"
             self._background_label = ""
@@ -1111,7 +1123,7 @@ class LibrarySession:
         }
 
     def _set_exact_index_progress(self, label: str, percent: int) -> None:
-        with self._lock:
+        with self._lock_scope("LibrarySession._set_exact_index_progress"):
             self._pipeline_phase = "exact_index"
             self._pipeline_label = label
             self._pipeline_percent = percent
@@ -1131,12 +1143,12 @@ class LibrarySession:
             probe_buffer = []
             reset = first_batch
             first_batch = False
-            with self._lock:
+            with self._lock_scope("LibrarySession.flush_batch"):
                 if self._pipeline_phase != "scan_persist":
                     self._pipeline_phase = "persist"
             self._index.append_files_batch(folder, batch, reset=reset)
             committed = self._index.file_count()
-            with self._lock:
+            with self._lock_scope("LibrarySession.flush_batch"):
                 if not self._index_ready and committed > 0:
                     self._index_ready = True
                 self._library_revision += 1
@@ -1150,7 +1162,7 @@ class LibrarySession:
                 flush_batch()
 
         def on_progress(pct: int, label: str) -> None:
-            with self._lock:
+            with self._lock_scope("LibrarySession.on_progress"):
                 self._pipeline_phase = "probe"
             self._set_pipeline_progress(pct, label)
 
@@ -1180,7 +1192,7 @@ class LibrarySession:
             scan_error = str(exc)
 
         if scan_error is not None:
-            with self._lock:
+            with self._lock_scope("LibrarySession.cancel_check"):
                 self._restore_backup_after_failed_scan(folder)
                 self._pipeline_running = False
                 self._pipeline_cancellable = False
@@ -1192,7 +1204,7 @@ class LibrarySession:
             return
 
         if scan_cancelled:
-            with self._lock:
+            with self._lock_scope("LibrarySession.cancel_check"):
                 self._restore_backup_after_cancel(folder)
                 self._pipeline_running = False
                 self._pipeline_cancellable = False
@@ -1204,7 +1216,7 @@ class LibrarySession:
                 self._scan_state = "success" if had_prior else "error"
             return
 
-        with self._lock:
+        with self._lock_scope("LibrarySession.cancel_check"):
             self._pipeline_running = True
             self._pipeline_cancellable = False
             self._pipeline_phase = "scan_persist"
@@ -1212,7 +1224,7 @@ class LibrarySession:
 
         flush_batch()
 
-        with self._lock:
+        with self._lock_scope("LibrarySession.cancel_check"):
             self._post_scan_running = True
             self._pipeline_running = False
             self._scan_thread = None
@@ -1229,10 +1241,31 @@ class LibrarySession:
 
     def _start_post_scan_worker(self, folder: str) -> None:
         def _worker() -> None:
+            worker_t0 = log_phase_start("worker")
+            worker_status = "complete"
+            active_phase: str | None = None
+            active_t0: float | None = None
+
+            def _begin_phase(phase: str) -> None:
+                nonlocal active_phase, active_t0
+                if active_phase is not None and active_t0 is not None:
+                    log_phase_end(active_phase, active_t0, status="complete")
+                active_phase = phase
+                active_t0 = log_phase_start(phase)
+
+            def _finish_active_phase(*, status: str = "complete") -> None:
+                nonlocal active_phase, active_t0
+                if active_phase is not None and active_t0 is not None:
+                    log_phase_end(active_phase, active_t0, status=status)
+                active_phase = None
+                active_t0 = None
+
             try:
-                with self._lock:
+                with self._lock_scope("LibrarySession._start_post_scan_worker.init"):
                     self._deep_analysis_status = "running"
                     self._deep_analysis_error = None
+
+                _begin_phase("exact_index")
                 self._set_exact_index_progress("파일 메타데이터 로드 중…", 84)
                 files = self._index.files()
                 defer_projection = len(files) > 500
@@ -1257,11 +1290,11 @@ class LibrarySession:
                     review_rows = build_review_rows(review_groups, files_by_id)
 
                 self._set_exact_index_progress("품질 이슈 집계 중…", 94)
-                with self._lock:
+                with self._lock_scope("LibrarySession._start_post_scan_worker.files_by_id"):
                     self._files_by_id = {f.id: f for f in files}
                 self._rebuild_quality_index(folder, files)
 
-                with self._lock:
+                with self._lock_scope("LibrarySession._start_post_scan_worker.review_cache"):
                     self._review_rows_cache = review_rows
                     self._refresh_duplicate_group_count()
                     self._refresh_resolve_counts()
@@ -1269,17 +1302,19 @@ class LibrarySession:
                     self._scan_state = "success"
                     self._scan_last_run = scan_timestamp()
                     self._library_revision += 1
+                _finish_active_phase()
 
                 deep_analysis_non_blocking = (
                     len(files) >= scan_pipeline_constants.SCAN_DEEP_ANALYSIS_BACKGROUND_THRESHOLD
                 )
                 if deep_analysis_non_blocking:
-                    with self._lock:
+                    with self._lock_scope("LibrarySession._start_post_scan_worker.pipeline_idle"):
                         self._pipeline_phase = "idle"
                         self._pipeline_label = "근사·관계 분석 중… (백그라운드)"
                         self._pipeline_percent = 0
 
                 block_pipeline = not deep_analysis_non_blocking
+                _begin_phase("queue")
                 self._set_background_progress(
                     phase="queue",
                     label="중복·관계 분석 준비 중…",
@@ -1287,6 +1322,9 @@ class LibrarySession:
                     step_total=step_total,
                     block_pipeline=block_pipeline,
                 )
+                _finish_active_phase()
+
+                _begin_phase("prepare")
                 self._set_background_progress(
                     phase="prepare",
                     label="분석 대상 파일 준비 중…",
@@ -1294,6 +1332,9 @@ class LibrarySession:
                     step_total=step_total,
                     block_pipeline=block_pipeline,
                 )
+                _finish_active_phase()
+
+                _begin_phase("relation")
                 self._set_background_progress(
                     phase="relation",
                     label="파일명 관계 분석 중…",
@@ -1301,10 +1342,13 @@ class LibrarySession:
                     step_total=step_total,
                     block_pipeline=block_pipeline,
                 )
-                with self._lock:
+                with self._lock_scope("LibrarySession._run_relation_phase"):
                     self._run_relation_phase(folder, files)
                     self._refresh_duplicate_group_count()
                     self._library_revision += 1
+                _finish_active_phase()
+
+                _begin_phase("near")
                 self._set_background_progress(
                     phase="near",
                     label="근사 중복 분석 중…",
@@ -1312,12 +1356,14 @@ class LibrarySession:
                     step_total=step_total,
                     block_pipeline=block_pipeline,
                 )
-                with self._lock:
+                with self._lock_scope("LibrarySession._run_near_duplicate_phase"):
                     self._run_near_duplicate_phase(folder, files)
                     self._refresh_duplicate_group_count()
                     self._library_revision += 1
+                _finish_active_phase()
 
                 if defer_projection:
+                    _begin_phase("projection")
                     self._set_background_progress(
                         phase="projection",
                         label="검토 인덱스 동기화 중…",
@@ -1326,9 +1372,12 @@ class LibrarySession:
                         block_pipeline=block_pipeline,
                     )
                     self._sync_file_review_projection()
+                    _finish_active_phase()
             except Exception as exc:
                 _LOGGER.exception("post-scan worker failed")
-                with self._lock:
+                worker_status = "error"
+                _finish_active_phase(status="error")
+                with self._lock_scope("LibrarySession._start_post_scan_worker._worker"):
                     self._scan_state = "error"
                     self._deep_analysis_status = "error"
                     self._deep_analysis_complete = False
@@ -1337,7 +1386,7 @@ class LibrarySession:
                     self._pipeline_label = "후속 분석 실패"
                     self._pipeline_percent = 0
             else:
-                with self._lock:
+                with self._lock_scope("LibrarySession._start_post_scan_worker._worker"):
                     self._deep_analysis_status = "complete"
                     self._deep_analysis_complete = True
                     self._deep_analysis_error = None
@@ -1345,10 +1394,11 @@ class LibrarySession:
                     self._pipeline_percent = 100
                     self._pipeline_label = "대기 중"
             finally:
-                with self._lock:
+                with self._lock_scope("LibrarySession._start_post_scan_worker._worker"):
                     self._post_scan_running = False
                     self._clear_background_progress()
                     self._library_revision += 1
+                log_phase_end("worker", worker_t0, status=worker_status)
 
         threading.Thread(target=_worker, name="novelguard-post-scan", daemon=True).start()
 
