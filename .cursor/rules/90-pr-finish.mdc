@@ -5,6 +5,7 @@ alwaysApply: false
 
 # PR finish
 
+- Applies only when user asks commit, push, PR, merge, release, or babysit.
 - Re-run scoped tests before push.
-- `gh pr create` with summary + test plan; no merge without approval.
+- Create PR with summary + test plan; no merge without approval.
 - `/babysit`: fix CI/review in PR scope only; do not weaken workflows.

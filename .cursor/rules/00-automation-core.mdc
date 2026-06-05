@@ -1,22 +1,17 @@
 ---
-description: NovelGuard routing — load deep docs only when needed
+description: NovelGuard core router
 alwaysApply: true
 ---
 
 # NovelGuard core
 
-Read [AGENTS.md](../../AGENTS.md) for project + priority.
+Read [AGENTS.md](../../AGENTS.md) first. It is canonical.
 
-Load on demand (do not preload entire files unless the task needs them):
+Load only matching scoped rule/docs for current task:
 
-| Situation | Doc / rule |
-|-----------|------------|
-| Queued / Linear job | `docs/agents/runner-brief.md` |
-| Roadmap PR work | `docs/agents/program-loop.md` |
-| Large spec/plan work | `docs/superpowers/agent-workflow.md` |
-| Automation scripts | `10-runner-safety.mdc` |
-| Tests / verify | `30-verify-gates.mdc` |
-| `web/**` UI | `40-web-tailwind.mdc` |
-| PR finish | `90-pr-finish.mdc` |
+- Automation scripts -> `10-runner-safety.mdc`
+- Tests / verify -> `30-verify-gates.mdc`
+- `web/**` UI -> `40-web-tailwind.mdc`
+- PR finish -> `90-pr-finish.mdc`
 
-Default: minimal diff, smallest verification, no commit/merge without explicit approval.
+Default: minimal diff, smallest valid verification, no publish action without explicit approval.

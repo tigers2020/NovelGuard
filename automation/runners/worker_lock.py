@@ -28,6 +28,15 @@ def parse_pid_lock_file(lock_path: Path) -> int | None:
         text = lock_path.read_text(encoding="utf-8")
     except OSError:
         return None
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        data = None
+    if isinstance(data, dict):
+        try:
+            return int(data.get("pid") or 0)
+        except (TypeError, ValueError):
+            return None
     for line in text.splitlines():
         line = line.strip()
         if line.startswith("pid="):
@@ -127,7 +136,10 @@ def acquire_daemon_lock(locks_dir: Path) -> None:
             f"Automation daemon already running (pid={pid}). " "Stop it before starting another."
         )
     if path.is_file():
-        path.unlink(missing_ok=True)
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            raise RuntimeError(f"Automation daemon stale lock cannot be removed: {path}") from exc
     payload = {"pid": os.getpid(), "started_at": time.time()}
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
     try:

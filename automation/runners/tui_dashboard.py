@@ -235,7 +235,10 @@ def _build_agent_panel(
     log_age_s: float | None,
 ) -> str:
     active = snapshot.cursor_running or snapshot.verify_running or snapshot.cursor_output_buffered
-    if not active and not cursor_lines:
+    stage_active = bool(
+        snapshot.active_stage and snapshot.active_stage not in ("idle", "complete")
+    )
+    if not active and not cursor_lines and not stage_active:
         return "idle"
 
     header_parts: list[str] = []
@@ -243,8 +246,10 @@ def _build_agent_panel(
         header_parts.append("cursor-agent running")
     elif snapshot.verify_running:
         header_parts.append("verify running")
+    elif stage_active:
+        header_parts.append(snapshot.active_stage or "preparing")
 
-    if snapshot.job_started_at is not None and active:
+    if snapshot.job_started_at is not None and (active or stage_active):
         header_parts.append(f"elapsed {_format_duration(time.time() - snapshot.job_started_at)}")
 
     if log_age_s is not None and snapshot.log_path:
@@ -253,7 +258,7 @@ def _build_agent_panel(
     if snapshot.cursor_pid:
         header_parts.append(f"pid {snapshot.cursor_pid}")
 
-    if snapshot.active_branch and active:
+    if snapshot.active_branch and (active or stage_active):
         header_parts.append(f"branch {_basename_branch(snapshot.active_branch)}")
 
     lines: list[str] = []
@@ -273,6 +278,8 @@ def _build_agent_panel(
         body = _filter_log_content(log_tail)[-30:]
     elif snapshot.cursor_running:
         body = ["(waiting for agent output)"]
+    elif stage_active:
+        body = [f"({snapshot.active_stage or 'preparing'} — waiting for cursor-agent)"]
 
     if body:
         if lines:

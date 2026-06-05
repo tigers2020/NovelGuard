@@ -7,8 +7,8 @@ alwaysApply: false
 # Runner safety
 
 - One branch per job; never checkout over dirty working tree.
-- No commit unless job says `commit: true`.
-- No merge to protected branches.
+- No commit/push/PR unless job explicitly allows it.
+- No merge to protected branches without user approval.
 - No destructive moves without dry-run + approval.
 - Report every verify command with exit code.
 - Stop on instruction conflict; do not guess.

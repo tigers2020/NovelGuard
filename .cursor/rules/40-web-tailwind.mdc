@@ -8,4 +8,4 @@ alwaysApply: false
 
 - React+TS; Tailwind v4 per [DESIGN.md](../../DESIGN.md).
 - UI in `web/` only — no business rules in components.
-- After UI changes: `cd web && npm run lint` + relevant contract/e2e tests.
+- After UI changes: `cd web && npm run lint` plus relevant contract/e2e tests.

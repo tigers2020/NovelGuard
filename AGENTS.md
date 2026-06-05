@@ -1,15 +1,6 @@
 # AGENTS.md
 
-Router for humans, Cursor IDE, CLI runners, and automations.
-
-| Need | Doc |
-|------|-----|
-| Automation / queue | [docs/agent-automation.md](docs/agent-automation.md) |
-| Headless job brief | [docs/agents/runner-brief.md](docs/agents/runner-brief.md) |
-| PR program loop (steps 1–15) | [docs/agents/program-loop.md](docs/agents/program-loop.md) |
-| Large work / Superpowers | [docs/superpowers/agent-workflow.md](docs/superpowers/agent-workflow.md) |
-
----
+Canonical repo guide for humans, Cursor, Codex, CLI runners, and automations.
 
 ## Project
 
@@ -18,20 +9,37 @@ NovelGuard — local-first novel scan, duplicate detection, review, cleanup.
 Stack: Python 3.12+ (`src/`), React+TS (`web/`), Tailwind v4 ([DESIGN.md](DESIGN.md)).  
 Layers: `domain` → `application` → `infrastructure` → `web` → `app` ([docs/current_architecture.md](docs/current_architecture.md)).
 
-**Safety:** No destructive file moves without dry-run preview + user approval.
+**Safety:** no destructive file moves without dry-run preview + user approval.
 
 ---
 
-## Instruction priority
+## Contract
 
-On conflict, stop and report.
+Stop and report on instruction conflict.
 
 1. Explicit user / job message  
 2. This file  
-3. Named spec under `docs/superpowers/specs/`  
-4. General model knowledge  
+3. Matching `.cursor/rules/*.mdc`
+4. Named spec under `docs/superpowers/specs/`
+5. Referenced docs
+6. General model knowledge
 
-Opt-in unless requested: `persona/`, legacy `protocols/`, Superpowers ceremony.
+- Minimal diff; no unrelated files.
+- Preserve public function/class signatures unless asked.
+- No commit, push, PR, merge, or publish without explicit approval.
+- Opt-in only: `persona/`, legacy `protocols/`, Superpowers ceremony.
+
+---
+
+## Routing
+
+| Need | Load |
+|------|------|
+| Automation / queue | [docs/agent-automation.md](docs/agent-automation.md), [docs/agents/runner-brief.md](docs/agents/runner-brief.md) |
+| Roadmap PR loop | [docs/agents/program-loop.md](docs/agents/program-loop.md) |
+| Large spec / plan | [docs/superpowers/agent-workflow.md](docs/superpowers/agent-workflow.md) |
+| Testing policy | [docs/agent-testing-policy.md](docs/agent-testing-policy.md) |
+| UI system | [DESIGN.md](DESIGN.md) |
 
 ---
 
@@ -53,7 +61,7 @@ cd web && npm run test:e2e      # UI/E2E affected
 ```
 
 Targeted: `pytest tests/path::test -v`  
-Policy: [docs/agent-testing-policy.md](docs/agent-testing-policy.md)
+Never claim tests passed unless the command was run and exited 0.
 
 ---
 

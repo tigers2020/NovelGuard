@@ -185,6 +185,29 @@ def test_read_git_status_short_empty_repo(tmp_path):
     assert lines == []
 
 
+def test_parse_pid_lock_file_accepts_json_and_pid_line(tmp_path):
+    from automation.runners.worker_lock import parse_pid_lock_file
+
+    json_lock = tmp_path / "worker.lock"
+    json_lock.write_text('{"pid": 1234, "row_id": 1}', encoding="utf-8")
+    assert parse_pid_lock_file(json_lock) == 1234
+
+    text_lock = tmp_path / "repo.lock"
+    text_lock.write_text("pid=5678 ts=1\n", encoding="utf-8")
+    assert parse_pid_lock_file(text_lock) == 5678
+
+
+def test_clear_stale_file_lock_removes_dead_json_lock(monkeypatch, tmp_path):
+    from automation.runners import worker_lock
+
+    lock_file = tmp_path / "automation-worker.lock"
+    lock_file.write_text('{"pid": 1234, "row_id": 1}', encoding="utf-8")
+    monkeypatch.setattr(worker_lock, "_pid_alive", lambda pid: False)
+
+    assert worker_lock.clear_stale_file_lock(lock_file) is True
+    assert not lock_file.exists()
+
+
 def test_header_includes_compact_queue_line():
     from automation.runners.runtime_state import RuntimeState
     from automation.runners.tui_dashboard import _build_header

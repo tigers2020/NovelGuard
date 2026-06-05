@@ -1,7 +1,7 @@
 ---
 description: Test and verification gates
 globs: tests/**,scripts/verify*.py,scripts/beta_gate.py
-alwaysApply: false
+alwaysApply: true
 ---
 
 # Verify gates
@@ -9,4 +9,5 @@ alwaysApply: false
 - Run smallest scoped test first, then widen.
 - No new test files without approval or TEST_ALLOWED prompt.
 - Claim pass only after command exits 0.
+- Do not weaken assertions or delete failing coverage to make tests pass.
 - On fail: command, exit code, failed test name, traceback tail (≤80 lines) — not full logs.

@@ -1,0 +1,8 @@
+[daemon] DEBUG: interrupt tracing enabled
+[daemon] SIGINT shield: ignoring spurious Ctrl+C for first 15s
+[daemon] script=F:\Python_Projects\NovelGuard\scripts\automation_daemon.py
+[daemon] starting...
+[daemon] config ok
+[daemon] lock ok
+[daemon] worker poll every 0.2s (Ctrl+C to stop)
+[daemon] idle (queued=0 running=0)
