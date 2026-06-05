@@ -442,7 +442,7 @@ describe("snapshot invalidation", () => {
     const row = getAllReviewRows().find((candidate) => candidate.id === "row-2");
     expect(row?.type).toBe("exact");
     const groupId = reviewRowGroupId(row!);
-    expect(groupId).toBe("group-02");
+    expect(groupId).toBe("group-exact-e2e");
     if (!groupId) {
       throw new Error("expected exact review row to resolve a group id");
     }

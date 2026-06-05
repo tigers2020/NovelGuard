@@ -29,7 +29,7 @@ from application.quality_rows_builder import build_quality_rows
 from application.review_auto_approve import persist_exact_non_keeper_approvals
 from application.review_query import query_review_page
 from application.review_rows_builder import build_review_rows
-from application.review_snapshot_counts import file_row_status_counts
+from application.review_snapshot_counts import file_row_status_counts, resolve_insight_counts
 from application.review_state_merge import rebuild_rows_with_review_state
 from application.scan_settings import build_scan_options_labels, parse_extension_filter
 from domain.duplicate_exact import find_exact_duplicate_groups
@@ -120,6 +120,7 @@ class LibrarySession:
         self._review_signal_count = 0
         self._approved_count = 0
         self._conflict_count = 0
+        self._exact_auto_approved_count = 0
         self._files_by_id: dict[str, FileRecord] = {}
         self._quality_rows_cache: list[dict[str, Any]] = []
         self._integrity_issue_count = 0
@@ -319,6 +320,7 @@ class LibrarySession:
             self._pipeline_label = "파일 확인 중…"
             self._pipeline_cancellable = True
             self._scan_state = "running"
+            self._exact_auto_approved_count = 0
             self._scan_thread = threading.Thread(target=self._run_scan, args=(folder,), daemon=True)
             self._scan_thread.start()
 
@@ -372,6 +374,7 @@ class LibrarySession:
                 review_signal_count=self._review_signal_count,
                 approved_count=self._approved_count,
                 conflict_count=self._conflict_count,
+                exact_auto_approved_count=self._exact_auto_approved_count,
                 integrity_issue_count=self._integrity_issue_count,
                 encoding_issue_count=self._encoding_issue_count,
                 small_file_anomaly_count=self._small_file_anomaly_count,
@@ -820,6 +823,7 @@ class LibrarySession:
         self._review_signal_count = 0
         self._approved_count = 0
         self._conflict_count = 0
+        self._exact_auto_approved_count = 0
         self._files_by_id = {}
         self._clear_quality_cache()
 
@@ -1210,7 +1214,10 @@ class LibrarySession:
                     valid_file_ids = {file_record.id for file_record in files}
                     self._index.prune_review_state(folder, valid_group_ids, valid_file_ids)
                     stored = self._index.load_review_state(folder)
-                    persist_exact_non_keeper_approvals(folder, files, self._index, stored)
+                    approved_n = persist_exact_non_keeper_approvals(
+                        folder, files, self._index, stored
+                    )
+                    self._exact_auto_approved_count = approved_n
                     stored = self._index.load_review_state(folder)
                     self._set_exact_index_progress("검토 행 구성 중…", 91)
                     review_rows = rebuild_rows_with_review_state(files, stored)

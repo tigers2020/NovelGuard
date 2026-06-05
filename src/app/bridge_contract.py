@@ -138,9 +138,12 @@ def validate_app_snapshot(snapshot: Any) -> None:
         "deepAnalysisComplete",
         "deepAnalysisStatus",
         "deepAnalysisError",
+        "exactAutoApprovedCount",
     ):
         if key not in scan:
             raise SnapshotContractError(f"AppSnapshot.work.scan missing {key}")
+    if not isinstance(scan.get("exactAutoApprovedCount"), int):
+        raise SnapshotContractError("invalid work.scan.exactAutoApprovedCount")
     status = scan.get("deepAnalysisStatus")
     if status not in ("idle", "running", "complete", "error"):
         raise SnapshotContractError(f"invalid work.scan.deepAnalysisStatus: {status!r}")

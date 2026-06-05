@@ -55,6 +55,10 @@ function assertRequiredFields(snapshot: Record<string, unknown>): void {
       throw new SnapshotContractError(`ResolveSnapshot.${key} must be a non-negative int`);
     }
   }
+  const scan = work.scan;
+  if (isRecord(scan) && typeof scan.exactAutoApprovedCount !== "number") {
+    throw new SnapshotContractError("ScanSnapshot.exactAutoApprovedCount must be a number");
+  }
 }
 
 /** Runtime guard: no unbounded row arrays on snapshot payloads. */

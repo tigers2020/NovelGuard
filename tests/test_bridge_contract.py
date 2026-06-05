@@ -897,6 +897,24 @@ def _wait_deep_analysis_complete(api: BridgeApi, *, timeout: float = 120.0) -> d
     return snap
 
 
+def test_resolve_snapshot_split_counts_with_near_rows(tmp_path: Path) -> None:
+    (tmp_path / "alpha.txt").write_text(_near_similar_body("alpha"), encoding="utf-8")
+    (tmp_path / "beta.txt").write_text(_near_similar_body("beta"), encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _wait_deep_analysis_complete(api)
+    snap = api.get_snapshot()
+    validate_app_snapshot(snap)
+    resolve = snap["work"]["resolve"]
+    assert resolve["moveReadyCount"] >= 0
+    assert resolve["reviewSignalCount"] >= 0
+    assert resolve["moveReadyCount"] + resolve["reviewSignalCount"] == resolve["queueCount"]
+    if resolve["reviewSignalCount"] > 0:
+        assert resolve["moveReadyCount"] < resolve["queueCount"]
+
+
 def test_large_library_counts_near_duplicate_groups(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -1115,6 +1133,7 @@ def test_query_review_rows_exact_duplicate_pair(tmp_path: Path) -> None:
     api.start_scan()
     snap = _scan_until_idle(api)
     assert snap["work"]["scan"]["state"] == "success"
+    assert snap["work"]["scan"]["exactAutoApprovedCount"] >= 1
     assert snap["work"]["resolve"]["approvedCount"] >= 1
     page = api.query_review_rows({"viewMode": "all", "limit": 50})
     validate_review_rows_page(page)
