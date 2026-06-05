@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from automation.runners.event_bus import EventBus
+    from automation.runners.queue import JobQueue
 
 
 def _install_signal_handlers(*, startup_ignore_seconds: float, debug: bool) -> None:
@@ -129,6 +130,7 @@ def _start_webhook_background(
     host: str,
     port: int,
     *,
+    cfg: dict[str, Any] | None = None,
     debug: bool = False,
     restart_delay: float = 3.0,
     stop_event: threading.Event | None = None,
@@ -146,7 +148,7 @@ def _start_webhook_background(
 
                 if debug:
                     print("[daemon] webhook thread: serving", flush=True)
-                serve(host=host, port=port)
+                serve(host=host, port=port, cfg=cfg)
                 if stop_event is not None and stop_event.is_set():
                     break
                 summary = "webhook server exited"
@@ -204,6 +206,8 @@ def _worker_loop(
     stop_event: threading.Event,
     display_mode: str,
     bus: EventBus,
+    queue: JobQueue | None = None,
+    locks_dir: Path | None = None,
 ) -> None:
     from automation.runners.emit import emit_or_print
     from automation.runners.job_worker import run_once
@@ -213,7 +217,16 @@ def _worker_loop(
     idle_ticks = 0
     while not stop_event.is_set():
         try:
-            had_job = run_once(cfg, quiet_idle=True)
+            if queue is None and locks_dir is None:
+                had_job = run_once(cfg, quiet_idle=True)
+            else:
+                had_job = run_once(
+                    cfg,
+                    quiet_idle=True,
+                    queue=queue,
+                    locks_dir=locks_dir,
+                    recover_orphans=False,
+                )
         except KeyboardInterrupt:
             stop_event.set()
             raise
@@ -233,9 +246,7 @@ def _worker_loop(
             if display_mode == "plain" and (idle_ticks == 1 or idle_ticks % 20 == 0):
                 stats: dict[str, int] = {}
                 try:
-                    from automation.runners.job_worker import _queue
-
-                    stats = _queue(cfg).stats()
+                    stats = queue.stats() if queue is not None else {}
                 except Exception:
                     pass
                 suffix = ""
@@ -330,7 +341,6 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     from automation.runners.config import load_config
-    from automation.runners.job_worker import run_once
     from automation.runners.worker_lock import (
         acquire_daemon_lock,
         release_daemon_lock,
@@ -419,7 +429,8 @@ def main(argv: list[str] | None = None) -> int:
 
     from automation.runners.job_worker import _queue
 
-    recovered = _queue(cfg).recover_orphaned_running(locks_dir)
+    daemon_queue = _queue(cfg)
+    recovered = daemon_queue.recover_orphaned_running(locks_dir)
     if recovered:
         emit_or_print(
             "daemon",
@@ -442,6 +453,7 @@ def main(argv: list[str] | None = None) -> int:
             _start_webhook_background(
                 host,
                 port,
+                cfg=cfg,
                 debug=args.debug_interrupts,
                 stop_event=webhook_stop_event,
             )
@@ -488,47 +500,20 @@ def main(argv: list[str] | None = None) -> int:
             worker_thread: threading.Thread | None = None
             try:
                 if display_mode == "plain":
-                    idle_ticks = 0
-                    while True:
-                        try:
-                            had_job = run_once(cfg, quiet_idle=True)
-                        except KeyboardInterrupt:
-                            raise
-                        except Exception as exc:
-                            emit_or_print(
-                                "daemon",
-                                "worker.error",
-                                str(exc),
-                                plain_prefix=f"[daemon] worker error: {exc}",
-                            )
-                            had_job = False
-
-                        if had_job:
-                            idle_ticks = 0
-                        else:
-                            idle_ticks += 1
-                            if idle_ticks == 1 or idle_ticks % 20 == 0:
-                                stats: dict[str, int] = {}
-                                try:
-                                    from automation.runners.job_worker import _queue
-
-                                    stats = _queue(cfg).stats()
-                                except Exception:
-                                    pass
-                                suffix = ""
-                                if webhook_enabled:
-                                    suffix = f" webhook=http://{host}:{port}/health"
-                                idle_msg = (
-                                    f"[daemon] idle (queued={stats.get('queued', '?')} "
-                                    f"running={stats.get('running', '?')}){suffix}"
-                                )
-                                emit_or_print(
-                                    "daemon",
-                                    "worker.idle",
-                                    idle_msg.removeprefix("[daemon] "),
-                                    plain_prefix=idle_msg,
-                                )
-                        time.sleep(poll)
+                    stop_event = threading.Event()
+                    _worker_loop(
+                        cfg,
+                        poll,
+                        webhook_enabled,
+                        host,
+                        port,
+                        path,
+                        stop_event,
+                        display_mode,
+                        bus,
+                        daemon_queue,
+                        locks_dir,
+                    )
                 else:
                     from automation.runners.tui_dashboard import run_live
 
@@ -540,9 +525,7 @@ def main(argv: list[str] | None = None) -> int:
                     def refresh_stats() -> None:
                         state = get_runtime_state()
                         try:
-                            from automation.runners.job_worker import _queue
-
-                            stats = _queue(cfg).stats()
+                            stats = daemon_queue.stats()
                             state.queued = stats.get("queued")
                             state.running = stats.get("running")
                             state.succeeded = stats.get("succeeded")
@@ -576,6 +559,8 @@ def main(argv: list[str] | None = None) -> int:
                             stop_event,
                             display_mode,
                             bus,
+                            daemon_queue,
+                            locks_dir,
                         ),
                         daemon=False,
                     )

@@ -95,12 +95,21 @@ def render_prompt(cfg: dict[str, Any], payload: dict[str, Any], branch: str) -> 
         raise FileNotFoundError(template_path)
 
     template = template_path.read_text(encoding="utf-8")
+    meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+    linear_event = meta.get("linear_event") if isinstance(meta, dict) else None
     replacements = {
         "{{TASK}}": str(payload["task"]),
         "{{JOB_ID}}": str(payload["id"]),
         "{{BRANCH}}": branch,
         "{{ISSUE_IDENTIFIER}}": str(payload.get("issue_identifier") or ""),
         "{{ISSUE_URL}}": str(payload.get("issue_url") or ""),
+        "{{ROUTE_REASON}}": str(meta.get("route_reason") or ""),
+        "{{LINEAR_STATE}}": str(payload.get("linear_state") or ""),
+        "{{LINEAR_EVENT}}": json.dumps(
+            linear_event or {},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ),
     }
     rendered = template
     for key, value in replacements.items():
@@ -367,10 +376,18 @@ def _queue(cfg: dict[str, Any]) -> JobQueue:
     return JobQueue(queue_path, stale_seconds=float(stale) if stale is not None else None)
 
 
-def run_once(cfg: dict[str, Any], *, quiet_idle: bool = False) -> bool:
-    queue = _queue(cfg)
-    locks_dir = _locks_dir(cfg)
-    queue.recover_orphaned_running(locks_dir)
+def run_once(
+    cfg: dict[str, Any],
+    *,
+    quiet_idle: bool = False,
+    queue: JobQueue | None = None,
+    locks_dir: Path | None = None,
+    recover_orphans: bool = True,
+) -> bool:
+    queue = queue or _queue(cfg)
+    locks_dir = locks_dir or _locks_dir(cfg)
+    if recover_orphans:
+        queue.recover_orphaned_running(locks_dir)
 
     record = queue.claim_next()
     if record is None:

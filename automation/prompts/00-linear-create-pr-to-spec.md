@@ -35,6 +35,6 @@ Research (read-only) → Linear comment → feature branch for later impl. **No 
    Blocked → `## Research blocked`, `auto:blocked`, Backlog, STOP.
 3. **Comment** — `## Research report — {{ISSUE_IDENTIFIER}}`: **Summary (caveman)**, Problem, Root cause, Fix locations, AC, Verify commands, Risks.
 4. **Branch** — `ai/{{ISSUE_IDENTIFIER}}-<slug>`: fetch, pull base, checkout -b, push -u. Append `## Branch ready` (name, base, reuse in 02/03). → `auto:branch-creating`.
-5. **Closeout — MUST** — `save_issue(state=Todo, labels+=auto:research-done)` in **one call**. STOP. (Triggers `01-linear-status-changed-router.md`.)
+5. **Closeout — MUST** — `save_issue(state=Todo, labels+=auto:research-done)` in **one call**. STOP. (Triggers `01a-linear-spec.md`.)
 
 **Tools:** Linear MCP · git (branch + push only)
