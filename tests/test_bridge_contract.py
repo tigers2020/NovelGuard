@@ -587,20 +587,20 @@ def test_hash_file_hello_golden(tmp_path: Path) -> None:
 def test_find_exact_duplicate_groups_keeper_by_size() -> None:
     content = "a" * 64
     keeper = FileRecord(
-        id=make_file_id("z_keeper.txt", 50, 2),
+        id=make_file_id("z_keeper.txt", 50, 1),
         relative_path="z_keeper.txt",
         name="z_keeper.txt",
         size_bytes=50,
-        modified_at_ns=2,
+        modified_at_ns=1,
         extension=".txt",
         content_sha256=content,
     )
     other = FileRecord(
-        id=make_file_id("a_other.txt", 50, 1),
+        id=make_file_id("a_other.txt", 50, 2),
         relative_path="a_other.txt",
         name="a_other.txt",
         size_bytes=50,
-        modified_at_ns=1,
+        modified_at_ns=2,
         extension=".txt",
         content_sha256=content,
     )
