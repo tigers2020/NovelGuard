@@ -19,6 +19,7 @@ def main(argv: list[str] | None = None) -> int:
         clear_lock,
         clear_stale_file_lock,
         lock_holder_alive,
+        resolve_locks_dir,
     )
 
     parser = argparse.ArgumentParser(description="Automation queue admin")
@@ -37,15 +38,20 @@ def main(argv: list[str] | None = None) -> int:
     reset_p = sub.add_parser("reset", help="Delete job row so webhook can re-enqueue same job_id")
     reset_p.add_argument("--job-id", required=True)
 
+    requeue_p = sub.add_parser(
+        "requeue-failed",
+        help="Move failed jobs back to queued for worker retry",
+    )
+    requeue_p.add_argument("--job-id", help="Specific job_id to requeue")
+    requeue_p.add_argument("--limit", type=int, help="Max failed jobs to requeue (newest first)")
+
     args = parser.parse_args(argv)
     cfg = load_config()
     queue_path = Path(cfg.get("queue", {}).get("path", "automation/jobs/queue.sqlite"))
     if not queue_path.is_absolute():
         queue_path = repo_root() / queue_path
 
-    locks_dir = Path(cfg.get("locks", {}).get("dir", "automation/locks"))
-    if not locks_dir.is_absolute():
-        locks_dir = repo_root() / locks_dir
+    locks_dir = resolve_locks_dir(cfg)
 
     stale = cfg.get("queue", {}).get("stale_seconds")
     queue = JobQueue(
@@ -127,6 +133,14 @@ def main(argv: list[str] | None = None) -> int:
             )
         )
         return 0 if deleted else 1
+
+    if args.command == "requeue-failed":
+        requeued = queue.requeue_failed(
+            job_id=args.job_id,
+            limit=args.limit,
+        )
+        print(json.dumps({"requeued": requeued, "stats": queue.stats()}, indent=2))
+        return 0
 
     return 1
 

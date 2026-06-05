@@ -235,9 +235,7 @@ def _build_agent_panel(
     log_age_s: float | None,
 ) -> str:
     active = snapshot.cursor_running or snapshot.verify_running or snapshot.cursor_output_buffered
-    stage_active = bool(
-        snapshot.active_stage and snapshot.active_stage not in ("idle", "complete")
-    )
+    stage_active = bool(snapshot.active_stage and snapshot.active_stage not in ("idle", "complete"))
     if not active and not cursor_lines and not stage_active:
         return "idle"
 

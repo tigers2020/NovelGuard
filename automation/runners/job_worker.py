@@ -29,6 +29,7 @@ from automation.runners.worker_lock import (
     clear_lock,
     clear_stale_file_lock,
     daemon_running,
+    resolve_locks_dir,
     write_lock,
 )
 
@@ -222,10 +223,7 @@ def run_verify(
 
 
 def _locks_dir(cfg: dict[str, Any]) -> Path:
-    locks_dir = Path(cfg.get("locks", {}).get("dir", "automation/locks"))
-    if not locks_dir.is_absolute():
-        locks_dir = repo_root() / locks_dir
-    return locks_dir
+    return resolve_locks_dir(cfg)
 
 
 def _logs_dir(cfg: dict[str, Any]) -> Path:

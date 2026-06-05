@@ -335,7 +335,7 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
           </div>
         )}
         {!loading && !queryError && filteredCount > 0 && (
-          <p className="mt-2 text-xs text-on-surface-variant" data-testid="quality-tab-summary">
+          <p className="mt-2 text-xs text-on-surface-variant" data-testid="quality-tab-active-summary">
             {activeTabLabel}: {filteredCount.toLocaleString()}건 (경고{" "}
             {tabSummary.warningCount.toLocaleString()} · 오류{" "}
             {tabSummary.errorCount.toLocaleString()})

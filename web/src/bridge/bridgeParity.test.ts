@@ -23,6 +23,10 @@ import {
   loadFileDockExpandedForMode,
   persistFileDockExpandedForMode,
 } from "../components/layout/shellFileDockStorage";
+import {
+  loadResolveFacetExpanded,
+  persistResolveFacetExpanded,
+} from "../features/work/resolve/resolveFacetStorage";
 import { derivePipelineTracks } from "../features/work/pipelineTracks";
 import { deriveScanSectionState } from "../features/work/scanSectionState";
 import { buildQualityRows, getAllReviewRows, sortQualityRows } from "./mockData";
@@ -517,6 +521,41 @@ describe("snapshot invalidation", () => {
     vi.advanceTimersByTime(1000);
     expect(seen.length).toBe(last);
     await mockBridge.cancelRun();
+  });
+});
+
+describe("resolveFacetStorage", () => {
+  const storage = new Map<string, string>();
+
+  beforeEach(() => {
+    storage.clear();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        storage.set(key, value);
+      },
+      removeItem: (key: string) => {
+        storage.delete(key);
+      },
+      clear: () => {
+        storage.clear();
+      },
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("defaults expanded to false when key absent", () => {
+    expect(loadResolveFacetExpanded()).toBe(false);
+  });
+
+  it("persists and loads expanded preference", () => {
+    persistResolveFacetExpanded(true);
+    expect(loadResolveFacetExpanded()).toBe(true);
+    persistResolveFacetExpanded(false);
+    expect(loadResolveFacetExpanded()).toBe(false);
   });
 });
 

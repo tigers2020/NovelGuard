@@ -13,6 +13,10 @@ import { reviewRowGroupId } from "../../types/review";
 import type { ReviewDecisionCommand } from "../../types/reviewDecisions";
 import type { SelectionScope } from "../../types/selection";
 import { FacetPanel } from "./resolve/FacetPanel";
+import {
+  loadResolveFacetExpanded,
+  persistResolveFacetExpanded,
+} from "./resolve/resolveFacetStorage";
 import { ResolveGridToolbar } from "./resolve/ResolveGridToolbar";
 import { VirtualizedReviewGrid } from "./resolve/VirtualizedReviewGrid";
 import { REVIEW_GRID_SIZING_KEY } from "./resolve/reviewGridColumns";
@@ -48,6 +52,12 @@ export function ResolveAndOrganizeWorkspace({
   const resolve = snapshot.work.resolve;
 
   const [viewMode, setViewMode] = useState<ReviewViewMode>("action");
+  const [facetExpanded, setFacetExpanded] = useState(() => loadResolveFacetExpanded());
+
+  const handleFacetExpandedChange = (next: boolean) => {
+    setFacetExpanded(next);
+    persistResolveFacetExpanded(next);
+  };
   const [rowTypeFilter, setRowTypeFilter] = useState<"exact" | "near" | "relation" | "all">("all");
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<ReviewRow[]>([]);
@@ -305,7 +315,12 @@ export function ResolveAndOrganizeWorkspace({
       data-testid="resolve-workspace"
     >
       <div className="relative z-0 flex min-h-0 min-w-0 flex-1 overflow-hidden">
-        <FacetPanel viewMode={viewMode} onViewModeChange={setViewMode} />
+        <FacetPanel
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          expanded={facetExpanded}
+          onExpandedChange={handleFacetExpandedChange}
+        />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {!isWideLayout && selectedRow && (
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-outline bg-surface px-3 py-2">
