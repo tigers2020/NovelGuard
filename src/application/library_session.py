@@ -26,6 +26,7 @@ from application.quality_analyzer import analyze_quality
 from application.quality_issue_detail import build_quality_issue_detail
 from application.quality_query import query_quality_page
 from application.quality_rows_builder import build_quality_rows
+from application.review_auto_approve import persist_exact_non_keeper_approvals
 from application.review_query import query_review_page
 from application.review_rows_builder import build_review_rows
 from application.review_snapshot_counts import file_row_status_counts
@@ -1197,6 +1198,8 @@ class LibrarySession:
                     valid_group_ids = {group.group_id for group in review_groups}
                     valid_file_ids = {file_record.id for file_record in files}
                     self._index.prune_review_state(folder, valid_group_ids, valid_file_ids)
+                    stored = self._index.load_review_state(folder)
+                    persist_exact_non_keeper_approvals(folder, files, self._index, stored)
                     stored = self._index.load_review_state(folder)
                     self._set_exact_index_progress("검토 행 구성 중…", 91)
                     review_rows = rebuild_rows_with_review_state(files, stored)
