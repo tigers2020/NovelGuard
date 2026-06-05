@@ -31,5 +31,8 @@ describe("ResolveGridToolbar", () => {
     expect(screen.getByText("이동 대기")).toBeTruthy();
     expect(screen.getByText("참고 신호")).toBeTruthy();
     expect(screen.queryByText("Queue")).toBeNull();
+    expect(screen.getByText("Groups")).toBeTruthy();
+    expect(screen.getByText("Conflicts")).toBeTruthy();
+    expect(screen.getByText("Approved")).toBeTruthy();
   });
 });

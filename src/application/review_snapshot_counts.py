@@ -14,9 +14,7 @@ from application.finalize_blockers import (
 def resolve_insight_counts(rows: list[dict[str, Any]]) -> tuple[int, int]:
     """Return (move_ready_count, review_signal_count) for unresolved file rows."""
     move_ready = exact_unresolved_queue_count(rows)
-    review_signal = near_unresolved_file_row_count(rows) + relation_unresolved_file_row_count(
-        rows
-    )
+    review_signal = near_unresolved_file_row_count(rows) + relation_unresolved_file_row_count(rows)
     return move_ready, review_signal
 
 
