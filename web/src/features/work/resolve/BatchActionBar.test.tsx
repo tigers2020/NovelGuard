@@ -76,6 +76,7 @@ describe("BatchActionBar", () => {
         loadedCount={10}
         reviewOnlyGuidance="Exact (이동) 탭에서만 가능합니다."
         onExcludeAllFiltered={noop}
+        onAutoSelectKeepers={noop}
         onPreview={noop}
       />,
     );
@@ -89,6 +90,7 @@ describe("BatchActionBar", () => {
         filteredCount={10}
         loadedCount={10}
         onExcludeAllFiltered={noop}
+        onAutoSelectKeepers={noop}
         onPreview={noop}
       />,
     );
