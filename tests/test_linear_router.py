@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from automation.linear.router import (
     _labels_changed,
     _state_changed,
