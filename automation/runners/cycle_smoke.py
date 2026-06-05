@@ -8,6 +8,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from automation.linear.linear_ids import (
+    DEFAULT_LABEL_IDS,
+    DEFAULT_PROJECT_IDS,
+    DEFAULT_STATE_IDS,
+    DEFAULT_TEAM_IDS,
+)
 from automation.linear.router import build_job_payload, route_linear_webhook
 from automation.runners.config import load_config, repo_root
 
@@ -26,6 +32,20 @@ _WORKER_PLACEHOLDERS = (
     "{{CONTEXT_MEMORY_JSON}}",
     "{{NEXT_PROMPT}}",
 )
+
+def smoke_config() -> dict[str, Any]:
+    """CI-safe minimal config when automation/config.yaml is absent."""
+    return {
+        "linear": {
+            "label_ids": dict(DEFAULT_LABEL_IDS),
+            "state_ids": dict(DEFAULT_STATE_IDS),
+            "team_ids": list(DEFAULT_TEAM_IDS),
+            "project_ids": list(DEFAULT_PROJECT_IDS),
+        },
+        "prompts": {"dir": "automation/prompts"},
+        "repos": {"novelguard": {"path": "."}},
+    }
+
 
 _MOCK_MEMORY: dict[str, Any] = {
     "goal": "NOV-SMOKE cycle smoke",

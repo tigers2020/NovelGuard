@@ -7,14 +7,10 @@ import json
 from pathlib import Path
 
 import automation.linear.router as router_mod
-
 from automation.linear.linear_ids import DEFAULT_LABEL_IDS
 from automation.linear.router import (
-    _labels_changed,
-    _state_changed,
     build_job_payload,
     dedupe_key,
-    resolve_planning_prompt,
     route_linear_webhook,
 )
 
@@ -230,7 +226,7 @@ def test_build_job_payload_task_is_compact():
             "labelIds": [],
         },
     }
-    from automation.linear.router import build_job_payload, route_linear_webhook
+    from automation.linear.router import route_linear_webhook
 
     route = route_linear_webhook(payload, cfg=_TEST_CFG)
     assert route is not None

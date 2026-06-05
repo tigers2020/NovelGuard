@@ -10,8 +10,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from automation.runners.config import load_config
-from automation.runners.context_compressor import compress_job_context
+from automation.runners.config import load_config  # noqa: E402
+from automation.runners.context_compressor import compress_job_context  # noqa: E402
 
 
 def main() -> int:

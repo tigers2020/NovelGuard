@@ -46,8 +46,8 @@ def test_render_prompt_injects_context_memory_when_enabled(tmp_path):
 
 
 def test_resolve_legacy_write_todo_list_prompt_path():
-    from automation.runners.job_worker import _resolve_prompt_file
     from automation.runners.config import repo_root
+    from automation.runners.job_worker import _resolve_prompt_file
 
     prompts_dir = repo_root() / "automation" / "prompts"
     resolved = _resolve_prompt_file(prompts_dir, "linear/todo/write-todo-list.md")
@@ -56,8 +56,8 @@ def test_resolve_legacy_write_todo_list_prompt_path():
 
 
 def test_resolve_write_task_list_prompt_path():
-    from automation.runners.job_worker import _resolve_prompt_file
     from automation.runners.config import repo_root
+    from automation.runners.job_worker import _resolve_prompt_file
 
     prompts_dir = repo_root() / "automation" / "prompts"
     resolved = _resolve_prompt_file(prompts_dir, "linear/todo/write-task-list.md")
