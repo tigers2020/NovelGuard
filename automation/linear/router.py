@@ -394,11 +394,7 @@ def build_job_payload(
         f"{state_id[:8] or action}{label_suffix}"
     )
 
-    title = str(data.get("title") or "")
-    task = (
-        f"Linear automation: {route.reason} for {identifier} ({state}). "
-        f"Issue: {title}. Follow prompt {route.prompt_file} exactly."
-    )
+    task = f"{identifier}: {route.reason}"
 
     return {
         "id": job_id,

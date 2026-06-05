@@ -181,6 +181,29 @@ def test_label_ids_only_routes_by_uuid():
     assert route.prompt_file == "linear/todo/write-todo-list.md"
 
 
+def test_build_job_payload_task_is_compact():
+    payload = {
+        "action": "update",
+        "type": "Issue",
+        "updatedFrom": {"stateId": "49a46ce6-eb18-4377-95ae-b76f655a77b7"},
+        "data": {
+            "identifier": "NOV-38",
+            "teamId": "97047174-6453-4458-b170-a9bf5f7b52e0",
+            "projectId": "20965ebc-3ea7-4787-9310-f15ad9019007",
+            "stateId": "0be134b7-bc56-4ba6-ba76-6b0a705e2ded",
+            "labelIds": [],
+        },
+    }
+    from automation.linear.router import build_job_payload, route_linear_webhook
+
+    route = route_linear_webhook(payload, cfg=_TEST_CFG)
+    assert route is not None
+    job = build_job_payload(payload, route, cfg=_TEST_CFG)
+    assert job["task"] == "NOV-38: status→In Progress"
+    assert "Follow prompt" not in job["task"]
+    assert len(job["task"]) < 80
+
+
 def test_dedupe_key_varies_with_webhook_id():
     payload = _issue(
         state="Todo",
