@@ -65,6 +65,18 @@ Routing logic: `automation/linear/router.py` (`resolve_planning_prompt`). Produc
 
 Doctor: `python scripts/automation_compressor_doctor.py`
 
+### Cycle smoke (prompt pipeline)
+
+Validates routing + `render_prompt` for UUID webhook fixtures (no Cursor, no queue writes):
+
+```bash
+python scripts/automation_cycle_smoke.py
+python scripts/automation_cycle_smoke.py --group state_changed
+python scripts/automation_cycle_smoke.py --live-compressor   # requires Ollama
+```
+
+Fixtures: `automation/examples/cycle-smoke/`. Includes combined state+label case (`A-combined-in-review-impl-done`) to ensure `impl-done→verify` beats plain `status→In Review`.
+
 Hermes can enqueue the same JSON shape as [automation/examples/hermes-job.json](../automation/examples/hermes-job.json):
 
 ```bash
