@@ -28,6 +28,7 @@ VALID_SNAPSHOT: dict[str, Any] = {
         "scan": {
             "state": "empty",
             "lastRun": None,
+            "exactAutoApprovedCount": 0,
             "indexReady": False,
             "deepAnalysisComplete": False,
             "deepAnalysisStatus": "idle",

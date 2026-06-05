@@ -1115,6 +1115,7 @@ def test_query_review_rows_exact_duplicate_pair(tmp_path: Path) -> None:
     api.start_scan()
     snap = _scan_until_idle(api)
     assert snap["work"]["scan"]["state"] == "success"
+    assert snap["work"]["scan"]["exactAutoApprovedCount"] >= 1
     assert snap["work"]["resolve"]["approvedCount"] >= 1
     page = api.query_review_rows({"viewMode": "all", "limit": 50})
     validate_review_rows_page(page)

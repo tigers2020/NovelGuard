@@ -20,6 +20,7 @@ export type DeepAnalysisStatus = "idle" | "running" | "complete" | "error";
 export interface ScanSnapshot {
   state: "empty" | "ready" | "running" | "success" | "error";
   lastRun: string | null;
+  exactAutoApprovedCount: number;
   indexReady: boolean;
   deepAnalysisComplete: boolean;
   deepAnalysisStatus: DeepAnalysisStatus;

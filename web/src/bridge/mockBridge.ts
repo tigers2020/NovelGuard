@@ -74,6 +74,7 @@ const state = {
 };
 
 let libraryRevision = 0;
+let exactAutoApprovedCount = 0;
 
 let invalidationSequence = 0;
 const invalidationListeners = new Set<(event: SnapshotInvalidationEvent) => void>();
@@ -267,6 +268,7 @@ function buildSnapshot(): AppSnapshot {
       scan: {
         state: state.pipelineRunning ? "running" : "success",
         lastRun: "2026-06-01 10:42",
+        exactAutoApprovedCount,
         indexReady: !state.pipelineRunning,
         deepAnalysisComplete: !state.pipelineRunning,
         deepAnalysisStatus: state.pipelineRunning ? "running" : "complete",
@@ -493,6 +495,7 @@ export const mockBridge: NovelGuardBridge = {
       rejectApply("start_scan", "LIBRARY_BUSY");
     }
     stopScanSimulation();
+    exactAutoApprovedCount = 0;
     appendMockLog("INFO", "Mock scan started");
     state.pipelineRunning = true;
     emitSnapshotInvalidation("pipelinePhase", { pipelinePhase: "probe" });
@@ -503,7 +506,7 @@ export const mockBridge: NovelGuardBridge = {
       if (pct >= 100) {
         stopScanSimulation();
         state.pipelineRunning = false;
-        persistMockExactNonKeeperApprovals(getAllReviewRows());
+        exactAutoApprovedCount = persistMockExactNonKeeperApprovals(getAllReviewRows());
         libraryRevision += 1;
         emitSnapshotInvalidation("libraryRevision", { libraryRevision });
       }

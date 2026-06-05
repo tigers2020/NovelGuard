@@ -855,7 +855,10 @@ describe("auto-approve parity (NOV-20)", () => {
     await scanPromise;
     const after = (await mockBridge.getSnapshot()).work.resolve.libraryRevision;
     expect(after).toBeGreaterThan(before);
-    expect((await mockBridge.getSnapshot()).work.scan.state).toBe("success");
+    const snap = await mockBridge.getSnapshot();
+    expect(snap.work.scan.state).toBe("success");
+    expect(typeof snap.work.scan.exactAutoApprovedCount).toBe("number");
+    expect(snap.work.scan.exactAutoApprovedCount).toBeGreaterThanOrEqual(0);
     vi.useRealTimers();
   });
 });

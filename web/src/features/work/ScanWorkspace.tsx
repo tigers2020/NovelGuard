@@ -166,6 +166,15 @@ export function ScanWorkspace({
             {scan.deepAnalysisError ? ` ${scan.deepAnalysisError}` : null}
           </p>
         )}
+        {sectionState === "success" && scan.exactAutoApprovedCount > 0 && (
+          <p
+            className="mt-2 text-sm text-on-surface-variant"
+            data-testid="scan-auto-approve-summary"
+          >
+            Exact 중복 {scan.exactAutoApprovedCount}건 non-keeper 자동 승인 — 검토·정리에서 이동
+            계획 미리보기 가능
+          </p>
+        )}
 
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <button
