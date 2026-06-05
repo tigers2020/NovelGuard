@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+PROMPT_DELIVERY = "subprocess-stdin"
 
 
 @dataclass(frozen=True)
@@ -16,6 +19,7 @@ class CursorRunResult:
     stdout: str
     stderr: str
     dry_run: bool
+    stdin_path: str | None = None
 
 
 def resolve_cli(cfg: dict[str, Any]) -> list[str]:
@@ -46,20 +50,34 @@ def run_prompt(
         )
 
     base = resolve_cli(cfg)
-    extra = [str(x) for x in (cursor_cfg.get("args") or ["-p"])]
-    cmd = base + extra + [prompt]
+    extra = [str(x) for x in (cursor_cfg.get("args") or ["-p", "--trust", "--force"])]
+    cmd = base + extra
+
+    logs_dir = Path(cfg.get("logs", {}).get("dir", "automation/logs"))
+    if not logs_dir.is_absolute():
+        from automation.runners.config import repo_root
+
+        logs_dir = repo_root() / logs_dir
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    stdin_path = logs_dir / f"_stdin-{int(time.time())}.md"
+    stdin_path.write_text(prompt, encoding="utf-8")
+
     proc = subprocess.run(
         cmd,
         cwd=repo,
+        input=prompt,
         text=True,
         capture_output=True,
         encoding="utf-8",
         errors="replace",
     )
+    display_cmd = cmd + [f"<stdin:{stdin_path.name}>"]
+
     return CursorRunResult(
-        command=cmd,
+        command=display_cmd,
         returncode=proc.returncode,
         stdout=proc.stdout or "",
         stderr=proc.stderr or "",
         dry_run=False,
+        stdin_path=str(stdin_path),
     )

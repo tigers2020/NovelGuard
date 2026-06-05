@@ -1,0 +1,24 @@
+{
+  "action": "create",
+  "type": "Issue",
+  "data": {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "identifier": "NOV-17",
+    "title": "Resolve: auto-approve exact non-keeper after scan",
+    "url": "https://linear.app/zkaufman/issue/NOV-17/example",
+    "project": {
+      "id": "20965ebc-3ea7-4787-9310-f15ad9019007",
+      "name": "NovelGuard"
+    },
+    "team": {
+      "id": "97047174-6453-4458-b170-a9bf5f7b52e0",
+      "name": "NoverGuard"
+    },
+    "state": {
+      "id": "180fc254-f066-4fad-a425-7ebab180d4c6",
+      "name": "Backlog",
+      "type": "backlog"
+    },
+    "labels": []
+  }
+}

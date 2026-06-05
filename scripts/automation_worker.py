@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Run automation job worker. Usage: python scripts/automation_worker.py [--once]"""
+"""Run one automation job. For continuous Linear automation use automation_daemon.py.
+
+Usage:
+  python scripts/automation_daemon.py          # webhook + worker (recommended)
+  python scripts/automation_worker.py --once   # single job only
+"""
 
 import runpy
 import sys
