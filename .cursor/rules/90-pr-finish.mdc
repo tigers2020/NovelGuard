@@ -1,0 +1,10 @@
+---
+description: PR finish and babysit flow
+alwaysApply: false
+---
+
+# PR finish
+
+- Re-run scoped tests before push.
+- `gh pr create` with summary + test plan; no merge without approval.
+- `/babysit`: fix CI/review in PR scope only; do not weaken workflows.

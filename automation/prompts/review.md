@@ -1,14 +1,5 @@
-@AGENTS.md @.cursor/rules/10-runner-safety.mdc
+@docs/agents/runner-brief.md
 
-Review the current git diff. Do not modify files.
+Review current git diff. **No file edits.**
 
-Focus:
-- correctness and regression risk
-- architecture / layer violations
-- missing tests
-- unsafe file operations
-- scope creep
-
-Return blocking issues first, then suggestions.
-
-Job context: {{TASK}}
+Blocking issues first, then suggestions. Focus: correctness, layers, tests, unsafe file ops, scope creep.

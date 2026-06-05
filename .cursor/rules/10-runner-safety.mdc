@@ -1,0 +1,14 @@
+---
+description: Headless runner safety gates
+globs: automation/**,scripts/automation*.py,scripts/hermes*.py,scripts/linear_webhook*.py
+alwaysApply: false
+---
+
+# Runner safety
+
+- One branch per job; never checkout over dirty working tree.
+- No commit unless job says `commit: true`.
+- No merge to protected branches.
+- No destructive moves without dry-run + approval.
+- Report every verify command with exit code.
+- Stop on instruction conflict; do not guess.
