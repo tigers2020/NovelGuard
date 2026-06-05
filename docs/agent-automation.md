@@ -50,9 +50,11 @@ Quick start: [automation/README.md](../automation/README.md).
 | Backlog + `auto:spec-done` | `backlog/grill-plan.md` |
 | Todo + `auto:grill-needs-revision` | `todo/revise-spec.md` |
 | Todo + `auto:spec-done` (no plan) | `todo/defer-to-backlog.md` |
-| Todo + `auto:plan-done` | `todo/write-todo-list.md` |
-| status → In Progress | `in-progress/implement.md` |
+| Todo + `auto:plan-done` | `todo/write-todo-list.md` (posts **`## Task list`** for `/subagent-driven-development`; Linear label still `auto:todo-list-done`) |
+| status → In Progress | `in-progress/implement.md` (**`/subagent-driven-development` only**) |
 | status → In Review | `in-review/verify.md` |
+
+**Plan → Task list → Implement:** After `## Implementation Plan`, the Task list phase posts `## Task list` — bite-sized tasks for `/subagent-driven-development` (not a generic todo dump). Implement phase runs **subagent-driven only** (one subagent per task; spec then code-quality review). Linear closeout label remains `auto:todo-list-done` until renamed in Linear.
 
 Routing logic: `automation/linear/router.py` (`resolve_planning_prompt`). Production webhooks use **`stateId` / `labelIds` UUIDs** — configure `linear.state_ids` and `linear.label_ids` in `automation/config.yaml`. Label-only updates route when a **routing** label resolves; progress labels alone are ignored. Phase closeouts must use `save_issue` with status **and** done label in one call.
 

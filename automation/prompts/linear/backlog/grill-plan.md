@@ -28,7 +28,7 @@ commit: false
 | status ≠ Backlog | silent exit |
 | `auto:plan-done` + no `regenerate plan` | idempotent exit |
 
-**Skip:** Plan + grill APPROVED already in comments → `save_issue(Todo, labels+=auto:plan-done)` **one call**. STOP. → `linear/todo/write-todo-list.md`.
+**Skip:** Plan + grill APPROVED already in comments → `save_issue(Todo, labels+=auto:plan-done)` **one call**. STOP. → `linear/todo/write-todo-list.md` (Task list phase).
 
 **Never:** `src/`/`web/`/`tests/` edits, commit, branch, PR.
 
@@ -37,6 +37,6 @@ commit: false
 /grill-me · /writing-plans · read-only.
 
 1. `## Grill-me verdict` (**Summary caveman**). NEEDS_REVISION → `save_issue(Todo, labels+=auto:grill-needs-revision)` **one call**. STOP. → `linear/todo/revise-spec.md`.
-2. APPROVED → `## Implementation Plan` (**Summary caveman** at top) → `save_issue(Todo, labels+=auto:plan-done)` **one call**. STOP. → `linear/todo/write-todo-list.md`.
+2. APPROVED → `## Implementation Plan` (**Summary caveman** at top) → `save_issue(Todo, labels+=auto:plan-done)` **one call**. STOP. → Task list phase (`linear/todo/write-todo-list.md`).
 
 **Tools:** Linear MCP · read-only repo
