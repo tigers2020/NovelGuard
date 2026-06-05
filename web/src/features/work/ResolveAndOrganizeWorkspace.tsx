@@ -23,9 +23,9 @@ import { REVIEW_GRID_SIZING_KEY } from "./resolve/reviewGridColumns";
 import { mergeReviewColumnVisibility } from "./resolve/reviewGridLayout";
 import { DetailPanel } from "./resolve/DetailPanel";
 import { BatchActionBar } from "./resolve/BatchActionBar";
-import { AutoSelectConfirmDialog } from "./resolve/AutoSelectConfirmDialog";
+import { AutoSelectKeepersConfirmDialog } from "./resolve/AutoSelectKeepersConfirmDialog";
+import { computeAutoSelectSummary } from "./resolve/computeAutoSelectSummary";
 import { BulkFilterConfirmDialog } from "./resolve/BulkFilterConfirmDialog";
-import type { AutoSelectKeepersSummary } from "../../types/autoSelectSummary";
 import {
   countExecutableMovePreviewRows,
   hasExecutableMovePreviewRows,
@@ -87,9 +87,6 @@ export function ResolveAndOrganizeWorkspace({
   const [bulkExcludeConfirmOpen, setBulkExcludeConfirmOpen] = useState(false);
   const [bulkMutating, setBulkMutating] = useState(false);
   const [autoSelectConfirmOpen, setAutoSelectConfirmOpen] = useState(false);
-  const [autoSelectSummary, setAutoSelectSummary] = useState<AutoSelectKeepersSummary | null>(
-    null,
-  );
   const [autoSelectMutating, setAutoSelectMutating] = useState(false);
   const [isWideLayout, setIsWideLayout] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches,
@@ -304,6 +301,12 @@ export function ResolveAndOrganizeWorkspace({
     [rows],
   );
 
+  const autoSelectSummary = useMemo(() => {
+    if (!autoSelectConfirmOpen) return null;
+    const loadedFileRowCount = rows.filter((row) => row.rowKind === "file").length;
+    return computeAutoSelectSummary(rows, { filteredCount, loadedFileRowCount });
+  }, [autoSelectConfirmOpen, rows, filteredCount]);
+
   const previewCtaText = useMemo(
     () =>
       previewCtaLabel({
@@ -316,19 +319,13 @@ export function ResolveAndOrganizeWorkspace({
 
   const showPreviewCta = rowTypeFilter === "exact";
 
-  const openAutoSelectConfirm = useCallback(async () => {
-    try {
-      setQueryError(null);
-      const summary = await bridge.summarizeAutoSelectKeepers(currentQuery);
-      setAutoSelectSummary(summary);
-      setAutoSelectConfirmOpen(true);
-    } catch (err) {
-      setQueryError(err instanceof Error ? err.message : "Auto-select summary failed");
-    }
-  }, [bridge, currentQuery]);
+  const openAutoSelectConfirm = useCallback(() => {
+    setQueryError(null);
+    setAutoSelectConfirmOpen(true);
+  }, []);
 
   const runAutoSelectKeepersAndApprove = useCallback(async () => {
-    const targetCount = autoSelectSummary?.targetCount ?? 0;
+    const targetCount = autoSelectSummary?.mutationTargetCount ?? 0;
     if (targetCount === 0) return;
     setAutoSelectMutating(true);
     try {
@@ -366,7 +363,6 @@ export function ResolveAndOrganizeWorkspace({
     } finally {
       setAutoSelectMutating(false);
       setAutoSelectConfirmOpen(false);
-      setAutoSelectSummary(null);
     }
   }, [autoSelectSummary, bridge, currentQuery, loadAllFiltered, refreshSnapshot]);
 
@@ -590,17 +586,15 @@ export function ResolveAndOrganizeWorkspace({
         previewLabel={previewCtaText}
       />
 
-      <AutoSelectConfirmDialog
-        open={autoSelectConfirmOpen}
-        summary={autoSelectSummary}
-        filteredCount={filteredCount}
-        mutating={autoSelectMutating}
-        onCancel={() => {
-          setAutoSelectConfirmOpen(false);
-          setAutoSelectSummary(null);
-        }}
-        onConfirm={() => void runAutoSelectKeepersAndApprove()}
-      />
+      {autoSelectSummary && (
+        <AutoSelectKeepersConfirmDialog
+          open={autoSelectConfirmOpen}
+          summary={autoSelectSummary}
+          mutating={autoSelectMutating}
+          onCancel={() => setAutoSelectConfirmOpen(false)}
+          onConfirm={() => void runAutoSelectKeepersAndApprove()}
+        />
+      )}
 
       <BulkFilterConfirmDialog
         open={bulkExcludeConfirmOpen}
