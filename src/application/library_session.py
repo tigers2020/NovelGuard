@@ -868,8 +868,6 @@ class LibrarySession:
         )
 
     def _refresh_resolve_counts(self) -> None:
-        from application.review_snapshot_counts import resolve_insight_counts
-
         queue, approved, conflict = file_row_status_counts(self._review_rows_cache)
         move_ready, review_signal = resolve_insight_counts(self._review_rows_cache)
         self._queue_count = queue
