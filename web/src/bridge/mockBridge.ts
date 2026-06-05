@@ -36,6 +36,7 @@ import {
   applyMockReviewCommand,
   applyMockReviewState,
   fileRowStatusCounts,
+  persistMockExactNonKeeperApprovals,
 } from "./mockReviewState";
 import type { DuplicateGroupDetail, ReviewRow } from "../types/review";
 import { buildMockDuplicateGroupDetail } from "./mockDuplicateGroupDetail";
@@ -329,10 +330,13 @@ function buildMockPreviewPlan(selection: SelectionScope): {
 
   for (const row of selectedRows) {
     if (row.rowKind !== "file") continue;
-    if (row.status === "approved" || row.status === "excluded" || row.status === "conflict") {
+    if (row.status === "excluded" || row.status === "conflict") {
       continue;
     }
     const action = row.proposedAction;
+    if (row.status === "approved" && action !== "move_duplicate") {
+      continue;
+    }
     if (action === "keep" || action === "ignore") continue;
     if (action === "move_organized") {
       blockedCount += 1;
@@ -499,6 +503,7 @@ export const mockBridge: NovelGuardBridge = {
       if (pct >= 100) {
         stopScanSimulation();
         state.pipelineRunning = false;
+        persistMockExactNonKeeperApprovals(getAllReviewRows());
         libraryRevision += 1;
         emitSnapshotInvalidation("libraryRevision", { libraryRevision });
       }

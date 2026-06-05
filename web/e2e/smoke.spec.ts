@@ -245,6 +245,19 @@ test.describe("NovelGuard smoke", () => {
     );
   });
 
+  test("NOV-20 scan resolve preview without checkbox selection", async ({ page }) => {
+    await page.goto("/");
+    await runScanToSuccess(page);
+    await page.getByTestId("work-mode-tab-resolve").click();
+    await expect(page.getByTestId("shell-file-dock")).toHaveAttribute("data-state", "collapsed");
+    const resolveGrid = page.getByTestId("resolve-review-grid");
+    await expect(resolveGrid).toBeVisible({ timeout: 15_000 });
+    await expect(resolveGrid.locator('input[type="checkbox"]')).toHaveCount(0);
+    await prepareExecutableMoveFilter(page);
+    await openApplyDialog(page);
+    await expect(page.getByTestId("apply-preview-run")).toBeVisible();
+  });
+
   test("quality query failure shows error and retry", async ({ page }) => {
     await page.addInitScript(() => {
       (window as unknown as { __NOVELGUARD_TEST_BRIDGE_FAIL__?: string }).__NOVELGUARD_TEST_BRIDGE_FAIL__ =

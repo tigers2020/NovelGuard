@@ -26,8 +26,14 @@ import {
 import { derivePipelineTracks } from "../features/work/pipelineTracks";
 import { deriveScanSectionState } from "../features/work/scanSectionState";
 import { buildQualityRows, getAllReviewRows, sortQualityRows } from "./mockData";
+import {
+  applyMockReviewState,
+  persistMockExactNonKeeperApprovals,
+  resetMockReviewState,
+} from "./mockReviewState";
 import { reviewRowGroupId } from "../types/review";
 import type { WorkMode } from "../types/snapshot";
+import type { ReviewRow } from "../types/review";
 import { createPywebviewBridge } from "./pywebviewBridge";
 import {
   NOVEL_GUARD_BRIDGE_METHODS,
@@ -724,5 +730,93 @@ describe("quality repair parity (PR-42)", () => {
   it("cancelFinalize is idempotent", async () => {
     await mockBridge.cancelFinalize();
     await expect(mockBridge.cancelFinalize()).resolves.toBeUndefined();
+  });
+});
+
+describe("auto-approve parity (NOV-20)", () => {
+  beforeEach(() => {
+    resetMockReviewState();
+  });
+
+  function exactPairFixture(): ReviewRow[] {
+    return [
+      {
+        id: "row-keeper",
+        rowKind: "file",
+        type: "exact",
+        status: "unreviewed",
+        name: "keeper.txt",
+        groupId: "group-test",
+        proposedAction: "keep",
+        targetFolder: "duplicate/",
+        sizeBytes: 2_000,
+        encoding: "UTF-8",
+        integrity: "OK",
+        hasChildren: false,
+        path: "/library/keeper.txt",
+      },
+      {
+        id: "row-non-keeper",
+        rowKind: "file",
+        type: "exact",
+        status: "unreviewed",
+        name: "dup.txt",
+        groupId: "group-test",
+        proposedAction: "move_duplicate",
+        targetFolder: "duplicate/",
+        sizeBytes: 1_000,
+        encoding: "UTF-8",
+        integrity: "OK",
+        hasChildren: false,
+        path: "/library/dup.txt",
+      },
+    ];
+  }
+
+  it("persistMockExactNonKeeperApprovals approves exact non-keepers only", () => {
+    const rows = exactPairFixture();
+    expect(persistMockExactNonKeeperApprovals(rows)).toBe(1);
+    const merged = applyMockReviewState(rows);
+    expect(merged.find((row) => row.id === "row-non-keeper")?.status).toBe("approved");
+    expect(merged.find((row) => row.id === "row-keeper")?.status).toBe("unreviewed");
+  });
+
+  it("getMovePreview current_query includes approved move_duplicate", async () => {
+    await mockBridge.updateReviewDecisions({
+      selection: { type: "explicit_rows", rowIds: ["row-2"] },
+      command: "approve",
+    });
+    const preview = await mockBridge.getMovePreview({
+      type: "current_query",
+      query: { viewMode: "action", limit: 50, filters: { types: ["exact"] } },
+      excludeRowIds: [],
+    });
+    expect(preview.rows.map((row) => row.id)).toContain("row-2");
+    expect(preview.summary.operationCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it("getMovePreview includes approved move_duplicate rows", async () => {
+    await mockBridge.updateReviewDecisions({
+      selection: { type: "explicit_rows", rowIds: ["row-2"] },
+      command: "approve",
+    });
+    const preview = await mockBridge.getMovePreview({
+      type: "explicit_rows",
+      rowIds: ["row-2"],
+    });
+    expect(preview.rows.some((row) => row.id === "row-2")).toBe(true);
+    expect(preview.summary.operationCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it("mockBridge startScan completes and bumps library revision", async () => {
+    vi.useFakeTimers();
+    const before = (await mockBridge.getSnapshot()).work.resolve.libraryRevision;
+    const scanPromise = mockBridge.startScan();
+    await vi.advanceTimersByTimeAsync(3_500);
+    await scanPromise;
+    const after = (await mockBridge.getSnapshot()).work.resolve.libraryRevision;
+    expect(after).toBeGreaterThan(before);
+    expect((await mockBridge.getSnapshot()).work.scan.state).toBe("success");
+    vi.useRealTimers();
   });
 });
