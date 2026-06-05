@@ -130,10 +130,14 @@ _LEGACY_PROMPT_ALIASES: dict[str, str] = {
     "01a-linear-spec.md": "linear/todo/write-spec.md",
     "01b-linear-grill-plan.md": "linear/backlog/grill-plan.md",
     "01c-linear-spec-revise.md": "linear/todo/revise-spec.md",
-    "01d-linear-todo-list.md": "linear/todo/write-todo-list.md",
+    "01d-linear-todo-list.md": "linear/todo/write-task-list.md",
     "02-linear-in-progress-implement.md": "linear/in-progress/implement.md",
     "03-linear-in-review-verification.md": "linear/in-review/verify.md",
     "linear-issue-created.md": "linear/backlog/create-research.md",
+}
+
+_PROMPT_PATH_ALIASES: dict[str, str] = {
+    "linear/todo/write-todo-list.md": "linear/todo/write-task-list.md",
 }
 
 
@@ -142,6 +146,9 @@ def _resolve_prompt_file(prompts_dir: Path, prompt_file: str) -> str:
     direct = prompts_dir / prompt_file
     if direct.is_file():
         return prompt_file
+    path_alias = _PROMPT_PATH_ALIASES.get(prompt_file)
+    if path_alias and (prompts_dir / path_alias).is_file():
+        return path_alias
     alias = _LEGACY_PROMPT_ALIASES.get(prompt_file)
     if alias and (prompts_dir / alias).is_file():
         return alias

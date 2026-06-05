@@ -1,5 +1,3 @@
-<!-- legacy prompt path: prefer linear/todo/write-task-list.md -->
-
 ---
 trigger: linear.labels@Todo
 label: auto:plan-done
