@@ -187,7 +187,7 @@ def test_resolve_planning_defer_spec_without_plan():
     assert resolve_planning_prompt("Todo", labels) == "linear/todo/defer-to-backlog.md"
 
 
-def test_dedupe_key_includes_labels():
+def test_dedupe_key_ignores_labels():
     payload = _issue(
         state="Todo",
         labels=_label_set("auto:spec-done", "auto:plan-done"),
@@ -196,8 +196,49 @@ def test_dedupe_key_includes_labels():
     route = route_linear_webhook(payload)
     assert route is not None
     key = dedupe_key(payload, route)
-    assert "auto:plan-done" in key
-    assert "auto:spec-done" in key
+    assert key == "NOV-X:linear/todo/write-todo-list.md:Todo"
+    payload["data"]["labels"] = _label_set("auto:spec-done")
+    assert dedupe_key(payload, route) == key
+
+
+def test_status_in_progress_impl_done_without_verify_failed_is_ignored():
+    assert (
+        route_linear_webhook(
+            _issue(
+                state="In Progress",
+                state_id="p1",
+                labels=_label_set("auto:impl-done", "auto:todo-list-done"),
+                updated_from={"stateId": "r1"},
+            ),
+        )
+        is None
+    )
+
+
+def test_status_in_progress_verify_failed_routes_implement():
+    route = route_linear_webhook(
+        _issue(
+            state="In Progress",
+            state_id="p1",
+            labels=_label_set("auto:impl-done", "auto:verify-failed"),
+            updated_from={"stateId": "r1"},
+        ),
+    )
+    assert route is not None
+    assert route.prompt_file == "linear/in-progress/implement.md"
+    assert route.reason == "status→In Progress (verify-failed)"
+
+
+def test_build_job_payload_includes_linear_event():
+    payload = _issue(
+        state="Todo",
+        labels=_label_set("auto:research-done"),
+        updated_from={"stateId": "b1"},
+    )
+    route = route_linear_webhook(payload)
+    assert route is not None
+    job = build_job_payload(payload, route)
+    assert job["meta"]["linear_event"]["identifier"] == "NOV-X"
 
 
 def test_job_id_uses_prompt_stem():

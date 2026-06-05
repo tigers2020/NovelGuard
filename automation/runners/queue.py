@@ -106,7 +106,7 @@ class JobQueue:
                 elif status == "queued":
                     raise RuntimeError(f"Job already active: {job_id}")
                 elif status == "succeeded":
-                    raise RuntimeError(f"Job already succeeded: {job_id}")
+                    return job_id
                 elif status == "failed":
                     conn.execute(
                         """

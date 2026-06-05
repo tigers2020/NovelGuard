@@ -257,12 +257,19 @@ def route_linear_webhook(
             return _route_planning(state, labels, reason=f"status→{state}")
 
         if state == "In Progress":
+            if "auto:impl-done" in labels and "auto:verify-failed" not in labels:
+                return None
+            reason = (
+                "status→In Progress (verify-failed)"
+                if "auto:verify-failed" in labels
+                else "status→In Progress"
+            )
             return LinearRoute(
                 prompt_file=_PROMPT_IMPLEMENT,
                 commit=True,
                 verify="none",
                 git_prepare=False,
-                reason="status→In Progress",
+                reason=reason,
             )
 
         if state == "In Review":
@@ -279,6 +286,16 @@ def route_linear_webhook(
     # Label-only: planning states only; ignore progress-label noise.
     if _label_only_should_route(state, labels):
         return _route_planning(state, labels, reason=f"labels@{state}")
+
+    # Rebuke may arrive label-only if status was already In Progress.
+    if state == "In Progress" and "auto:verify-failed" in labels:
+        return LinearRoute(
+            prompt_file=_PROMPT_IMPLEMENT,
+            commit=True,
+            verify="none",
+            git_prepare=False,
+            reason="labels@In Progress (verify-failed)",
+        )
 
     return None
 
@@ -328,6 +345,7 @@ def build_job_payload(
         "meta": {
             "route_reason": route.reason,
             "webhook_type": webhook_payload.get("type"),
+            "linear_event": data,
         },
     }
 
@@ -336,5 +354,4 @@ def dedupe_key(webhook_payload: dict[str, Any], route: LinearRoute) -> str:
     data = _issue_data(webhook_payload)
     identifier = _issue_identifier(data)
     state = _state_name(data)
-    labels = ",".join(sorted(_label_names(data)))
-    return f"{identifier}:{route.prompt_file}:{state}:{labels}"
+    return f"{identifier}:{route.prompt_file}:{state}"

@@ -39,6 +39,6 @@ Progress labels (`verifying`, `verify-testing`, …) — **no separate `save_iss
 4. **PR** — /finishing-a-development-branch: push + `gh pr create` (no merge).
 5. **Babysit** — /babysit until merge-ready.
 6. **Done** — `## Verification report`: **Summary (caveman)**, test matrix↔AC, tests changed, commands (pass), PR URL, babysit status → `save_issue(state=Done, labels+=auto:verify-done)` **one call**. STOP.  
-   **Rebuke** — `## Verification rebuke`: **Summary (caveman)**, failures, required fixes, PR URL → `save_issue(state=In Progress, labels+=auto:verify-failed)` **one call**. STOP. → `linear/in-progress/implement.md`.
+   **Rebuke** — `## Verification rebuke`: **Summary (caveman)**, failures, required fixes, PR URL → `save_issue(state=In Progress, labels+=auto:verify-failed, labels-=auto:impl-done)` **one call**. STOP. → `linear/in-progress/implement.md`.
 
 **Tools:** Linear MCP · git · `gh` · pytest · npm

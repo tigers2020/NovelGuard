@@ -88,8 +88,13 @@ def _prompts_dir(cfg: dict[str, Any]) -> Path:
 # Queued jobs may still reference pre-reorg filenames (see prompts/archive/README.md).
 _LEGACY_PROMPT_ALIASES: dict[str, str] = {
     "00-linear-create-pr-to-spec.md": "linear/backlog/create-research.md",
+    "01a-linear-spec.md": "linear/todo/write-spec.md",
+    "01b-linear-grill-plan.md": "linear/backlog/grill-plan.md",
+    "01c-linear-spec-revise.md": "linear/todo/revise-spec.md",
+    "01d-linear-todo-list.md": "linear/todo/write-todo-list.md",
     "02-linear-in-progress-implement.md": "linear/in-progress/implement.md",
     "03-linear-in-review-verification.md": "linear/in-review/verify.md",
+    "linear-issue-created.md": "linear/backlog/create-research.md",
 }
 
 
