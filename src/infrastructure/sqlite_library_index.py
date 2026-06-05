@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
+import time
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
@@ -199,6 +201,7 @@ class SqliteLibraryIndex:
         conn = sqlite3.connect(self._db_path)
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
+        conn.execute("PRAGMA busy_timeout=5000")
         return conn
 
     def _storage_folder_path(self, folder_path: str) -> str:
@@ -345,8 +348,24 @@ class SqliteLibraryIndex:
     def query_file_rows_page(self, normalized: NormalizedFileRowsQuery) -> dict[str, Any]:
         if self._current_folder is None:
             return empty_file_rows_page(normalized.wire_cursor)
+        t0 = time.perf_counter()
         with self._connect() as conn:
-            return query_sqlite_file_rows_page(conn, self._current_folder, normalized)
+            page = query_sqlite_file_rows_page(conn, self._current_folder, normalized)
+        elapsed_ms = int((time.perf_counter() - t0) * 1000)
+        logging.getLogger(__name__).debug(
+            "%s",
+            json.dumps(
+                {
+                    "event": "sqlite_query",
+                    "query_type": "file_rows_page",
+                    "query_ms": elapsed_ms,
+                    "row_count": len(page.get("rows", [])),
+                    "limit": normalized.limit,
+                    "offset": normalized.cursor_offset,
+                }
+            ),
+        )
+        return page
 
     @property
     def folder_path(self) -> str | None:

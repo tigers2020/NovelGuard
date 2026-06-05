@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SortingState } from "@tanstack/react-table";
 import { useBridge, useRefreshSnapshot, useSnapshot } from "../../app/providers/snapshotHooks";
+import { BridgeCallError } from "../../bridge/bridgeErrors";
 import type {
   DuplicateGroupDetail,
   DuplicateGroupMemberDetail,
@@ -40,6 +41,8 @@ import {
 } from "../../constants/reviewBulk";
 import { MAX_QUERY_LIMIT } from "../../contracts/reviewPageContract";
 
+const LARGE_LIBRARY_THRESHOLD = 500;
+
 function loadColumnSizing(): Record<string, number> {
   try {
     const raw = localStorage.getItem(REVIEW_GRID_SIZING_KEY);
@@ -60,6 +63,9 @@ export function ResolveAndOrganizeWorkspace({
   const refreshSnapshot = useRefreshSnapshot();
   const snapshot = useSnapshot();
   const resolve = snapshot.work.resolve;
+  const pipelineBusy = Boolean(snapshot.pipeline.background?.active);
+  const deepAnalysisRunning = snapshot.work.scan.deepAnalysisStatus === "running";
+  const isExpectedSlow = pipelineBusy || deepAnalysisRunning;
 
   const [viewMode, setViewMode] = useState<ReviewViewMode>("action");
   const [facetExpanded, setFacetExpanded] = useState(() => loadResolveFacetExpanded());
@@ -78,6 +84,8 @@ export function ResolveAndOrganizeWorkspace({
   const [loadingMore, setLoadingMore] = useState(false);
   const [selectedRow, setSelectedRow] = useState<ReviewRow | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
+  const [degraded, setDegraded] = useState(false);
+  const showDegradedBanner = degraded || isExpectedSlow;
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnSizing, setColumnSizing] = useState<Record<string, number>>(loadColumnSizing);
   const [detail, setDetail] = useState<DuplicateGroupDetail | null>(null);
@@ -198,10 +206,16 @@ export function ResolveAndOrganizeWorkspace({
         }
       } catch (err) {
         if (seq !== loadSeqRef.current) return;
-        setQueryError(err instanceof Error ? err.message : "Failed to load rows");
-        setRows([]);
-        setFilteredCount(0);
-        setNextCursor(null);
+        const isTimeout = err instanceof BridgeCallError && err.code === "timeout";
+        if (isTimeout) {
+          setDegraded(true);
+          setQueryError(null);
+        } else {
+          setQueryError(err instanceof Error ? err.message : "Failed to load rows");
+          setRows([]);
+          setFilteredCount(0);
+          setNextCursor(null);
+        }
       } finally {
         if (seq === loadSeqRef.current) {
           setLoading(false);
@@ -214,10 +228,38 @@ export function ResolveAndOrganizeWorkspace({
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
-      void loadAllFiltered();
+      void (async () => {
+        setLoading(true);
+        setQueryError(null);
+        try {
+          const first = await bridge.queryReviewRows({ ...currentQuery, cursor: null });
+          if (first.pageInfo.totalFiltered > LARGE_LIBRARY_THRESHOLD) {
+            setRows(first.rows);
+            setFilteredCount(first.pageInfo.totalFiltered);
+            setNextCursor(first.pageInfo.nextCursor);
+            setDegraded(false);
+            setSelectedRow(null);
+            setDetail(null);
+            setDetailError(null);
+            return;
+          }
+          await loadAllFiltered();
+        } catch (err) {
+          const isTimeout = err instanceof BridgeCallError && err.code === "timeout";
+          if (isTimeout) {
+            setDegraded(true);
+            setQueryError(null);
+          } else {
+            setQueryError(err instanceof Error ? err.message : "Failed to load rows");
+          }
+        } finally {
+          setLoading(false);
+          setLoadingAll(false);
+        }
+      })();
     });
     return () => cancelAnimationFrame(frame);
-  }, [loadAllFiltered]);
+  }, [bridge, currentQuery, loadAllFiltered]);
 
   const loadPage = useCallback(
     async (cursor: string | null) => {
@@ -231,7 +273,13 @@ export function ResolveAndOrganizeWorkspace({
         setNextCursor(page.pageInfo.nextCursor);
         setRows((prev) => [...prev, ...page.rows]);
       } catch (err) {
-        setQueryError(err instanceof Error ? err.message : "Failed to load rows");
+        const isTimeout = err instanceof BridgeCallError && err.code === "timeout";
+        if (isTimeout) {
+          setDegraded(true);
+          setQueryError(null);
+        } else {
+          setQueryError(err instanceof Error ? err.message : "Failed to load rows");
+        }
       } finally {
         setLoadingMore(false);
       }
@@ -467,6 +515,14 @@ export function ResolveAndOrganizeWorkspace({
                 상세 보기
               </button>
             </div>
+          )}
+          {showDegradedBanner && (
+            <p className="px-3 py-2 text-sm text-amber-600" data-testid="resolve-degraded-banner">
+              백그라운드 분석 중 — 목록 일부만 표시됨
+              <span className="block text-xs text-muted-foreground">
+                계속 불러오는 중입니다. 이미 불러온 항목은 유지됩니다.
+              </span>
+            </p>
           )}
           <ResolveGridToolbar
             moveReadyCount={resolve.moveReadyCount}

@@ -41,6 +41,7 @@ from application.app_settings import (
     InvalidSettingValueError,
     UnknownSettingKeyError,
 )
+from application.bridge_timing import bridge_method_span
 from application.file_row_query import normalize_file_rows_query
 from application.library_session import LibrarySession
 from application.log_query import LogQueryError
@@ -87,11 +88,15 @@ class BridgeApi:
         )
 
     def get_snapshot(self) -> dict[str, Any]:
-        payload = self._session.get_snapshot()
-
-        validate_app_snapshot(payload)
-
-        return payload
+        span = bridge_method_span("get_snapshot")
+        try:
+            payload = self._session.get_snapshot()
+            validate_app_snapshot(payload)
+            span.finish(ok=True)
+            return payload
+        except Exception as exc:
+            span.finish(ok=False, error_code=type(exc).__name__)
+            raise
 
     def set_work_mode(self, mode: str) -> None:
         try:
@@ -106,48 +111,60 @@ class BridgeApi:
         self._session.select_folder()
 
     def start_scan(self, options: dict[str, Any] | None = None) -> None:
-        if self._session.is_apply_or_scan_busy():
-            raise PreviewApplyError("LIBRARY_BUSY")
-
-        self._session.start_scan(options)
+        span = bridge_method_span("start_scan")
+        try:
+            if self._session.is_apply_or_scan_busy():
+                raise PreviewApplyError("LIBRARY_BUSY")
+            self._session.start_scan(options)
+            span.finish(ok=True)
+        except Exception as exc:
+            span.finish(ok=False, error_code=type(exc).__name__)
+            raise
 
     def cancel_run(self) -> None:
         self._session.cancel_run()
 
     def query_review_rows(self, query: dict[str, Any]) -> dict[str, Any]:
-        _ = clamp_query_limit(query)
-
-        payload = self._session.query_review_rows(query)
-
-        validate_review_rows_page(payload)
-
-        return payload
+        span = bridge_method_span("query_review_rows")
+        try:
+            _ = clamp_query_limit(query)
+            payload = self._session.query_review_rows(query)
+            validate_review_rows_page(payload)
+            span.finish(ok=True)
+            return payload
+        except Exception as exc:
+            span.finish(ok=False, error_code=type(exc).__name__)
+            raise
 
     def query_quality_rows(self, query: dict[str, Any]) -> dict[str, Any]:
-        _ = clamp_query_limit(query)
-
+        span = bridge_method_span("query_quality_rows")
         try:
-            payload = self._session.query_quality_rows(query)
-
-        except QualityQueryError as exc:
-            raise PreviewApplyError(exc.reason, str(exc)) from exc
-
-        validate_quality_rows_page(payload)
-
-        return payload
+            _ = clamp_query_limit(query)
+            try:
+                payload = self._session.query_quality_rows(query)
+            except QualityQueryError as exc:
+                raise PreviewApplyError(exc.reason, str(exc)) from exc
+            validate_quality_rows_page(payload)
+            span.finish(ok=True)
+            return payload
+        except Exception as exc:
+            span.finish(ok=False, error_code=type(exc).__name__)
+            raise
 
     def query_file_rows(self, query: dict[str, Any]) -> dict[str, Any]:
+        span = bridge_method_span("query_file_rows")
         try:
-            _ = normalize_file_rows_query(query)
-
-        except FileRowQueryError as exc:
-            raise PreviewApplyError(exc.reason, str(exc)) from exc
-
-        payload = self._session.query_file_rows(query)
-
-        validate_file_rows_page(payload)
-
-        return payload
+            try:
+                _ = normalize_file_rows_query(query)
+            except FileRowQueryError as exc:
+                raise PreviewApplyError(exc.reason, str(exc)) from exc
+            payload = self._session.query_file_rows(query)
+            validate_file_rows_page(payload)
+            span.finish(ok=True)
+            return payload
+        except Exception as exc:
+            span.finish(ok=False, error_code=type(exc).__name__)
+            raise
 
     def get_duplicate_group_detail(self, group_id: str) -> dict[str, Any]:
         result = self._session.get_duplicate_group_detail(group_id)
@@ -171,13 +188,16 @@ class BridgeApi:
         return payload
 
     def get_move_preview(self, selection: dict[str, Any]) -> dict[str, Any]:
-        validate_selection_scope(selection)
-
-        payload = self._preview_use_case.execute(selection)
-
-        validate_move_preview(payload)
-
-        return payload
+        span = bridge_method_span("get_move_preview")
+        try:
+            validate_selection_scope(selection)
+            payload = self._preview_use_case.execute(selection)
+            validate_move_preview(payload)
+            span.finish(ok=True)
+            return payload
+        except Exception as exc:
+            span.finish(ok=False, error_code=type(exc).__name__)
+            raise
 
     def apply_resolved_actions(self, payload: dict[str, Any]) -> None:
         self._move_preview.apply_resolved_actions(payload)

@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { BridgeCallError } from "./bridgeErrors";
 import { callBridge } from "./callBridge";
+import { getBridgeTimeoutMs } from "./bridgeTimeouts";
+
+describe("bridgeTimeouts", () => {
+  it("returns method-specific timeouts", () => {
+    expect(getBridgeTimeoutMs("get_snapshot")).toBe(5_000);
+    expect(getBridgeTimeoutMs("query_file_rows")).toBe(60_000);
+    expect(getBridgeTimeoutMs("query_review_rows")).toBe(45_000);
+    expect(getBridgeTimeoutMs("unknown_method")).toBe(15_000);
+  });
+});
 
 describe("callBridge", () => {
   it("resolves successful promises", async () => {

@@ -1,0 +1,6 @@
+{
+  "expected_file_count": 7200,
+  "expected_exact_duplicate_pairs": 30,
+  "expected_stem_clusters": 10,
+  "generator_seed": 20260605
+}

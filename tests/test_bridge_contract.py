@@ -886,6 +886,31 @@ def test_snapshot_includes_index_ready_and_deep_analysis_flags(tmp_path: Path) -
     assert snap["work"]["scan"]["deepAnalysisComplete"] is True
 
 
+def test_query_review_rows_available_while_background_analysis(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from application import scan_pipeline_constants
+
+    monkeypatch.setattr(scan_pipeline_constants, "SCAN_DEEP_ANALYSIS_BACKGROUND_THRESHOLD", 2)
+    for name in ("a.txt", "b.txt", "c.txt"):
+        (tmp_path / name).write_text(f"body {name}\n", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    deadline = time.monotonic() + 30.0
+    snap = api.get_snapshot()
+    while time.monotonic() < deadline:
+        if snap["work"]["scan"].get("indexReady"):
+            break
+        time.sleep(0.05)
+        snap = api.get_snapshot()
+    assert snap["work"]["scan"]["indexReady"] is True
+    page = api.query_review_rows({"viewMode": "all", "limit": 50})
+    validate_review_rows_page(page)
+    assert page["pageInfo"]["totalFiltered"] >= 0
+
+
 def _wait_deep_analysis_complete(api: BridgeApi, *, timeout: float = 120.0) -> dict:
     deadline = time.monotonic() + timeout
     snap = api.get_snapshot()
