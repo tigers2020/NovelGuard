@@ -46,6 +46,12 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [repairOpen, setRepairOpen] = useState(false);
+  const [filteredCount, setFilteredCount] = useState(0);
+  const [tabSummary, setTabSummary] = useState({
+    issueCount: 0,
+    warningCount: 0,
+    errorCount: 0,
+  });
 
   const detailStale = useMemo(
     () => detail !== null && detail.libraryRevision !== libraryRevision,
@@ -90,7 +96,7 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
   );
 
   const loadPage = useCallback(
-    async (cursor: string | null, append: boolean) => {
+    async (cursor: string | null, append: boolean, preserveRowId?: string | null) => {
       if (append) setLoadingMore(true);
       else setLoading(true);
       try {
@@ -101,18 +107,38 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
           limit: 100,
           sort: currentSort,
         });
+        setFilteredCount(page.pageInfo.totalFiltered);
+        setTabSummary(page.summary);
         setNextCursor(page.pageInfo.nextCursor);
         setRows((prev) => (append ? [...prev, ...page.rows] : page.rows));
         if (!append) {
-          const first = page.rows[0] ?? null;
-          setSelected(first);
-          loadDetail(first);
+          if (page.rows.length === 0) {
+            setSelected(null);
+            loadDetail(null);
+            setRepairOpen(false);
+          } else if (preserveRowId != null) {
+            const preserved = page.rows.find((r) => r.id === preserveRowId) ?? null;
+            if (preserved) {
+              setSelected(preserved);
+              loadDetail(preserved);
+            } else {
+              setSelected(null);
+              loadDetail(null);
+              setRepairOpen(false);
+            }
+          } else {
+            const first = page.rows[0] ?? null;
+            setSelected(first);
+            loadDetail(first);
+          }
         }
       } catch (err) {
         setQueryError(err instanceof Error ? err.message : "Failed to load quality rows");
         if (!append) {
           setRows([]);
           setNextCursor(null);
+          setFilteredCount(0);
+          setTabSummary({ issueCount: 0, warningCount: 0, errorCount: 0 });
         }
       } finally {
         setLoading(false);
@@ -137,8 +163,8 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
     }
     if (seenRevisionRef.current === libraryRevision) return;
     seenRevisionRef.current = libraryRevision;
-    void loadPage(null, false);
-  }, [libraryRevision, loadPage]);
+    void loadPage(null, false, selected?.id ?? null);
+  }, [libraryRevision, loadPage, selected?.id]);
 
   const loadingMoreRef = useRef(false);
   const handleNearEnd = () => {
@@ -227,11 +253,21 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
             </button>
           </div>
         )}
+        <p
+          className="mt-2 text-xs text-muted"
+          data-testid="quality-tab-summary"
+        >
+          Tab: {tabSummary.issueCount.toLocaleString()} issues ·{" "}
+          {tabSummary.warningCount.toLocaleString()} warnings ·{" "}
+          {tabSummary.errorCount.toLocaleString()} errors ·{" "}
+          {filteredCount.toLocaleString()} filtered
+        </p>
       </section>
 
       <div className="mt-4 grid min-h-0 flex-1 gap-4 lg:grid-cols-[1fr_280px]">
         <VirtualizedQualityGrid
           rows={rows}
+          filteredCount={filteredCount}
           selectedRowId={selected?.id ?? null}
           onSelectRow={handleSelect}
           onNearEnd={handleNearEnd}
@@ -337,10 +373,8 @@ export function QualityWorkspace({ onOpenFinalize }: { onOpenFinalize: () => voi
         snapshotLibraryRevision={libraryRevision}
         onClose={() => setRepairOpen(false)}
         onSuccess={() => {
-          void loadPage(null, false);
-          if (selected) {
-            loadDetail(selected);
-          }
+          const preserveRowId = selected?.id ?? null;
+          void loadPage(null, false, preserveRowId);
         }}
         onOpenFinalize={onOpenFinalize}
       />

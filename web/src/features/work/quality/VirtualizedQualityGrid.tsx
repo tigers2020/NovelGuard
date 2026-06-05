@@ -9,6 +9,7 @@ const OPTIONAL_COLUMN_IDS = ["severity", "encoding", "integrity", "path", "issue
 
 export function VirtualizedQualityGrid({
   rows,
+  filteredCount,
   selectedRowId,
   onSelectRow,
   onNearEnd,
@@ -20,6 +21,7 @@ export function VirtualizedQualityGrid({
   onColumnSizingChange,
 }: {
   rows: QualityRow[];
+  filteredCount: number;
   selectedRowId: string | null;
   onSelectRow: (row: QualityRow) => void;
   onNearEnd?: () => void;
@@ -63,8 +65,8 @@ export function VirtualizedQualityGrid({
       loadingMore={loadingMore}
       footer={
         <div className="flex items-center justify-between border-t border-outline bg-surface px-4 py-2 text-xs text-muted">
-          <span>
-            {rows.length.toLocaleString()} loaded rows
+          <span data-testid="quality-grid-row-count">
+            {rows.length.toLocaleString()} loaded · {filteredCount.toLocaleString()} filtered
             {loadingMore ? " · loading…" : ""}
           </span>
         </div>
