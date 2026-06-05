@@ -9,7 +9,6 @@ from application.library_session import LibrarySession
 from application.ports.library_index import LibraryIndexPort
 from application.review_errors import ReviewDecisionError
 from application.review_state_merge import _file_id_from_row_id, group_id_from_row
-from domain.duplicate_exact import find_exact_duplicate_groups
 
 MAX_REVIEW_MUTATIONS = 500
 
@@ -47,13 +46,7 @@ class UpdateReviewDecisionsUseCase:
                 f"Selection resolves to more than {MAX_REVIEW_MUTATIONS} rows",
             )
 
-        files = self._index.files()
-        groups = find_exact_duplicate_groups(files)
-        members_by_group = {g.group_id: set(g.member_ids) for g in groups}
-        for group_id, near_group in self._session.near_groups_by_id().items():
-            members_by_group[group_id] = set(near_group.member_file_ids)
-        for group_id, relation_group in self._session.relation_groups_by_id().items():
-            members_by_group[group_id] = set(relation_group.member_file_ids)
+        members_by_group = self._session.build_review_members_by_group()
 
         updated = 0
         for row in rows:
@@ -88,6 +81,8 @@ class UpdateReviewDecisionsUseCase:
         return updated
 
     def _apply_status(self, folder: str, row: dict[str, Any], group_id: str, status: str) -> int:
+        if status == "approved" and row.get("status") == "conflict":
+            return 0
         if row.get("rowKind") == "group":
             self._index.upsert_review_group(
                 folder,

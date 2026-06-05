@@ -592,6 +592,19 @@ class LibrarySession:
         with self._lock:
             self._library_revision += 1
 
+    def build_review_members_by_group(self) -> dict[str, set[str]]:
+        from domain.duplicate_exact import find_exact_duplicate_groups
+
+        files = list(self._files_by_id.values())
+        members: dict[str, set[str]] = {}
+        for exact_group in find_exact_duplicate_groups(files):
+            members[exact_group.group_id] = set(exact_group.member_ids)
+        for near_group in self._near_groups_by_id.values():
+            members[near_group.group_id] = set(near_group.member_file_ids)
+        for relation_group in self._relation_groups_by_id.values():
+            members[relation_group.group_id] = set(relation_group.member_file_ids)
+        return members
+
     def update_review_decisions(
         self,
         selection: dict[str, Any],

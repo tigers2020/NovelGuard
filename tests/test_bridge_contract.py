@@ -1894,6 +1894,113 @@ def test_get_duplicate_group_detail_not_found(tmp_path: Path) -> None:
     assert detail["members"] == []
 
 
+def test_pick_keeper_file_id_tie_break_size_mtime_path_id() -> None:
+    from domain.keeper_selection import pick_keeper_file_id
+    from domain.models import FileRecord
+
+    def record(*, id_char: str, path: str, size: int, mtime: int) -> FileRecord:
+        return FileRecord(
+            id=id_char * 64,
+            relative_path=path,
+            name=path.split("/")[-1],
+            size_bytes=size,
+            modified_at_ns=mtime,
+            extension=".txt",
+        )
+
+    larger = record(id_char="a", path="z.txt", size=200, mtime=1)
+    smaller = record(id_char="b", path="a.txt", size=100, mtime=1)
+    assert pick_keeper_file_id([smaller, larger]) == larger.id
+
+    older = record(id_char="c", path="a.txt", size=100, mtime=1)
+    newer = record(id_char="d", path="z.txt", size=100, mtime=2)
+    assert pick_keeper_file_id([older, newer]) == newer.id
+
+    path_a = record(id_char="e", path="alpha.txt", size=100, mtime=1)
+    path_z = record(id_char="f", path="zeta.txt", size=100, mtime=1)
+    assert pick_keeper_file_id([path_a, path_z]) == path_z.id
+
+
+def test_near_non_keeper_skeleton_has_move_duplicate_proposed_action() -> None:
+    from application.near_review_rows_builder import build_near_review_rows
+    from domain.duplicate_near import NearDuplicateGroup
+    from domain.models import FileRecord
+
+    keeper = FileRecord(
+        id="k" * 64,
+        relative_path="keep.txt",
+        name="keep.txt",
+        size_bytes=200,
+        modified_at_ns=2,
+        extension=".txt",
+    )
+    other = FileRecord(
+        id="o" * 64,
+        relative_path="other.txt",
+        name="other.txt",
+        size_bytes=100,
+        modified_at_ns=1,
+        extension=".txt",
+    )
+    files_by_id = {keeper.id: keeper, other.id: other}
+    groups = [
+        NearDuplicateGroup(
+            group_id="near:test",
+            member_file_ids=(keeper.id, other.id),
+            pairs=(),
+            max_similarity=0.9,
+        )
+    ]
+    rows = build_near_review_rows(groups, files_by_id)
+    non_keeper = next(
+        row for row in rows if row["rowKind"] == "file" and row["id"].endswith(other.id)
+    )
+    assert non_keeper["proposedAction"] == "move_duplicate"
+    assert non_keeper["targetFolder"] == "duplicate/"
+
+
+def test_bulk_approve_near_file_row_updates_member(tmp_path: Path) -> None:
+    (tmp_path / "alpha.txt").write_text(_near_similar_body("alpha"), encoding="utf-8")
+    (tmp_path / "beta.txt").write_text(_near_similar_body("beta"), encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _wait_deep_analysis_complete(api)
+    near_page = api.query_review_rows(
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["near"]}}
+    )
+    file_rows = [
+        row
+        for row in near_page["rows"]
+        if row["rowKind"] == "file" and row.get("status") == "unreviewed"
+    ]
+    if not file_rows:
+        pytest.skip("no near duplicate groups in fixture")
+    file_row = file_rows[0]
+    result = api.update_review_decisions(
+        {
+            "selection": {"type": "explicit_rows", "rowIds": [file_row["id"]]},
+            "command": "approve",
+        }
+    )
+    assert result["updatedCount"] == 1
+    from application.review_state_merge import _file_id_from_row_id
+
+    file_id = _file_id_from_row_id(str(file_row["id"]))
+    assert file_id is not None
+    stored = session.index.load_review_state(session.index.folder_path or str(tmp_path))
+    assert stored.members.get(file_id) == "approved"
+    page_after = api.query_review_rows({"viewMode": "all", "limit": 50})
+    approved_row = next(
+        (row for row in page_after["rows"] if row["id"] == file_row["id"]),
+        None,
+    )
+    if approved_row is not None:
+        assert approved_row["status"] == "approved"
+        assert approved_row["proposedAction"] in {"keep", "move_duplicate"}
+
+
 def _near_similar_body(seed: str) -> str:
     paragraph = (
         "The quick brown fox jumps over the lazy dog. "

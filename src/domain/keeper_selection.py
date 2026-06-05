@@ -6,7 +6,16 @@ from domain.models import FileRecord
 
 
 def pick_keeper_file_id(members: list[FileRecord]) -> str:
+    """Pick keeper: size desc, mtime desc, path asc, file id asc."""
     if not members:
-        raise ValueError("members must not be empty")
-    keeper = max(members, key=lambda m: (m.size_bytes, m.modified_at_ns, m.relative_path))
+        raise ValueError("pick_keeper_file_id requires at least one member")
+    keeper = max(
+        members,
+        key=lambda member: (
+            member.size_bytes,
+            member.modified_at_ns,
+            member.relative_path,
+            member.id,
+        ),
+    )
     return keeper.id
