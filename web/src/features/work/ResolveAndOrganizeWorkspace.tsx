@@ -271,15 +271,6 @@ export function ResolveAndOrganizeWorkspace({
 
   const hasExecutableRows = useMemo(() => hasExecutableMovePreviewRows(rows), [rows]);
 
-  const executableCount = useMemo(() => countExecutableMovePreviewRows(rows), [rows]);
-
-  const previewCtaText = useMemo(
-    () => previewCtaLabel({ filter: rowTypeFilter, executableCount }),
-    [rowTypeFilter, executableCount],
-  );
-
-  const showPreviewCta = rowTypeFilter === "exact";
-
   const reviewOnlyBlockedReason = useMemo(
     () => reviewOnlyBlockedReasonForFilter(rowTypeFilter),
     [rowTypeFilter],
