@@ -41,7 +41,7 @@ linear:
     spec_done: bffa5b70-6009-4c1c-8f6a-f7fd62e79621
     plan_done: f3424dcd-6d2c-47f9-a8fe-5f4d5b626d27
     grill_needs_revision: 6213baed-1cd7-4bb7-acb4-1572e7fbdf36
-    task_list_done: aaaaaaaa-bbbb-4ccc-dddd-111111111111  # auto:task-list-done — replace with Linear UUID
+    task_list_done: 972c97e9-1c0d-4a3a-a8ec-04310b6e45eb  # auto:task-list-done
     todo_list_done: 75d4a692-8214-4592-8f45-f29f93162b45  # legacy auto:todo-list-done
     impl_done: 41269879-fa85-478c-bca6-3329340d8069
     verify_done: 65836882-f344-4675-b3a2-552a3fb3c79c
