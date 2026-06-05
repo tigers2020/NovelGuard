@@ -34,9 +34,12 @@ export const validAppSnapshot: AppSnapshot = {
       deepAnalysisComplete: false,
       deepAnalysisStatus: "idle",
       deepAnalysisError: null,
+      exactAutoApprovedCount: 0,
     },
     resolve: {
       queueCount: 0,
+      moveReadyCount: 0,
+      reviewSignalCount: 0,
       groupCount: 0,
       conflictCount: 0,
       approvedCount: 0,

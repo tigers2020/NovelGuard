@@ -37,6 +37,7 @@ import {
   applyMockReviewState,
   fileRowStatusCounts,
   persistMockExactNonKeeperApprovals,
+  resolveInsightCounts,
 } from "./mockReviewState";
 import type { DuplicateGroupDetail, ReviewRow } from "../types/review";
 import { buildMockDuplicateGroupDetail } from "./mockDuplicateGroupDetail";
@@ -240,6 +241,7 @@ function finalizeLastStatusFromReport(doc: FinalizeReportDocument | null): Final
 function buildSnapshot(): AppSnapshot {
   const merged = mergedReviewRows();
   const counts = fileRowStatusCounts(merged);
+  const insight = resolveInsightCounts(merged);
   const qualityRows = buildQualityRows();
 
   return {
@@ -273,9 +275,12 @@ function buildSnapshot(): AppSnapshot {
         deepAnalysisComplete: !state.pipelineRunning,
         deepAnalysisStatus: state.pipelineRunning ? "running" : "complete",
         deepAnalysisError: null,
+        exactAutoApprovedCount,
       },
       resolve: {
         queueCount: counts.queueCount,
+        moveReadyCount: insight.moveReadyCount,
+        reviewSignalCount: insight.reviewSignalCount,
         groupCount: 37,
         conflictCount: counts.conflictCount,
         approvedCount: counts.approvedCount,
@@ -498,6 +503,7 @@ export const mockBridge: NovelGuardBridge = {
     exactAutoApprovedCount = 0;
     appendMockLog("INFO", "Mock scan started");
     state.pipelineRunning = true;
+    exactAutoApprovedCount = 0;
     emitSnapshotInvalidation("pipelinePhase", { pipelinePhase: "probe" });
     let pct = 0;
     scanSimulationTimer = setInterval(() => {
