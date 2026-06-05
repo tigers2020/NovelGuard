@@ -3026,3 +3026,51 @@ def test_finalize_while_scan_raises_library_busy(tmp_path: Path) -> None:
     with pytest.raises(FinalizeError) as exc_info:
         api.run_finalize_verification({"includeCleanup": False})
     assert exc_info.value.reason == "LIBRARY_BUSY"
+
+
+def test_query_review_rows_available_while_background_analysis(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    import application.library_session as library_session_module
+    import application.scan_pipeline_constants as scan_constants
+
+    monkeypatch.setattr(scan_constants, "SCAN_DEEP_ANALYSIS_BACKGROUND_THRESHOLD", 2)
+    monkeypatch.setattr(scan_constants, "SCAN_NEAR_FAST_LIBRARY_THRESHOLD", 2)
+    for i in range(4):
+        (tmp_path / f"f{i}.txt").write_text(f"body-{i}\n", encoding="utf-8")
+
+    relation_started = threading.Event()
+    release_relation = threading.Event()
+    original_relation = library_session_module.LibrarySession._run_relation_phase
+
+    def slow_relation(self, folder: str, files: list[FileRecord]) -> None:
+        relation_started.set()
+        release_relation.wait(timeout=5.0)
+        original_relation(self, folder, files)
+
+    monkeypatch.setattr(
+        library_session_module.LibrarySession,
+        "_run_relation_phase",
+        slow_relation,
+    )
+
+    session = create_library_session(SqliteLibraryIndex(tmp_path / "idx.db"))
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        snap = api.get_snapshot()
+        if snap["work"]["scan"]["indexReady"] and relation_started.is_set():
+            break
+        time.sleep(0.05)
+    else:
+        pytest.fail("indexReady + relation phase start not reached")
+
+    page = api.query_review_rows({"viewMode": "all", "limit": 50})
+    validate_review_rows_page(page)
+
+    release_relation.set()
+    _scan_until_idle(api)
