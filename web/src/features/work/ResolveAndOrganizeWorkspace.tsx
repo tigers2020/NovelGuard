@@ -24,11 +24,8 @@ import { mergeReviewColumnVisibility } from "./resolve/reviewGridLayout";
 import { DetailPanel } from "./resolve/DetailPanel";
 import { BatchActionBar } from "./resolve/BatchActionBar";
 import { AutoSelectKeepersConfirmDialog } from "./resolve/AutoSelectKeepersConfirmDialog";
-import {
-  buildAutoSelectKeepersStats,
-  fileIdFromReviewRow,
-  pickPolicyKeeperFileId,
-} from "./resolve/autoSelectKeepers";
+import { computeAutoSelectSummary } from "./resolve/computeAutoSelectSummary";
+import { fileIdFromReviewRow, pickPolicyKeeperFileId } from "./resolve/autoSelectKeepers";
 import { BulkFilterConfirmDialog } from "./resolve/BulkFilterConfirmDialog";
 import {
   hasExecutableMovePreviewRows,
@@ -296,7 +293,11 @@ export function ResolveAndOrganizeWorkspace({
     [rows],
   );
 
-  const autoSelectStats = useMemo(() => buildAutoSelectKeepersStats(rows), [rows]);
+  const autoSelectSummary = useMemo(() => {
+    if (!autoSelectConfirmOpen) return null;
+    const loadedFileRowCount = rows.filter((row) => row.rowKind === "file").length;
+    return computeAutoSelectSummary(rows, { filteredCount, loadedFileRowCount });
+  }, [autoSelectConfirmOpen, rows, filteredCount]);
 
   const autoSelectDisabledReason =
     unreviewedFileCount === 0 ? "미검토 파일 행이 없습니다." : undefined;
@@ -583,13 +584,15 @@ export function ResolveAndOrganizeWorkspace({
         onConfirm={() => void runBulkExcludeFiltered()}
       />
 
-      <AutoSelectKeepersConfirmDialog
-        open={autoSelectConfirmOpen}
-        stats={autoSelectStats}
-        mutating={bulkMutating}
-        onCancel={() => setAutoSelectConfirmOpen(false)}
-        onConfirm={() => void runBulkAutoSelectKeepers()}
-      />
+      {autoSelectSummary && (
+        <AutoSelectKeepersConfirmDialog
+          open={autoSelectConfirmOpen}
+          summary={autoSelectSummary}
+          mutating={bulkMutating}
+          onCancel={() => setAutoSelectConfirmOpen(false)}
+          onConfirm={() => void runBulkAutoSelectKeepers()}
+        />
+      )}
     </main>
   );
 }
