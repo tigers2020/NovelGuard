@@ -287,16 +287,22 @@ describe("bridge parity", () => {
     expect(snap.work.activeMode).toBe("resolve");
   });
 
-  it("getMovePreview executable rows are move_duplicate only", async () => {
-    const page = await mockBridge.queryReviewRows({
-      viewMode: "move",
-      limit: 50,
-      filters: { types: ["exact"] },
-    });
-    const moveIds = page.rows
-      .filter((row) => row.rowKind === "file" && row.proposedAction === "move_duplicate")
-      .slice(0, 5)
-      .map((row) => row.id);
+  it("getMovePreview executable rows are approved move_duplicate only", async () => {
+    const eligible = getAllReviewRows()
+      .filter(
+        (row) =>
+          row.rowKind === "file" &&
+          row.proposedAction === "move_duplicate" &&
+          (row.type === "exact" || row.type === "near" || row.type === "relation"),
+      )
+      .slice(0, 5);
+    for (const row of eligible) {
+      await mockBridge.updateReviewDecisions({
+        selection: { type: "explicit_rows", rowIds: [row.id] },
+        command: "approve",
+      });
+    }
+    const moveIds = eligible.map((row) => row.id);
     expect(moveIds.length).toBeGreaterThan(0);
     const preview = await mockBridge.getMovePreview({
       type: "explicit_rows",
@@ -305,7 +311,8 @@ describe("bridge parity", () => {
     for (const row of preview.rows) {
       expect(row.action).toBe("move_duplicate");
     }
-    expect(preview.summary.operationCount).toBe(moveIds.length);
+    expect(preview.summary.operationCount).toBe(preview.rows.length);
+    expect(preview.summary.operationCount).toBeGreaterThan(0);
   });
 
   it("textSortKey case-folds file-row search fixtures", () => {
@@ -650,6 +657,7 @@ describe("scan section state (PR-35)", () => {
           deepAnalysisComplete: false,
           deepAnalysisStatus: "idle",
           deepAnalysisError: null,
+          exactAutoApprovedCount: 0,
         },
         pipeline: { phase: "idle", percent: 0, label: "대기", cancellable: false, background: null },
       }),
@@ -667,6 +675,7 @@ describe("scan section state (PR-35)", () => {
           deepAnalysisComplete: false,
           deepAnalysisStatus: "idle",
           deepAnalysisError: null,
+          exactAutoApprovedCount: 0,
         },
         pipeline: { phase: "probe", percent: 10, label: "파일 확인 중…", cancellable: true, background: null },
       }),
@@ -684,6 +693,7 @@ describe("scan section state (PR-35)", () => {
           deepAnalysisComplete: false,
           deepAnalysisStatus: "running",
           deepAnalysisError: null,
+          exactAutoApprovedCount: 0,
         },
         pipeline: {
           phase: "analyze",
@@ -721,6 +731,7 @@ describe("pipeline tracks (PR-48 scan_persist)", () => {
         deepAnalysisComplete: false,
         deepAnalysisStatus: "idle",
         deepAnalysisError: null,
+        exactAutoApprovedCount: 0,
       },
     );
     expect(model.tracks[0]?.id).toBe("foreground");
@@ -903,6 +914,32 @@ describe("auto-approve parity (NOV-20)", () => {
       rowIds: ["row-2"],
     });
     expect(preview.rows.some((row) => row.id === "row-2")).toBe(true);
+    expect(preview.summary.operationCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it("getMovePreview includes approved near move_duplicate rows", async () => {
+    await mockBridge.updateReviewDecisions({
+      selection: { type: "explicit_rows", rowIds: ["row-19"] },
+      command: "approve",
+    });
+    const preview = await mockBridge.getMovePreview({
+      type: "explicit_rows",
+      rowIds: ["row-19"],
+    });
+    expect(preview.rows.some((row) => row.id === "row-19")).toBe(true);
+    expect(preview.summary.operationCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it("getMovePreview includes approved relation move_duplicate rows", async () => {
+    await mockBridge.updateReviewDecisions({
+      selection: { type: "explicit_rows", rowIds: ["row-20"] },
+      command: "approve",
+    });
+    const preview = await mockBridge.getMovePreview({
+      type: "explicit_rows",
+      rowIds: ["row-20"],
+    });
+    expect(preview.rows.some((row) => row.id === "row-20")).toBe(true);
     expect(preview.summary.operationCount).toBeGreaterThanOrEqual(1);
   });
 

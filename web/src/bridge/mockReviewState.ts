@@ -50,7 +50,7 @@ export function summarizeMockAutoSelectKeepers(
     },
   };
   const fileRows = filterReviewRows(rows, mergedQuery).filter(
-    (row) => row.rowKind === "file" && row.status === "unreviewed" && row.status !== "conflict",
+    (row) => row.rowKind === "file" && row.status === "unreviewed",
   );
 
   const byGroup = new Map<string, ReviewRow[]>();

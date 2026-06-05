@@ -36,10 +36,17 @@ export function reviewOnlyGuidanceBannerForFilter(rowTypeFilter: RowTypeFilter):
   return undefined;
 }
 
+const PREVIEW_ELIGIBLE_TYPES: ReadonlySet<ReviewRow["type"]> = new Set([
+  "exact",
+  "near",
+  "relation",
+]);
+
 /** Mirrors `BuildPreviewPlanUseCase` file-row eligibility for move_duplicate preview. */
 export function isExecutableMovePreviewRow(row: ReviewRow): boolean {
   if (row.rowKind !== "file") return false;
-  if (row.status === "excluded" || row.status === "conflict") return false;
+  if (row.status !== "approved") return false;
+  if (!PREVIEW_ELIGIBLE_TYPES.has(row.type)) return false;
   if (row.proposedAction === "keep" || row.proposedAction === "ignore") return false;
   if (row.proposedAction === "move_organized") return false;
   return row.proposedAction === "move_duplicate";

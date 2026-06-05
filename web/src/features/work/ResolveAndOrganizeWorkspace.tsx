@@ -7,6 +7,7 @@ import type {
   ReviewRow,
   ReviewRowType,
   ReviewRowsQuery,
+  ReviewStatus,
   ReviewViewMode,
 } from "../../types/review";
 import { reviewRowGroupId } from "../../types/review";
@@ -286,15 +287,14 @@ export function ResolveAndOrganizeWorkspace({
   );
 
   const previewBlockedReason = useMemo(() => {
-    if (reviewOnlyBlockedReason) return reviewOnlyBlockedReason;
     if (filteredCount === 0) {
       return "현재 필터에 표시된 항목이 없습니다.";
     }
     if (!hasExecutableRows) {
-      return "현재 필터에 이동 미리보기 가능한 항목이 없습니다. 미검토 자동 선정·승인 후 다시 시도하세요.";
+      return "현재 필터에 승인된 이동 대상이 없습니다. 미검토 자동 선정·승인 후 다시 시도하세요.";
     }
     return undefined;
-  }, [filteredCount, hasExecutableRows, reviewOnlyBlockedReason]);
+  }, [filteredCount, hasExecutableRows]);
 
   const executableCount = useMemo(
     () => countExecutableMovePreviewRows(rows),
@@ -332,10 +332,10 @@ export function ResolveAndOrganizeWorkspace({
       setQueryError(null);
       const cursors = bulkMutationChunkCursors(targetCount);
       for (const cursor of cursors) {
-        const chunkQuery = {
+        const chunkQuery: ReviewRowsQuery = {
           ...currentQuery,
           cursor,
-          filters: { ...currentQuery.filters, status: ["unreviewed"] as const },
+          filters: { ...currentQuery.filters, status: ["unreviewed"] satisfies ReviewStatus[] },
         };
         const chunkSummary = await bridge.summarizeAutoSelectKeepers(chunkQuery);
         if (chunkSummary.keeperRowIds.length > 0) {
