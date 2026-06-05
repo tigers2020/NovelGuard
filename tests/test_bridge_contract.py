@@ -1670,6 +1670,33 @@ def test_real_move_preview_lists_duplicate_member(tmp_path: Path) -> None:
     assert preview["rows"][0]["action"] == "move_duplicate"
 
 
+def test_current_query_move_preview_includes_auto_approved_duplicate(tmp_path: Path) -> None:
+    api = _duplicate_api(tmp_path)
+    page = api.query_review_rows({"viewMode": "all", "limit": 50})
+    file_rows = [row for row in page["rows"] if row.get("rowKind") == "file"]
+    move_row = next(row for row in file_rows if row.get("proposedAction") == "move_duplicate")
+    keeper_row = next(row for row in file_rows if row.get("proposedAction") == "keep")
+    assert move_row["status"] == "approved"
+
+    action_page = api.query_review_rows({"viewMode": "action", "limit": 50})
+    action_file_ids = {
+        row["id"] for row in action_page["rows"] if row.get("rowKind") == "file"
+    }
+    assert move_row["id"] in action_file_ids
+
+    selection = {
+        "type": "current_query",
+        "query": {"viewMode": "action", "limit": 50},
+        "excludeRowIds": [],
+    }
+    preview = api.get_move_preview(selection)
+    validate_move_preview(preview)
+    assert preview["summary"]["operationCount"] >= 1
+    preview_ids = {row["id"] for row in preview["rows"]}
+    assert move_row["id"] in preview_ids
+    assert keeper_row["id"] not in preview_ids
+
+
 def test_real_apply_moves_duplicate_file(
     tmp_path: Path, tmp_path_factory: pytest.TempPathFactory
 ) -> None:

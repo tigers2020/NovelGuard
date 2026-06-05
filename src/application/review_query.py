@@ -9,6 +9,13 @@ from application.dto_mapper import empty_review_page
 _NON_EXACT_TYPES = frozenset({"near", "relation", "move_only"})
 
 
+def _action_view_includes_row(row: dict[str, Any]) -> bool:
+    status = row.get("status")
+    if status in ("unreviewed", "conflict"):
+        return True
+    return status == "approved" and row.get("proposedAction") == "move_duplicate"
+
+
 def _types_yield_empty(query: dict[str, Any]) -> bool:
     types = (
         query.get("filters", {}).get("types") if isinstance(query.get("filters"), dict) else None
@@ -100,7 +107,7 @@ def _filter_rows(rows: list[dict[str, Any]], query: dict[str, Any]) -> list[dict
             continue
         if view_mode == "move" and "move" not in str(row.get("proposedAction", "")):
             continue
-        if view_mode == "action" and row.get("status") not in ("unreviewed", "conflict"):
+        if view_mode == "action" and not _action_view_includes_row(row):
             continue
         if status_filter and row.get("status") not in status_filter:
             continue
