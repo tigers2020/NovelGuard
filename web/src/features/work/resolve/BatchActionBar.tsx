@@ -8,6 +8,7 @@ export function BatchActionBar({
   onPreview,
   previewDisabled = false,
   previewDisabledReason,
+  reviewOnlyGuidance,
 }: {
   filteredCount: number;
   loadedCount: number;
@@ -18,11 +19,24 @@ export function BatchActionBar({
   onPreview: () => void;
   previewDisabled?: boolean;
   previewDisabledReason?: string;
+  reviewOnlyGuidance?: string;
 }) {
   const bulkFilterDisabled = bulkQueryDisabled || filteredCount === 0;
 
   return (
-    <div className="relative z-30 flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-outline bg-surface px-4 py-3">
+    <div className="relative z-30 shrink-0 border-t border-outline bg-surface">
+      {reviewOnlyGuidance && (
+        <div
+          className="border-b border-outline px-4 py-3 text-sm text-on-surface"
+          data-testid="batch-review-only-banner"
+          role="status"
+        >
+          <div className="rounded-md border border-secondary/40 bg-secondary/10 p-3">
+            {reviewOnlyGuidance}
+          </div>
+        </div>
+      )}
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-sm text-on-surface-variant">
           필터{" "}
@@ -62,6 +76,7 @@ export function BatchActionBar({
         >
           이동 계획 미리보기
         </button>
+      </div>
       </div>
     </div>
   );

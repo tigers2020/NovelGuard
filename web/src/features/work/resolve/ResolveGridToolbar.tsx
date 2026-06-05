@@ -3,9 +3,9 @@ import { StatChip } from "../../../components/ui/StatChip";
 export type ResolveRowTypeFilter = "exact" | "near" | "relation" | "all";
 
 const TYPE_FILTERS: { id: ResolveRowTypeFilter; label: string }[] = [
-  { id: "exact", label: "Exact only" },
-  { id: "near", label: "Near only" },
-  { id: "relation", label: "Relation only" },
+  { id: "exact", label: "Exact (이동)" },
+  { id: "near", label: "Near (참고)" },
+  { id: "relation", label: "Relation (참고)" },
   { id: "all", label: "All types" },
 ];
 

@@ -50,4 +50,31 @@ describe("BatchActionBar", () => {
 
     expect(screen.queryByTestId("batch-partial-load-warning")).toBeNull();
   });
+
+  it("shows review-only banner when guidance is set", () => {
+    render(
+      <BatchActionBar
+        filteredCount={10}
+        loadedCount={10}
+        reviewOnlyGuidance="Exact (이동) 탭에서만 가능합니다."
+        onExcludeAllFiltered={noop}
+        onPreview={noop}
+      />,
+    );
+
+    expect(screen.getByTestId("batch-review-only-banner").textContent).toContain("Exact (이동)");
+  });
+
+  it("hides review-only banner when guidance is unset", () => {
+    render(
+      <BatchActionBar
+        filteredCount={10}
+        loadedCount={10}
+        onExcludeAllFiltered={noop}
+        onPreview={noop}
+      />,
+    );
+
+    expect(screen.queryByTestId("batch-review-only-banner")).toBeNull();
+  });
 });

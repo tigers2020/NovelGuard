@@ -27,6 +27,7 @@ import { BulkFilterConfirmDialog } from "./resolve/BulkFilterConfirmDialog";
 import {
   hasExecutableMovePreviewRows,
   reviewOnlyBlockedReasonForFilter,
+  reviewOnlyGuidanceBannerForFilter,
 } from "./resolve/previewEligibility";
 import {
   bulkMutationChunkCursors,
@@ -273,6 +274,11 @@ export function ResolveAndOrganizeWorkspace({
     [rowTypeFilter],
   );
 
+  const reviewOnlyGuidance = useMemo(
+    () => reviewOnlyGuidanceBannerForFilter(rowTypeFilter),
+    [rowTypeFilter],
+  );
+
   const previewBlockedReason = useMemo(() => {
     if (reviewOnlyBlockedReason) return reviewOnlyBlockedReason;
     if (filteredCount === 0) {
@@ -489,6 +495,7 @@ export function ResolveAndOrganizeWorkspace({
         onPreview={() => onOpenPreview(previewSelection)}
         previewDisabled={Boolean(previewBlockedReason)}
         previewDisabledReason={previewBlockedReason}
+        reviewOnlyGuidance={reviewOnlyGuidance}
       />
 
       <BulkFilterConfirmDialog
