@@ -5,7 +5,7 @@ from automation.runners.cursor_stall import CursorOutputTracker, cursor_stall_co
 
 def test_cursor_stall_config_defaults():
     stall, retries, poll = cursor_stall_config({"cursor": {}})
-    assert stall == 300.0
+    assert stall == 900.0
     assert retries == 1
     assert poll == 5.0
 
