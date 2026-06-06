@@ -3,6 +3,10 @@ import type { FileRowsQuery } from "../types/fileRows";
 import { validateFileRowsPage, clampFileRowsLimit } from "../contracts/fileRowsPageContract";
 import { queryMockFileRows } from "./mockFileRows";
 import type { AppSnapshot, FinalizeLastStatus, WorkMode } from "../types/snapshot";
+import {
+  idleResolveAutoApproveJobSnapshot,
+  type ResolveAutoApproveJobSnapshot,
+} from "../types/resolveAutoApproveJob";
 import type { ReviewRowsQuery } from "../types/review";
 import type { SelectionScope } from "../types/selection";
 import type {
@@ -78,6 +82,9 @@ const state = {
 
 let libraryRevision = 0;
 let exactAutoApprovedCount = 0;
+let resolveAutoApproveJob: ResolveAutoApproveJobSnapshot = idleResolveAutoApproveJobSnapshot();
+let resolveAutoApproveCancelRequested = false;
+let resolveAutoApproveJobTimer: ReturnType<typeof setTimeout> | undefined;
 
 let invalidationSequence = 0;
 const invalidationListeners = new Set<(event: SnapshotInvalidationEvent) => void>();
@@ -323,6 +330,7 @@ function buildSnapshot(): AppSnapshot {
       issueCount: qualityRows.length,
       selectedCount: state.selectedCount,
     },
+    resolveAutoApproveJob,
   };
 }
 
@@ -826,6 +834,73 @@ export const mockBridge: NovelGuardBridge = {
 
   async summarizeResolveAutoApprove(query: ReviewRowsQuery) {
     return summarizeMockResolveAutoApprove(mergedReviewRows(), query);
+  },
+
+  async startResolveAutoApproveJob(query: ReviewRowsQuery) {
+    if (resolveAutoApproveJob.status === "running") {
+      throw new BridgeCallError("JOB_ALREADY_RUNNING", {
+        code: "JOB_ALREADY_RUNNING",
+        method: "startResolveAutoApproveJob",
+      });
+    }
+    const preview = summarizeMockResolveAutoApprove(mergedReviewRows(), query);
+    if (preview.unreviewedCount === 0) {
+      throw new BridgeCallError("NO_UNREVIEWED_TARGETS", {
+        code: "NO_UNREVIEWED_TARGETS",
+        method: "startResolveAutoApproveJob",
+      });
+    }
+    resolveAutoApproveCancelRequested = false;
+    const startedAt = new Date().toISOString();
+    resolveAutoApproveJob = {
+      ...idleResolveAutoApproveJobSnapshot(),
+      status: "running",
+      phase: "summarize",
+      label: "미검토 대상 집계 중…",
+      startedAt,
+    };
+    if (resolveAutoApproveJobTimer !== undefined) {
+      clearTimeout(resolveAutoApproveJobTimer);
+    }
+    resolveAutoApproveJobTimer = setTimeout(() => {
+      resolveAutoApproveJobTimer = undefined;
+      if (resolveAutoApproveCancelRequested) {
+        resolveAutoApproveJob = {
+          ...resolveAutoApproveJob,
+          status: "cancelled",
+          phase: "idle",
+          label: "취소됨",
+          finishedAt: new Date().toISOString(),
+        };
+        resolveAutoApproveCancelRequested = false;
+        return;
+      }
+      resolveAutoApproveJob = {
+        ...idleResolveAutoApproveJobSnapshot(),
+        status: "complete",
+        phase: "idle",
+        processedRows: preview.unreviewedCount,
+        totalRows: preview.unreviewedCount,
+        keeperCount: preview.keeperCount,
+        moveCandidateCount: preview.moveCandidateCount,
+        scannedCount: preview.unreviewedCount,
+        eligibleCount: preview.unreviewedCount,
+        skippedConflictCount: preview.skippedConflictCount,
+        skippedExcludedCount: preview.skippedExcludedCount,
+        label: "집계 완료",
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        summary: preview,
+      };
+    }, 0);
+    return { accepted: true as const };
+  },
+
+  async cancelResolveAutoApproveJob() {
+    if (resolveAutoApproveJob.status !== "running") {
+      return;
+    }
+    resolveAutoApproveCancelRequested = true;
   },
 
   async discardMovePreview(request: DiscardMovePreviewRequest) {

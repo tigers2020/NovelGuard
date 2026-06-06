@@ -57,6 +57,8 @@ export interface NovelGuardBridge {
   ): Promise<UpdateReviewDecisionsResult>;
   summarizeAutoSelectKeepers(query: ReviewRowsQuery): Promise<AutoSelectKeepersSummary>;
   summarizeResolveAutoApprove(query: ReviewRowsQuery): Promise<ResolveAutoApproveSummary>;
+  startResolveAutoApproveJob(query: ReviewRowsQuery): Promise<{ accepted: true }>;
+  cancelResolveAutoApproveJob(): Promise<void>;
   getAppSetting(key: AppSettingKey): Promise<AppSettingResponse>;
   setAppSetting(key: AppSettingKey, value: AppSettingValue): Promise<AppSettingResponse>;
   queryLogEntries(query: LogEntriesQuery): Promise<LogEntriesPage>;

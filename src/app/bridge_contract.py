@@ -173,6 +173,10 @@ def validate_app_snapshot(snapshot: Any) -> None:
         value = resolve.get(key)
         if not isinstance(value, int) or value < 0:
             raise SnapshotContractError(f"ResolveSnapshot.{key} must be a non-negative int")
+    job = snapshot.get("resolveAutoApproveJob")
+    if job is None:
+        raise SnapshotContractError("AppSnapshot missing required field: resolveAutoApproveJob")
+    validate_resolve_auto_approve_job_snapshot(job)
 
 
 def clamp_query_limit(query: dict[str, Any]) -> int:
@@ -476,6 +480,15 @@ class FinalizeError(Exception):
         return json.dumps({"reason": self.reason, "details": self.details}, ensure_ascii=False)
 
 
+class ResolveAutoApproveJobError(Exception):
+    def __init__(self, reason: str, message: str | None = None) -> None:
+        self.reason = reason
+        super().__init__(message or reason)
+
+    def __str__(self) -> str:
+        return json.dumps({"reason": self.reason}, ensure_ascii=False)
+
+
 def validate_app_setting_response(payload: Any) -> None:
     if not isinstance(payload, dict):
         raise PageContractError("AppSettingResponse must be a dict")
@@ -600,6 +613,18 @@ def validate_finalize_result(payload: Any) -> None:
     for key in ("previewedEmptyDirs", "removedEmptyDirs"):
         if not isinstance(cleanup.get(key), list):
             raise PageContractError(f"cleanup.{key} must be a list")
+
+
+def validate_resolve_auto_approve_job_snapshot(payload: Any) -> None:
+    from application.resolve_auto_approve_job import validate_resolve_auto_approve_job_snapshot as _validate
+
+    try:
+        _validate(payload)
+    except ValueError as exc:
+        raise SnapshotContractError(str(exc)) from exc
+    summary = payload.get("summary")
+    if summary is not None:
+        validate_resolve_auto_approve_summary(summary)
 
 
 def validate_resolve_auto_approve_summary(payload: Any) -> None:

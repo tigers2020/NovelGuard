@@ -142,6 +142,17 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
         () => call<ResolveAutoApproveSummary>(api, "summarize_resolve_auto_approve", query),
         { method: "summarize_resolve_auto_approve" },
       ),
+    startResolveAutoApproveJob: (query: ReviewRowsQuery) =>
+      callBridge(
+        () =>
+          call<{ accepted: true }>(api, "start_resolve_auto_approve_job", query),
+        { method: "start_resolve_auto_approve_job" },
+      ),
+    cancelResolveAutoApproveJob: () =>
+      callBridge(
+        () => call(api, "cancel_resolve_auto_approve_job").then(() => undefined),
+        { method: "cancel_resolve_auto_approve_job" },
+      ),
     getAppSetting: (key) =>
       callBridge(() => call(api, "get_app_setting", key), { method: "get_app_setting" }),
     setAppSetting: (key, value) =>

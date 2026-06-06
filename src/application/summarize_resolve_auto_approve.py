@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from application.review_query import query_review_page
 from application.review_state_merge import _file_id_from_row_id
@@ -12,6 +12,28 @@ from domain.models import FileRecord
 _PAGE_LIMIT = 200
 _MAX_SAMPLES = 5
 _ELIGIBLE_TYPES = frozenset({"exact", "near", "relation"})
+
+
+def has_unreviewed_resolve_targets(all_rows: list[dict[str, Any]], query: dict[str, Any]) -> bool:
+    """True when at least one eligible unreviewed file row exists for the query."""
+    merged_query = _merge_unreviewed_query(query)
+    offset = 0
+    while True:
+        page_query = {**merged_query, "cursor": str(offset) if offset else None}
+        page = query_review_page(all_rows, page_query, limit=_PAGE_LIMIT)
+        for row in page["rows"]:
+            if (
+                row.get("rowKind") == "file"
+                and row.get("type") in _ELIGIBLE_TYPES
+                and row.get("status") != "conflict"
+            ):
+                return True
+        if not page["pageInfo"].get("hasMore"):
+            return False
+        next_cursor = page["pageInfo"].get("nextCursor")
+        if next_cursor is None:
+            return False
+        offset = int(next_cursor)
 
 
 def _merge_unreviewed_query(query: dict[str, Any]) -> dict[str, Any]:
@@ -28,6 +50,8 @@ def _stream_file_rows(
     query: dict[str, Any],
     *,
     status_filter: list[str] | None = None,
+    on_page_scanned: Callable[[int], None] | None = None,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> list[dict[str, Any]]:
     merged_filters: dict[str, Any] = {}
     raw_filters = query.get("filters")
@@ -50,6 +74,12 @@ def _stream_file_rows(
             and row.get("status") != "conflict"
         ]
         collected.extend(chunk)
+        if on_page_scanned is not None:
+            on_page_scanned(len(collected))
+        if cancel_check is not None and cancel_check():
+            from application.resolve_auto_approve_job import ResolveAutoApproveJobCancelled
+
+            raise ResolveAutoApproveJobCancelled()
         if not page["pageInfo"].get("hasMore"):
             break
         next_cursor = page["pageInfo"].get("nextCursor")
@@ -65,15 +95,23 @@ def summarize_resolve_auto_approve(
     *,
     files_by_id: dict[str, FileRecord],
     members_by_group: dict[str, set[str]],
+    on_page_scanned: Callable[[int], None] | None = None,
+    cancel_check: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     """Server dry-run: full filter scan, no mutation, no public 500 cap."""
     unreviewed_query = _merge_unreviewed_query(query)
-    file_rows = _stream_file_rows(all_rows, unreviewed_query)
+    file_rows = _stream_file_rows(
+        all_rows,
+        unreviewed_query,
+        on_page_scanned=on_page_scanned,
+        cancel_check=cancel_check,
+    )
 
     skipped_rows = _stream_file_rows(
         all_rows,
         query,
         status_filter=["conflict", "excluded"],
+        cancel_check=cancel_check,
     )
     skipped_conflict_count = sum(1 for row in skipped_rows if row.get("status") == "conflict")
     skipped_excluded_count = sum(1 for row in skipped_rows if row.get("status") == "excluded")

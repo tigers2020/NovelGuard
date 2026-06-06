@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 import logging
 import sqlite3
 import threading
@@ -104,7 +105,7 @@ def test_clamp_query_limit_max_200() -> None:
 
 def test_pywebview_api_methods_match_locked_contract() -> None:
     """Canonical list: app.bridge_parity.PYWEBVIEW_API_METHODS (mirrors bridgeParity.ts)."""
-    assert len(PYWEBVIEW_API_METHODS) == 29
+    assert len(PYWEBVIEW_API_METHODS) == 31
     assert PYWEBVIEW_API_METHODS[0] == "get_app_info"
     assert PYWEBVIEW_API_METHODS[-1] == "cancel_finalize"
 
@@ -2464,6 +2465,107 @@ def test_summarize_resolve_auto_approve_keeper_uses_full_group_membership() -> N
     assert summary["unreviewedCount"] == 1
     assert summary["keeperCount"] == 0
     assert summary["moveCandidateCount"] == 1
+
+
+def _resolve_auto_approve_job_until_terminal(api: BridgeApi) -> dict[str, Any]:
+    deadline = time.monotonic() + 10.0
+    snap = api.get_snapshot()
+    job = snap["resolveAutoApproveJob"]
+    while time.monotonic() < deadline and job["status"] == "running":
+        time.sleep(0.02)
+        snap = api.get_snapshot()
+        job = snap["resolveAutoApproveJob"]
+    return job
+
+
+def test_resolve_auto_approve_job_snapshot_idle_by_default() -> None:
+    snap = _memory_api().get_snapshot()
+    job = snap["resolveAutoApproveJob"]
+    assert job["status"] == "idle"
+    assert job["summary"] is None
+
+
+def test_start_resolve_auto_approve_job_polls_dry_run_summary(tmp_path: Path) -> None:
+    (tmp_path / "a.txt").write_text("x" * 100, encoding="utf-8")
+    (tmp_path / "b.txt").write_text("x" * 100, encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    revision_before = session.library_revision()
+    query = {"viewMode": "all", "limit": 50}
+    direct = api.summarize_resolve_auto_approve(query)
+    accepted = api.start_resolve_auto_approve_job(query)
+    assert accepted == {"accepted": True}
+    job = _resolve_auto_approve_job_until_terminal(api)
+    assert job["status"] == "complete"
+    assert job["summary"] is not None
+    validate_resolve_auto_approve_summary(job["summary"])
+    assert job["summary"]["unreviewedCount"] == direct["unreviewedCount"]
+    assert job["summary"]["keeperCount"] == direct["keeperCount"]
+    assert job["summary"]["moveCandidateCount"] == direct["moveCandidateCount"]
+    assert session.library_revision() == revision_before
+
+
+def test_start_resolve_auto_approve_job_rejects_when_already_running() -> None:
+    import application.summarize_resolve_auto_approve as summarize_module
+
+    rows, files_by_id, members_by_group = _synthetic_exact_group_fixture(200)
+    session = create_library_session(MemoryLibraryIndex())
+    with session._lock:  # noqa: SLF001
+        session._review_rows_cache = rows
+        session._files_by_id = files_by_id
+    session.build_review_members_by_group = lambda: members_by_group  # type: ignore[method-assign]
+    api = create_bridge_api(session)
+    query = {"viewMode": "all", "limit": 50, "filters": {"types": ["exact"]}}
+    original_stream = summarize_module._stream_file_rows
+
+    def slow_stream(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+        time.sleep(0.02)
+        return original_stream(*args, **kwargs)
+
+    summarize_module._stream_file_rows = slow_stream
+    try:
+        api.start_resolve_auto_approve_job(query)
+        with pytest.raises(PreviewApplyError, match="JOB_ALREADY_RUNNING"):
+            api.start_resolve_auto_approve_job(query)
+        _resolve_auto_approve_job_until_terminal(api)
+    finally:
+        summarize_module._stream_file_rows = original_stream
+
+
+def test_start_resolve_auto_approve_job_rejects_no_targets() -> None:
+    api = _memory_api()
+    with pytest.raises(PreviewApplyError, match="NO_UNREVIEWED_TARGETS"):
+        api.start_resolve_auto_approve_job({"viewMode": "all", "limit": 50})
+
+
+def test_cancel_resolve_auto_approve_job_marks_cancelled() -> None:
+    import application.summarize_resolve_auto_approve as summarize_module
+
+    rows, files_by_id, members_by_group = _synthetic_exact_group_fixture(800)
+    session = create_library_session(MemoryLibraryIndex())
+    with session._lock:  # noqa: SLF001
+        session._review_rows_cache = rows
+        session._files_by_id = files_by_id
+    session.build_review_members_by_group = lambda: members_by_group  # type: ignore[method-assign]
+    api = create_bridge_api(session)
+    query = {"viewMode": "all", "limit": 50, "filters": {"types": ["exact"]}}
+    original_stream = summarize_module._stream_file_rows
+
+    def slow_stream(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+        time.sleep(0.02)
+        return original_stream(*args, **kwargs)
+
+    summarize_module._stream_file_rows = slow_stream
+    try:
+        api.start_resolve_auto_approve_job(query)
+        api.cancel_resolve_auto_approve_job()
+        job = _resolve_auto_approve_job_until_terminal(api)
+    finally:
+        summarize_module._stream_file_rows = original_stream
+    assert job["status"] == "cancelled"
 
 
 def test_summarize_resolve_auto_approve_bridge_counts_unreviewed_file_rows(tmp_path: Path) -> None:
