@@ -1,8 +1,10 @@
 ---
 title: Resolve bulk auto-select/approve — server-side job with full-filter summary and progress
-status: draft
+status: contract-review
 date: 2026-06-05
 implementation: not-on-main
+implementation_branch: feature/resolve-bulk-auto-approve-job
+contract_pr: pending
 risk: safe
 kind: feature
 layer: crosslayer
@@ -19,10 +21,11 @@ related_specs:
   - docs/adr/NOV-32-auto-keeper-policy.md
 ---
 
-> **Status:** `draft` / **not implemented** on `main`
+> **Status:** `contract-review` / **not implemented** on `main`
+> **Implementation branch (planned):** `feature/resolve-bulk-auto-approve-job` — **do not code until this contract PR merges**
 > **Current main contract:** [main-ux-contract.md](../../architecture/main-ux-contract.md) — Work 3-mode + subflow dialogs
-> **Do not implement** until stabilization is merged and server-job prerequisites (dry-run summary, progress polling, keeper policy tests) are approved.
-> **Policy authority:** [033 auto-keeper bulk approve policy](./033-2026-06-05-auto-keeper-bulk-approve-policy.md) remains locked; this spec is the **deferred** server-job slice.
+> **Prerequisites met:** PR #59 (IA contract), PR #60–#61 (036 done). Stabilization closed.
+> **Policy authority:** [033 auto-keeper bulk approve policy](./033-2026-06-05-auto-keeper-bulk-approve-policy.md) remains locked; this spec defines the **server-job delivery** slice.
 
 # Resolve bulk auto-select/approve — server-side job
 
@@ -35,17 +38,33 @@ User outcome: one click on the current filter processes **all** unreviewed file 
 ## Locked scope
 
 ```text
-IN:  Resolve 미검토 자동 선정·승인 (current filter, all unreviewed file rows)
-IN:  Server summary/count, background worker, snapshot progress polling
-IN:  Internal single-writer SQLite mutation in server chunks
+IN:  exact / near / relation file rows (active Resolve filter + status unreviewed)
+IN:  Server dry-run summary (full filter, no grid preload)
+IN:  Background job + snapshot progress polling
+IN:  Internal chunked SQLite mutations (single writer; no public 500 cap in bulk UX)
+IN:  Keeper policy: largest size_bytes → newest modified_at_ns → stable file_id tie-break
+IN:  Conflict/exclusion skip; cooperative cancel; partial failure + audit log
 
 OUT: move preview auto-generation
 OUT: file move / apply
 OUT: finalize / integrity
 OUT: full pipeline one-shot (auto-approve → preview → apply)
+OUT: checkbox / explicit multi-select revival
 ```
 
 Keeper policy, conflict exclusion, and preview-before-apply rules remain governed by [NOV-32 policy](../../adr/NOV-32-auto-keeper-policy.md) and [033 auto-keeper bulk approve policy](033-2026-06-05-auto-keeper-bulk-approve-policy.md).
+
+## Keeper policy lock (contract)
+
+For **exact**, **near**, and **relation** duplicate/review groups, the automatic keeper is selected by:
+
+1. **Largest** `size_bytes` (desc)
+2. **Newest** `modified_at_ns` (desc)
+3. **Stable** `file_id` tie-breaker (asc)
+
+All non-keeper **file** rows in eligible groups are approved for `move_duplicate`. Keeper rows are preserved (`approved` + `keep`). `conflict`, `excluded`, and manual-blocked rows are **not** mutated unless explicitly included by locked policy in [033](033-2026-06-05-auto-keeper-bulk-approve-policy.md).
+
+Implementation must use canonical `pick_keeper_file_id` (or equivalent) — no alternate client-side keeper logic in the bulk job path.
 
 Deferred follow-up issue:
 
@@ -271,17 +290,19 @@ Optional future optimization (out of scope): parallel CPU-only keeper grouping b
 
 ## Policy alignment (NOV-32)
 
-Unchanged from locked policy:
+Unchanged from locked policy — server job is the **delivery mechanism**, not a policy change:
 
 | Rule | Job behavior |
 |------|----------------|
 | Scope | Active Resolve filter + `status: unreviewed` |
 | Row types | exact, near, relation file rows |
-| Keeper | `pick_keeper_file_id` canonical tie-break |
+| Keeper | `pick_keeper_file_id` — size desc → `modified_at_ns` desc → `file_id` asc |
 | Keeper approve | `approved` + `keep` |
 | Non-keeper approve | `approved` + `move_duplicate` |
-| Conflict | excluded |
+| Conflict / excluded | skipped — no mutation |
+| Public 500 cap | **not** exposed in bulk UX; internal chunks only |
 | Preview | user must still run move preview separately |
+| Audit | job start/complete/cancel/error recorded in session audit log |
 
 ## Testing
 
@@ -298,6 +319,7 @@ Unchanged from locked policy:
 | Area | Path |
 |------|------|
 | Spec | `docs/superpowers/specs/035-2026-06-05-resolve-bulk-auto-approve-job-design.md` |
+| Plan | `docs/superpowers/plans/035-2026-06-06-resolve-bulk-auto-approve-job.md` |
 | Job logic | `src/application/resolve_auto_approve_job.py` (new) |
 | Session wiring | `src/application/library_session.py` |
 | Bridge | `src/app/bridge_api.py`, `src/app/bridge_parity.py` |
