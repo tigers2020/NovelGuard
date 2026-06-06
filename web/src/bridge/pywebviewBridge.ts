@@ -16,6 +16,7 @@ import type {
 } from "../types/reviewDecisions";
 import type { SelectionScope } from "../types/selection";
 import type { FinalizeReportDocument, FinalizeSummary, RunFinalizeRequest } from "../types/finalize";
+import type { ExecuteUndoPlanRequest, PreviewUndoPlanRequest } from "../types/recovery";
 import type { FinalizeJobSnapshot } from "../types/finalizeJob";
 import type { AppInfo } from "../types/appInfo";
 import type { WorkMode } from "../types/snapshot";
@@ -185,6 +186,16 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
     cancelFinalize: () =>
       callBridge(() => call(api, "cancel_finalize").then(() => undefined), {
         method: "cancel_finalize",
+      }),
+    getRecoveryState: () =>
+      callBridge(() => call(api, "get_recovery_state"), { method: "get_recovery_state" }),
+    previewUndoPlan: (request: PreviewUndoPlanRequest) =>
+      callBridge(() => call(api, "preview_undo_plan", request), {
+        method: "preview_undo_plan",
+      }),
+    executeUndoPlan: (request: ExecuteUndoPlanRequest) =>
+      callBridge(() => call(api, "execute_undo_plan", request), {
+        method: "execute_undo_plan",
       }),
     subscribeSnapshotInvalidation: () => () => {},
   };

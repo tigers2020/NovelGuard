@@ -14,6 +14,7 @@ from app.move_preview_facade import MovePreviewFacade
 from app.preview_apply_guard import PreviewApplyGuard
 from app.quality_repair_facade import QualityRepairFacade
 from app.quality_repair_guard import QualityRepairGuard
+from app.recovery_undo_facade import RecoveryUndoFacade
 from app.runtime_paths import (
     LibraryRuntimePaths,
     config_dir,
@@ -21,6 +22,7 @@ from app.runtime_paths import (
     library_runtime_paths,
     pending_library_runtime_paths,
 )
+from app.undo_preview_guard import UndoPreviewGuard
 from application.app_settings import AppSettings
 from application.audit_log import AuditLog
 from application.library_session import LibrarySession
@@ -70,6 +72,10 @@ class SessionRecoveryStore(JsonlRecoveryStore):
     def write_undo_manifest(self, manifest: dict[str, object]) -> Path:
         self._refresh_paths()
         return super().write_undo_manifest(manifest)
+
+    def list_undo_manifest_files(self) -> list[Path]:
+        self._refresh_paths()
+        return super().list_undo_manifest_files()
 
 
 def _scan_with_content_probe(
@@ -156,6 +162,8 @@ def create_bridge_api(
     filesystem: FilesystemApplyPort | None = None,
     repair_filesystem: FilesystemRepairPort | None = None,
     repair_backup_root: Path | None = None,
+    recovery_store: SessionRecoveryStore | None = None,
+    undo_preview_guard: UndoPreviewGuard | None = None,
 ) -> BridgeApi:
     """Composition root for pywebview BridgeApi + PR-15 apply + PR-22 repair."""
     resolved_session = session or create_library_session()
@@ -174,9 +182,10 @@ def create_bridge_api(
     preview_use_case = BuildPreviewPlanUseCase(
         resolved_session, move_guard, repair_guard, audit, fs
     )
-    recovery_store = SessionRecoveryStore(resolved_session)
+    resolved_recovery_store = recovery_store or SessionRecoveryStore(resolved_session)
+    undo_guard = undo_preview_guard or UndoPreviewGuard()
     apply_use_case = ApplyResolvedActionsUseCase(
-        resolved_session, move_guard, audit, fs, recovery_store=recovery_store
+        resolved_session, move_guard, audit, fs, recovery_store=resolved_recovery_store
     )
     repair_preview_use_case = BuildQualityRepairPlanUseCase(
         resolved_session, move_guard, repair_guard, audit
@@ -192,6 +201,12 @@ def create_bridge_api(
     quality_repair_facade = QualityRepairFacade(
         resolved_session, repair_guard, repair_apply_use_case
     )
+    recovery_undo_facade = RecoveryUndoFacade(
+        resolved_session,
+        resolved_recovery_store,
+        undo_guard,
+        filesystem=fs if isinstance(fs, LocalFilesystemApplyAdapter) else None,
+    )
     attach_session_log_handler()
     return BridgeApi(
         resolved_session,
@@ -203,4 +218,5 @@ def create_bridge_api(
         repair_apply_use_case=repair_apply_use_case,
         move_preview_facade=move_preview_facade,
         quality_repair_facade=quality_repair_facade,
+        recovery_undo_facade=recovery_undo_facade,
     )

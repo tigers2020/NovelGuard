@@ -13,6 +13,7 @@ from app.bridge_contract import (
     FinalizeJobError,
     PreviewApplyError,
     QualityQueryError,
+    RecoveryError,
     ResolveAutoApproveJobError,
     clamp_query_limit,
     validate_app_info,
@@ -29,9 +30,12 @@ from app.bridge_contract import (
     validate_quality_issue_detail,
     validate_quality_repair_preview,
     validate_quality_rows_page,
+    validate_recovery_state,
     validate_resolve_auto_approve_summary,
     validate_review_rows_page,
     validate_selection_scope,
+    validate_undo_dry_run_plan,
+    validate_undo_execution_result,
 )
 from app.build_preview_plan import BuildPreviewPlanUseCase
 from app.build_quality_repair_plan import BuildQualityRepairPlanUseCase
@@ -39,6 +43,7 @@ from app.move_preview_facade import MovePreviewFacade
 from app.preview_apply_guard import PreviewApplyGuard
 from app.quality_repair_facade import QualityRepairFacade
 from app.quality_repair_guard import QualityRepairGuard
+from app.recovery_undo_facade import RecoveryUndoFacade
 from app.runtime_paths import logs_dir
 from application.app_settings import (
     InvalidSettingValueError,
@@ -68,6 +73,7 @@ class BridgeApi:
         repair_apply_use_case: ApplyQualityRepairUseCase,
         move_preview_facade: MovePreviewFacade | None = None,
         quality_repair_facade: QualityRepairFacade | None = None,
+        recovery_undo_facade: RecoveryUndoFacade | None = None,
     ) -> None:
         self._session = session
 
@@ -90,6 +96,43 @@ class BridgeApi:
         self._quality_repair = quality_repair_facade or QualityRepairFacade(
             session, repair_guard, repair_apply_use_case
         )
+
+        self._recovery_undo = recovery_undo_facade
+
+    def get_recovery_state(self) -> dict[str, Any]:
+        if self._recovery_undo is None:
+            raise RecoveryError("RECOVERY_NOT_CONFIGURED")
+        payload = self._recovery_undo.get_recovery_state()
+        validate_recovery_state(payload)
+        return payload
+
+    def preview_undo_plan(self, request: dict[str, Any]) -> dict[str, Any]:
+        if self._recovery_undo is None:
+            raise RecoveryError("RECOVERY_NOT_CONFIGURED")
+        if not isinstance(request, dict):
+            raise RecoveryError("INVALID_REQUEST", "request must be a dict")
+        try:
+            payload = self._recovery_undo.preview_undo_plan(request)
+        except RecoveryError:
+            raise
+        except Exception as exc:
+            raise RecoveryError("UNDO_BLOCKED", str(exc)) from exc
+        validate_undo_dry_run_plan(payload)
+        return payload
+
+    def execute_undo_plan(self, request: dict[str, Any]) -> dict[str, Any]:
+        if self._recovery_undo is None:
+            raise RecoveryError("RECOVERY_NOT_CONFIGURED")
+        if not isinstance(request, dict):
+            raise RecoveryError("INVALID_REQUEST", "request must be a dict")
+        try:
+            payload = self._recovery_undo.execute_undo_plan(request)
+        except RecoveryError:
+            raise
+        except Exception as exc:
+            raise RecoveryError("UNDO_BLOCKED", str(exc)) from exc
+        validate_undo_execution_result(payload)
+        return payload
 
     def get_snapshot(self) -> dict[str, Any]:
         payload = self._session.get_snapshot()

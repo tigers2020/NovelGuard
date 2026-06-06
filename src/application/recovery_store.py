@@ -42,6 +42,16 @@ class JsonlRecoveryStore:
     def undo_manifest_path(self, undo_plan_id: str) -> Path:
         return self._undo_plans_dir / f"{undo_plan_id}.json"
 
+    def list_undo_manifest_files(self) -> list[Path]:
+        directory = self._undo_plans_dir
+        if not directory.is_dir():
+            return []
+        return sorted(
+            (path for path in directory.glob("*.json") if path.is_file()),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+
     def read_undo_manifest_raw(self, undo_plan_id: str) -> dict[str, Any]:
         path = self.undo_manifest_path(undo_plan_id)
         if not path.is_file():

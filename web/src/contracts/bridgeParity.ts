@@ -33,6 +33,9 @@ export const NOVEL_GUARD_BRIDGE_METHODS = [
   "getFinalizeJob",
   "getFinalizeReport",
   "cancelFinalize",
+  "getRecoveryState",
+  "previewUndoPlan",
+  "executeUndoPlan",
 ] as const satisfies readonly (keyof NovelGuardBridge)[];
 
 export const PYWEBVIEW_API_METHODS = [
@@ -68,6 +71,9 @@ export const PYWEBVIEW_API_METHODS = [
   "get_finalize_job",
   "get_finalize_report",
   "cancel_finalize",
+  "get_recovery_state",
+  "preview_undo_plan",
+  "execute_undo_plan",
 ] as const;
 
 export function assertBridgeParity(bridge: NovelGuardBridge): void {
