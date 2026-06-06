@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 from application import scan_pipeline_constants
 from application.app_settings import AppSettings, InvalidSettingValueError
+from application.bridge_timing import log_phase_end, log_phase_start
 from application.dto_mapper import (
     build_snapshot,
     scan_timestamp,
@@ -1346,10 +1347,30 @@ class LibrarySession:
 
     def _start_post_scan_worker(self, folder: str) -> None:
         def _worker() -> None:
+            worker_t0 = log_phase_start("worker")
+            worker_status = "complete"
+            active_phase: str | None = None
+            active_t0: float | None = None
+
+            def _begin_phase(phase: str) -> None:
+                nonlocal active_phase, active_t0
+                if active_phase is not None and active_t0 is not None:
+                    log_phase_end(active_phase, active_t0, status="complete")
+                active_phase = phase
+                active_t0 = log_phase_start(phase)
+
+            def _finish_active_phase(*, status: str = "complete") -> None:
+                nonlocal active_phase, active_t0
+                if active_phase is not None and active_t0 is not None:
+                    log_phase_end(active_phase, active_t0, status=status)
+                active_phase = None
+                active_t0 = None
+
             try:
                 with self._lock:
                     self._deep_analysis_status = "running"
                     self._deep_analysis_error = None
+                _begin_phase("exact_index")
                 self._set_exact_index_progress("파일 메타데이터 로드 중…", 84)
                 files = self._index.files()
                 defer_projection = len(files) > 500
@@ -1389,6 +1410,7 @@ class LibrarySession:
 
                 if defer_projection:
                     self._sync_file_review_projection()
+                _finish_active_phase()
 
                 deep_analysis_non_blocking = (
                     len(files) >= scan_pipeline_constants.SCAN_DEEP_ANALYSIS_BACKGROUND_THRESHOLD
@@ -1400,6 +1422,7 @@ class LibrarySession:
                         self._pipeline_percent = 0
 
                 block_pipeline = not deep_analysis_non_blocking
+                _begin_phase("queue")
                 self._set_background_progress(
                     phase="queue",
                     label="중복·관계 분석 준비 중…",
@@ -1407,6 +1430,9 @@ class LibrarySession:
                     step_total=step_total,
                     block_pipeline=block_pipeline,
                 )
+                _finish_active_phase()
+
+                _begin_phase("prepare")
                 self._set_background_progress(
                     phase="prepare",
                     label="분석 대상 파일 준비 중…",
@@ -1414,6 +1440,9 @@ class LibrarySession:
                     step_total=step_total,
                     block_pipeline=block_pipeline,
                 )
+                _finish_active_phase()
+
+                _begin_phase("relation")
                 self._set_background_progress(
                     phase="relation",
                     label="파일명 관계 분석 중…",
@@ -1424,6 +1453,9 @@ class LibrarySession:
                 self._run_relation_phase(folder, files)
                 with self._lock:
                     self._library_revision += 1
+                _finish_active_phase()
+
+                _begin_phase("near")
                 self._set_background_progress(
                     phase="near",
                     label="근사 중복 분석 중…",
@@ -1434,8 +1466,10 @@ class LibrarySession:
                 self._run_near_duplicate_phase(folder, files)
                 with self._lock:
                     self._library_revision += 1
+                _finish_active_phase()
 
                 if defer_projection:
+                    _begin_phase("projection")
                     self._set_background_progress(
                         phase="projection",
                         label="검토 인덱스 동기화 중…",
@@ -1444,8 +1478,11 @@ class LibrarySession:
                         block_pipeline=block_pipeline,
                     )
                     self._sync_file_review_projection()
+                    _finish_active_phase()
             except Exception as exc:
                 _LOGGER.exception("post-scan worker failed")
+                worker_status = "error"
+                _finish_active_phase(status="error")
                 with self._lock:
                     self._scan_state = "error"
                     self._deep_analysis_status = "error"
@@ -1467,6 +1504,7 @@ class LibrarySession:
                     self._post_scan_running = False
                     self._clear_background_progress()
                     self._library_revision += 1
+                log_phase_end("worker", worker_t0, status=worker_status)
 
         threading.Thread(target=_worker, name="novelguard-post-scan", daemon=True).start()
 
