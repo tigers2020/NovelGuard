@@ -15,7 +15,7 @@ Minimal context for queued jobs. IDE sessions use [AGENTS.md](../../AGENTS.md) +
 
 ## Layers
 
-`domain` → `application` → `infrastructure` → `web` → `app` ([current_architecture.md](../current_architecture.md)).
+`domain` → `application` → `infrastructure` → `web` → `app` ([main-ux-contract.md](../architecture/main-ux-contract.md)).
 
 ## Verify (default)
 

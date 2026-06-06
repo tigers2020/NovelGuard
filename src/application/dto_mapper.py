@@ -102,9 +102,7 @@ def build_snapshot(
         if resolve_auto_approve_job is not None
         else idle_resolve_auto_approve_job_snapshot()
     )
-    finalize = (
-        finalize_job if finalize_job is not None else idle_finalize_job_snapshot()
-    )
+    finalize = finalize_job if finalize_job is not None else idle_finalize_job_snapshot()
     return {
         "route": "work",
         "theme": "dark",
