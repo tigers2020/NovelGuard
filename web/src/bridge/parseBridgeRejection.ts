@@ -1,5 +1,7 @@
 import type { ApplyFailedDetails, PreviewApplyErrorCode } from "../types/movePreview";
 import type { RepairApplyErrorCode, RepairPreviewErrorCode } from "../types/qualityRepair";
+import type { RecoveryUndoReason } from "../types/recoveryUndo";
+import { isRecoveryUndoReason } from "../types/recoveryUndo";
 import {
   BridgeCallError,
   type FileRowQueryErrorCode,
@@ -59,7 +61,8 @@ type BridgeRejectionReason =
   | RepairApplyErrorCode
   | QualityQueryErrorCode
   | FileRowQueryErrorCode
-  | FinalizeBridgeErrorCode;
+  | FinalizeBridgeErrorCode
+  | RecoveryUndoReason;
 
 function isPreviewApplyCode(value: string): value is PreviewApplyErrorCode {
   return (PREVIEW_APPLY_CODES as readonly string[]).includes(value);
@@ -92,7 +95,8 @@ function isBridgeRejectionReason(value: string): value is BridgeRejectionReason 
     isRepairApplyCode(value) ||
     isQualityQueryCode(value) ||
     isFileRowQueryCode(value) ||
-    isFinalizeBridgeCode(value)
+    isFinalizeBridgeCode(value) ||
+    isRecoveryUndoReason(value)
   );
 }
 

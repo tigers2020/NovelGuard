@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useBridge, useRefreshSnapshot, useSnapshot } from "../../app/providers/snapshotHooks";
 import { BridgeCallError } from "../../bridge/bridgeErrors";
+import { EMPTY_RECOVERY_STATE } from "../../contracts/recoveryContract";
+import type { RecoveryState } from "../../types/recovery";
 import type { WorkMode } from "../../types/snapshot";
 import type { SelectionScope } from "../../types/selection";
 import { QualityWorkspace } from "./QualityWorkspace";
+import { RecoveryUndoBanner } from "./RecoveryUndoBanner";
 import { ResolveAndOrganizeWorkspace } from "./ResolveAndOrganizeWorkspace";
 import { ScanWorkspace } from "./ScanWorkspace";
 import { WorkModePanel } from "./WorkModePanel";
@@ -44,6 +47,7 @@ export function WorkRoute({
   const snapshotMode = snapshot.work.activeMode;
   const [optimisticMode, setOptimisticMode] = useState<WorkMode | null>(null);
   const [modeError, setModeError] = useState<string | null>(null);
+  const [recoveryState, setRecoveryState] = useState<RecoveryState>(EMPTY_RECOVERY_STATE);
   const requestSeqRef = useRef(0);
   const pendingOptimistic =
     optimisticMode != null && snapshotMode !== optimisticMode ? optimisticMode : null;
@@ -73,9 +77,23 @@ export function WorkRoute({
     [bridge, onWorkModeApplied, refreshSnapshot],
   );
 
+  const refreshRecoveryState = useCallback(async () => {
+    try {
+      const state = await bridge.getRecoveryState();
+      setRecoveryState(state);
+    } catch {
+      setRecoveryState(EMPTY_RECOVERY_STATE);
+    }
+  }, [bridge]);
+
   useEffect(() => {
     onRequestWorkModeReady?.(requestWorkMode);
   }, [onRequestWorkModeReady, requestWorkMode]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- bridge fetch on mount/revision
+    void refreshRecoveryState();
+  }, [refreshRecoveryState, snapshot.work.resolve.libraryRevision]);
 
   return (
     <div
@@ -95,6 +113,10 @@ export function WorkRoute({
           {modeError}
         </p>
       )}
+      <RecoveryUndoBanner
+        recoveryState={recoveryState}
+        onRecoveryRefreshed={refreshRecoveryState}
+      />
       <div
         className={
           compactWorkChrome

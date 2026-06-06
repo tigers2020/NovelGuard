@@ -64,6 +64,15 @@ describe("callBridge", () => {
     ).rejects.toMatchObject({ reason: "STALE_REPAIR_PREVIEW", code: "rejected" });
   });
 
+  it("maps RecoveryUndo reason from pywebview message", async () => {
+    await expect(
+      callBridge(() => Promise.reject(new Error("STALE_UNDO_PREVIEW")), {
+        method: "execute_undo_plan",
+        timeoutMs: 50,
+      }),
+    ).rejects.toMatchObject({ reason: "STALE_UNDO_PREVIEW", code: "rejected" });
+  });
+
   it("maps FinalizeError JSON payload", async () => {
     const payload = JSON.stringify({ reason: "REPORT_NOT_FOUND", details: "" });
     await expect(

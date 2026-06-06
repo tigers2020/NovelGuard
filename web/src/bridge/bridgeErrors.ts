@@ -1,5 +1,6 @@
 import type { ApplyFailedDetails, PreviewApplyErrorCode } from "../types/movePreview";
 import type { RepairApplyErrorCode, RepairPreviewErrorCode } from "../types/qualityRepair";
+import type { RecoveryUndoReason } from "../types/recoveryUndo";
 
 export type QualityQueryErrorCode = "INVALID_SORT_FIELD";
 
@@ -49,7 +50,8 @@ export class BridgeCallError extends Error {
     | "REPORT_NOT_FOUND"
     | "INVALID_SETTING_VALUE"
     | "JOB_ALREADY_RUNNING"
-    | "NO_UNREVIEWED_TARGETS";
+    | "NO_UNREVIEWED_TARGETS"
+    | RecoveryUndoReason;
   readonly details?: ApplyFailedDetails;
 
   constructor(
@@ -71,7 +73,8 @@ export class BridgeCallError extends Error {
         | "REPORT_NOT_FOUND"
         | "INVALID_SETTING_VALUE"
         | "JOB_ALREADY_RUNNING"
-        | "NO_UNREVIEWED_TARGETS";
+        | "NO_UNREVIEWED_TARGETS"
+        | RecoveryUndoReason;
       details?: ApplyFailedDetails;
       cause?: unknown;
     },
