@@ -42,6 +42,7 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "Stopping stale automation processes..."
 & $Python scripts/automation_stop.py --kill-port
+Start-Sleep -Milliseconds 400
 
 Write-Host "Starting NovelGuard automation daemon (webhook + worker)..."
 Write-Host "Requires ngrok in another terminal: ngrok http 8765"

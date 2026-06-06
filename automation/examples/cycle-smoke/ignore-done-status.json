@@ -1,0 +1,18 @@
+{
+  "action": "update",
+  "type": "Issue",
+  "webhookId": "smoke-ignore-done",
+  "updatedFrom": {
+    "stateId": "31a91042-9d59-49eb-8821-43ddd92ed76d"
+  },
+  "data": {
+    "identifier": "NOV-SMOKE",
+    "teamId": "97047174-6453-4458-b170-a9bf5f7b52e0",
+    "projectId": "20965ebc-3ea7-4787-9310-f15ad9019007",
+    "stateId": "537a17f3-7fe0-46f0-94d3-89f36f48e98c",
+    "labelIds": [
+      "41269879-fa85-478c-bca6-3329340d8069",
+      "65836882-f344-4675-b3a2-552a3fb3c79c"
+    ]
+  }
+}

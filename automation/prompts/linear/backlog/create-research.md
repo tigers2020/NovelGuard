@@ -8,7 +8,10 @@ commit: false
 base_branch: main
 ---
 
-@docs/agents/runner-brief.md
+@docs/agents/runner-brief-compact.md
+
+## Context memory
+{{CONTEXT_MEMORY_JSON}}
 
 # Backlog → research → branch
 

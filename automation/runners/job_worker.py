@@ -16,12 +16,21 @@ from typing import Any, Iterator
 
 from automation.runners import emit as emit_mod
 from automation.runners.config import load_config, repo_path, repo_root
+from automation.runners.context_compressor import compress_job_context
 from automation.runners.cursor_runner import (
     PROMPT_DELIVERY,
     is_cursor_proc_running,
+    request_cancel,
     run_prompt,
     run_prompt_streaming,
 )
+from automation.runners.cursor_stall import (
+    CursorOutputTracker,
+    cursor_stall_config,
+    diagnose_cursor_stall,
+    write_stall_diagnosis,
+)
+from automation.runners.git_guard import branch_change_error
 from automation.runners.queue import JobQueue, JobRecord
 from automation.runners.runtime_state import get_runtime_state
 from automation.runners.worker_context import get_cancel_event, stop_requested
@@ -52,6 +61,37 @@ def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProc
 @contextmanager
 def repo_lock(lock_path: Path) -> Iterator[None]:
     lock_path.parent.mkdir(parents=True, exist_ok=True)
+    if sys.platform == "win32":
+        import msvcrt
+
+        last_exc: OSError | None = None
+        for attempt in range(12):
+            clear_stale_file_lock(lock_path)
+            try:
+                handle = open(lock_path, "a+b")
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            except OSError as exc:
+                last_exc = exc
+                if attempt < 11:
+                    time.sleep(0.15 * (attempt + 1))
+                    continue
+                raise RuntimeError(f"Repo busy (lock exists): {lock_path}") from exc
+            try:
+                handle.seek(0)
+                handle.truncate()
+                handle.write(f"pid={os.getpid()} ts={time.time()}\n".encode())
+                handle.flush()
+                yield
+            finally:
+                try:
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+                finally:
+                    handle.close()
+            return
+        if last_exc is not None:
+            raise RuntimeError(f"Repo busy (lock exists): {lock_path}") from last_exc
+        return
+
     clear_stale_file_lock(lock_path)
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
     try:
@@ -91,10 +131,14 @@ _LEGACY_PROMPT_ALIASES: dict[str, str] = {
     "01a-linear-spec.md": "linear/todo/write-spec.md",
     "01b-linear-grill-plan.md": "linear/backlog/grill-plan.md",
     "01c-linear-spec-revise.md": "linear/todo/revise-spec.md",
-    "01d-linear-todo-list.md": "linear/todo/write-todo-list.md",
+    "01d-linear-todo-list.md": "linear/todo/write-task-list.md",
     "02-linear-in-progress-implement.md": "linear/in-progress/implement.md",
     "03-linear-in-review-verification.md": "linear/in-review/verify.md",
     "linear-issue-created.md": "linear/backlog/create-research.md",
+}
+
+_PROMPT_PATH_ALIASES: dict[str, str] = {
+    "linear/todo/write-todo-list.md": "linear/todo/write-task-list.md",
 }
 
 
@@ -103,6 +147,9 @@ def _resolve_prompt_file(prompts_dir: Path, prompt_file: str) -> str:
     direct = prompts_dir / prompt_file
     if direct.is_file():
         return prompt_file
+    path_alias = _PROMPT_PATH_ALIASES.get(prompt_file)
+    if path_alias and (prompts_dir / path_alias).is_file():
+        return path_alias
     alias = _LEGACY_PROMPT_ALIASES.get(prompt_file)
     if alias and (prompts_dir / alias).is_file():
         return alias
@@ -125,6 +172,16 @@ def render_prompt(cfg: dict[str, Any], payload: dict[str, Any], branch: str) -> 
     template = template_path.read_text(encoding="utf-8")
     meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
     linear_event = meta.get("linear_event") if isinstance(meta, dict) else None
+    raw_context = "\n".join(
+        [
+            str(payload.get("task") or ""),
+            str(meta.get("route_reason") or ""),
+            json.dumps(linear_event or {}, ensure_ascii=False),
+        ]
+    )
+    memory_result = compress_job_context(cfg, payload=payload, raw_context=raw_context)
+    memory = memory_result.get("memory")
+    memory_json = json.dumps(memory, ensure_ascii=False, indent=2) if memory else "{}"
     replacements = {
         "{{TASK}}": str(payload["task"]),
         "{{JOB_ID}}": str(payload["id"]),
@@ -138,6 +195,8 @@ def render_prompt(cfg: dict[str, Any], payload: dict[str, Any], branch: str) -> 
             ensure_ascii=False,
             separators=(",", ":"),
         ),
+        "{{CONTEXT_MEMORY_JSON}}": memory_json,
+        "{{NEXT_PROMPT}}": str((memory or {}).get("next_prompt") or payload.get("task") or ""),
     }
     rendered = template
     for key, value in replacements.items():
@@ -148,6 +207,13 @@ def render_prompt(cfg: dict[str, Any], payload: dict[str, Any], branch: str) -> 
 def _working_tree_dirty(repo: Path) -> bool:
     status = _git(repo, "status", "--porcelain", check=False)
     return bool((status.stdout or "").strip())
+
+
+def _current_branch(repo: Path) -> str:
+    result = _git(repo, "rev-parse", "--abbrev-ref", "HEAD", check=False)
+    if result.returncode != 0:
+        return "?"
+    return (result.stdout or "").strip()
 
 
 def prepare_branch(
@@ -317,48 +383,84 @@ def process_job(cfg: dict[str, Any], record: JobRecord, *, prompt: str) -> dict[
             state.log_path = str(log_path)
             state.cursor_output_buffered = False
 
+        agent_branch = _current_branch(repo)
+        result["start_branch"] = agent_branch
+
         if tui:
-            last_line_at = time.time()
-            buffered_monitor_stop = threading.Event()
+            stall_seconds, stall_max_retries, stall_poll = cursor_stall_config(cfg)
+            stall_retries = 0
+            cursor = None
 
-            def on_line(_stream: str, line: str) -> None:
-                nonlocal last_line_at
-                last_line_at = time.time()
-                if state is not None:
-                    state.cursor_output_buffered = False
-                emit_mod.emit_or_print("cursor", "cursor.line", line)
-
-            def _buffered_monitor() -> None:
-                while not buffered_monitor_stop.wait(5.0):
-                    if not is_cursor_proc_running():
-                        break
-                    if time.time() - last_line_at >= 30.0 and state is not None:
-                        state.cursor_output_buffered = True
-
-            monitor_thread = threading.Thread(target=_buffered_monitor, daemon=True)
-            monitor_thread.start()
-
+            log_file = log_path.open("w", encoding="utf-8")
             try:
-                with log_path.open("w", encoding="utf-8") as log_file:
-                    log_file.write(f"prompt_log: {prompt_log}\n\n")
-                    log_file.flush()
-                    cursor = run_prompt_streaming(
-                        repo,
-                        prompt,
-                        cfg,
-                        on_line=on_line,
-                        cancel_event=get_cancel_event(),
-                        log_file=log_file,
-                    )
-                    log_file.write(
-                        f"\n--- stdout ---\n{cursor.stdout}\n\n"
-                        f"--- stderr ---\n{cursor.stderr}\n"
-                    )
+                log_file.write(f"prompt_log: {prompt_log}\n\n")
+                log_file.flush()
+
+                for attempt in range(stall_max_retries + 1):
+                    tracker = CursorOutputTracker()
+                    monitor_stop = threading.Event()
+                    stall_cancelled = threading.Event()
+
+                    def on_line(
+                        stream: str, line: str, *, _tracker: CursorOutputTracker = tracker
+                    ) -> None:
+                        _tracker.note_line(stream, line)
+                        if state is not None:
+                            state.cursor_output_buffered = False
+                        emit_mod.emit_or_print("cursor", "cursor.line", line)
+
+                    def _stall_monitor(
+                        *,
+                        _tracker: CursorOutputTracker = tracker,
+                        _attempt: int = attempt,
+                    ) -> None:
+                        while not monitor_stop.wait(stall_poll):
+                            if not is_cursor_proc_running():
+                                break
+                            idle = _tracker.idle_seconds()
+                            if state is not None and idle >= 30.0:
+                                state.cursor_output_buffered = True
+                            if idle >= stall_seconds and is_cursor_proc_running():
+                                diagnosis = diagnose_cursor_stall(
+                                    tracker=_tracker,
+                                    attempt=_attempt + 1,
+                                    log_path=str(log_path),
+                                )
+                                write_stall_diagnosis(diagnosis, log_file=log_file)
+                                request_cancel()
+                                stall_cancelled.set()
+                                break
+
+                    monitor_thread = threading.Thread(target=_stall_monitor, daemon=True)
+                    monitor_thread.start()
+                    try:
+                        cursor = run_prompt_streaming(
+                            repo,
+                            prompt,
+                            cfg,
+                            on_line=on_line,
+                            cancel_event=get_cancel_event(),
+                            log_file=log_file,
+                        )
+                    finally:
+                        monitor_stop.set()
+                        monitor_thread.join(timeout=1.0)
+
+                    if stall_cancelled.is_set() and attempt < stall_max_retries:
+                        stall_retries += 1
+                        log_file.write(f"\n--- stall retry {stall_retries} ---\n")
+                        log_file.flush()
+                        continue
+                    break
+
+                log_file.write(
+                    f"\n--- stdout ---\n{cursor.stdout}\n\n" f"--- stderr ---\n{cursor.stderr}\n"
+                )
             finally:
-                buffered_monitor_stop.set()
-                monitor_thread.join(timeout=1.0)
-                if state is not None:
-                    state.cursor_running = False
+                log_file.close()
+
+            if state is not None:
+                state.cursor_running = False
         else:
             cursor = run_prompt(repo, prompt, cfg)
             log_path.write_text(
@@ -381,6 +483,17 @@ def process_job(cfg: dict[str, Any], record: JobRecord, *, prompt: str) -> dict[
             "log_path": str(log_path),
             "interrupted": cursor.interrupted,
         }
+        if tui:
+            result["cursor"]["stall_retries"] = stall_retries
+
+        end_branch = _current_branch(repo)
+        result["end_branch"] = end_branch
+        branch_err = branch_change_error(agent_branch, end_branch)
+        if branch_err:
+            result["branch_guard_failed"] = True
+            result["branch_guard_error"] = branch_err
+            with log_path.open("a", encoding="utf-8") as log_file:
+                log_file.write(f"\n--- branch guard ---\n{branch_err}\n")
 
         if git_prepare:
             diff_stat = _git(repo, "diff", "--stat", check=False)
@@ -389,7 +502,7 @@ def process_job(cfg: dict[str, Any], record: JobRecord, *, prompt: str) -> dict[
         result["verify"] = run_verify(cfg, payload, repo)
         result["verify_ok"] = all(v["returncode"] == 0 for v in result["verify"])
 
-        ok = cursor.returncode == 0 and result["verify_ok"]
+        ok = cursor.returncode == 0 and result["verify_ok"] and branch_err is None
         result["status"] = "succeeded" if ok else "failed"
 
     result["log_path"] = str(log_path)

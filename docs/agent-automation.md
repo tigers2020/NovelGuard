@@ -50,11 +50,36 @@ Quick start: [automation/README.md](../automation/README.md).
 | Backlog + `auto:spec-done` | `backlog/grill-plan.md` |
 | Todo + `auto:grill-needs-revision` | `todo/revise-spec.md` |
 | Todo + `auto:spec-done` (no plan) | `todo/defer-to-backlog.md` |
-| Todo + `auto:plan-done` | `todo/write-todo-list.md` |
-| status → In Progress | `in-progress/implement.md` |
+| Todo + `auto:plan-done` | `todo/write-task-list.md` (legacy path `write-todo-list.md` still resolves) |
+| status → In Progress | `in-progress/implement.md` (**`/subagent-driven-development` only**) |
 | status → In Review | `in-review/verify.md` |
 
-Routing logic: `automation/linear/router.py` (`resolve_planning_prompt`). Label-only updates route only when a **routing** label is present (`research-done`, `spec-done`, `plan-done`, `grill-needs-revision`); progress labels (`triaging`, `impl-running`, …) are ignored. Phase closeouts must use `save_issue` with status **and** done label in one call.
+**Plan → Task list → Implement:** After `## Implementation Plan`, the Task list phase posts `## Task list` — bite-sized tasks for `/subagent-driven-development` (not a generic todo dump). Implement phase runs **subagent-driven only** (one subagent per task; spec then code-quality review). Prefer closeout label `auto:task-list-done`; legacy `auto:todo-list-done` still routes.
+
+**Deprecation:** `auto:todo-list-done` and `write-todo-list.md` remain accepted; new closeouts should use `auto:task-list-done`.
+
+Routing logic: `automation/linear/router.py` (`resolve_planning_prompt`). Production webhooks use **`stateId` / `labelIds` UUIDs** — configure `linear.state_ids` and `linear.label_ids` in `automation/config.yaml`. Label-only updates route when a **routing** label resolves; progress labels alone are ignored. Phase closeouts must use `save_issue` with status **and** done label in one call.
+
+### Token / context pipeline
+
+1. **Router (Python)** picks one `linear/*` prompt — never `archive/01-linear-status-changed-router.md`.
+2. **Phase prompts** use `runner-brief-compact.md` (~40 lines).
+3. **Optional compressor** (`context_compressor.enabled: true`): `gemma4:latest` summarizes prior context into `automation/context_cache/<job-id>/memory.json`. If compression fails, the job aborts (no raw dump fallback).
+4. **Stall guard**: `cursor.stall_seconds` (default 300) — see `automation/runners/cursor_stall.py`.
+
+Doctor: `python scripts/automation_compressor_doctor.py`
+
+### Cycle smoke (prompt pipeline)
+
+Validates routing + `render_prompt` for UUID webhook fixtures (no Cursor, no queue writes):
+
+```bash
+python scripts/automation_cycle_smoke.py
+python scripts/automation_cycle_smoke.py --group state_changed
+python scripts/automation_cycle_smoke.py --live-compressor   # requires Ollama
+```
+
+Fixtures: `automation/examples/cycle-smoke/`. Includes combined state+label case (`A-combined-in-review-impl-done`) to ensure `impl-done→verify` beats plain `status→In Review`.
 
 Hermes can enqueue the same JSON shape as [automation/examples/hermes-job.json](../automation/examples/hermes-job.json):
 
@@ -94,11 +119,14 @@ Per-repo lock so only one job mutates a repo at a time.
 
 1. Command ingested → `status = queued`
 2. Worker: `git fetch`; checkout `main`; `git pull`
-3. `git checkout -b ai/job-<id>`
-4. Run Cursor CLI (`cursor-agent` / `agent` — confirm flags with `--help` on your install)
-5. Verify: `ruff`, `mypy`, `pytest`, `npm run lint` as applicable
-6. Emit: patch or diff stat, summary, test output, logs on failure
-7. Notify channel; await human for commit/PR/merge if not pre-authorized
+3. `git checkout -b ai/job-<id>` (orchestrator only — not the agent)
+4. Run Cursor CLI with `.automation/bin` on `PATH` (`git_guard` blocks agent branch ops)
+5. Post-cursor: fail job if `start_branch` ≠ `end_branch`
+6. Verify: `ruff`, `mypy`, `pytest`, `npm run lint` as applicable
+7. Emit: patch or diff stat, summary, test output, logs on failure
+8. Notify channel; await human for commit/PR/merge if not pre-authorized
+
+See [docs/agents/git-safety.md](agents/git-safety.md).
 
 ---
 
