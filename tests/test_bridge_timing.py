@@ -62,7 +62,7 @@ def test_bridge_method_span_success(caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.DEBUG, logger="application.bridge_timing")
     with bridge_method_span("query_review_rows"):
         pass
-    payloads = _parse_debug_records(caplog)
+    payloads = _timing_events(caplog, "bridge_timing")
     assert len(payloads) == 1
     assert payloads[0]["event"] == "bridge_timing"
     assert payloads[0]["method"] == "query_review_rows"
@@ -76,7 +76,7 @@ def test_bridge_method_span_maps_preview_apply_error(caplog: pytest.LogCaptureFi
     with pytest.raises(PreviewApplyError):
         with bridge_method_span("set_work_mode"):
             raise PreviewApplyError("INVALID_WORK_MODE", "bad mode")
-    payloads = _parse_debug_records(caplog)
+    payloads = _timing_events(caplog, "bridge_timing")
     assert payloads[0]["ok"] is False
     assert payloads[0]["error_code"] == "INVALID_WORK_MODE"
 
@@ -145,7 +145,7 @@ def test_bridge_timing_decorator(caplog: pytest.LogCaptureFixture) -> None:
             return "pong"
 
     assert _Api().ping() == "pong"
-    payloads = _parse_debug_records(caplog)
+    payloads = _timing_events(caplog, "bridge_timing")
     assert payloads[0]["method"] == "ping"
 
 
