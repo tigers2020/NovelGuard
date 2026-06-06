@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useBridge, useRefreshSnapshot, useSnapshot } from "../../app/providers/snapshotHooks";
+import { useBridge, useSnapshot } from "../../app/providers/snapshotHooks";
 import { StatChip } from "../../components/ui/StatChip";
-import type {
-  FinalizeCleanupResult,
-  FinalizeResult,
-  FinalizeSummary,
-} from "../../types/finalize";
+import type { FinalizeCleanupResult, FinalizeSummary } from "../../types/finalize";
+import { useFinalizeJob } from "./finalize/useFinalizeJob";
 
 type SectionState = "empty" | "ready" | "warning" | "disabled" | "running" | "success" | "error";
 
@@ -48,13 +45,11 @@ export function FinalizeSubflowContent({
 }) {
   const bridge = useBridge();
   const snapshot = useSnapshot();
-  const refreshSnapshot = useRefreshSnapshot();
   const [summary, setSummary] = useState<FinalizeSummary | null>(null);
   const [includeCleanup, setIncludeCleanup] = useState(false);
   const [cleanupPreview, setCleanupPreview] = useState<string[] | null>(null);
   const [lastCleanup, setLastCleanup] = useState<FinalizeCleanupResult | null>(null);
   const [reportJson, setReportJson] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const hasLibrary = Boolean(snapshot.library.folderPath);
@@ -73,6 +68,26 @@ export function FinalizeSubflowContent({
       setError(err instanceof Error ? err.message : String(err));
     }
   }, [bridge, hasLibrary]);
+
+  const handleFinalizeTerminal = useCallback(
+    async (job: { result: { reportId: string | null; cleanup: FinalizeCleanupResult } | null }) => {
+      const result = job.result;
+      if (!result) {
+        return;
+      }
+      setLastCleanup(result.cleanup);
+      await loadSummary();
+      if (result.reportId) {
+        const doc = await bridge.getFinalizeReport(result.reportId);
+        setReportJson(JSON.stringify(doc, null, 2));
+      }
+    },
+    [bridge, loadSummary],
+  );
+
+  const { job: finalizeJob, isRunning: finalizeRunning, startJob, cancelJob } = useFinalizeJob({
+    onJobTerminal: handleFinalizeTerminal,
+  });
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -107,16 +122,19 @@ export function FinalizeSubflowContent({
     };
   }, [bridge, cleanupPreviewActive]);
 
+  const pipelineRunning =
+    snapshot.pipeline.phase === "finalize" || finalizeRunning || finalizeJob.status === "running";
+
   const sectionState = deriveSectionState(
     hasLibrary,
-    snapshot.pipeline.phase,
+    pipelineRunning ? "finalize" : "idle",
     summary,
     finalize.lastStatus,
   );
 
   const primaryDisabled =
     !hasLibrary ||
-    busy ||
+    finalizeRunning ||
     sectionState === "running" ||
     sectionState === "disabled" ||
     blockers.length > 0;
@@ -124,21 +142,11 @@ export function FinalizeSubflowContent({
   const primaryTooltip = blockers[0]?.message;
 
   const onRun = async () => {
-    setBusy(true);
     setError(null);
     try {
-      const result: FinalizeResult = await bridge.runFinalizeVerification({ includeCleanup });
-      setLastCleanup(result.cleanup);
-      await refreshSnapshot();
-      await loadSummary();
-      if (result.reportId) {
-        const doc = await bridge.getFinalizeReport(result.reportId);
-        setReportJson(JSON.stringify(doc, null, 2));
-      }
+      await startJob({ includeCleanup });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBusy(false);
     }
   };
 
@@ -187,7 +195,9 @@ export function FinalizeSubflowContent({
         </p>
         <p className="mt-1 text-xs text-muted">
           상태: {statusLabel}
-          {sectionState === "running" ? ` · ${snapshot.pipeline.label}` : ""}
+          {sectionState === "running"
+            ? ` · ${finalizeJob.message || snapshot.pipeline.label} (${finalizeJob.progress}%)`
+            : ""}
         </p>
       </section>
 
@@ -287,6 +297,16 @@ export function FinalizeSubflowContent({
           >
             최종 검증 실행
           </button>
+          {finalizeRunning && (
+            <button
+              type="button"
+              data-testid="finalize-cancel-button"
+              onClick={() => void cancelJob()}
+              className="rounded-md border border-outline px-4 py-2 text-sm font-semibold text-on-surface hover:bg-hover"
+            >
+              취소
+            </button>
+          )}
           <button
             type="button"
             data-testid="finalize-report-button"

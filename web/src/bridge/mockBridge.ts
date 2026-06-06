@@ -64,6 +64,10 @@ import type {
   FinalizeSummary,
   RunFinalizeRequest,
 } from "../types/finalize";
+import {
+  idleFinalizeJobSnapshot,
+  type FinalizeJobSnapshot,
+} from "../types/finalizeJob";
 import type {
   SnapshotInvalidationEvent,
   SnapshotInvalidationReason,
@@ -85,6 +89,9 @@ let exactAutoApprovedCount = 0;
 let resolveAutoApproveJob: ResolveAutoApproveJobSnapshot = idleResolveAutoApproveJobSnapshot();
 let resolveAutoApproveCancelRequested = false;
 let resolveAutoApproveJobTimer: ReturnType<typeof setTimeout> | undefined;
+let finalizeJob: FinalizeJobSnapshot = idleFinalizeJobSnapshot();
+let finalizeCancelRequested = false;
+let finalizeJobTimer: ReturnType<typeof setTimeout> | undefined;
 
 let invalidationSequence = 0;
 const invalidationListeners = new Set<(event: SnapshotInvalidationEvent) => void>();
@@ -331,6 +338,7 @@ function buildSnapshot(): AppSnapshot {
       selectedCount: state.selectedCount,
     },
     resolveAutoApproveJob,
+    finalizeJob,
   };
 }
 
@@ -1013,47 +1021,106 @@ export const mockBridge: NovelGuardBridge = {
     };
   },
 
-  async runFinalizeVerification(request: RunFinalizeRequest) {
-    const summary = buildMockFinalizeSummary();
-    const status =
-      summary.blockers.length > 0
-        ? "blocked"
-        : summary.warnings.length > 0
-          ? "complete_with_warnings"
-          : "complete";
-    const reportId = `finalize-mock-${Date.now()}`;
-    const cleanup: FinalizeResult["cleanup"] = {
-      previewedEmptyDirs: [],
-      removedEmptyDirs: [],
-    };
-    if (request.includeCleanup && summary.blockers.length === 0) {
-      cleanup.previewedEmptyDirs = ["duplicate/empty-slot", "organized/empty-slot"];
-      cleanup.removedEmptyDirs = [...cleanup.previewedEmptyDirs];
+  async startFinalizeJob(request: RunFinalizeRequest) {
+    if (finalizeJob.status === "running") {
+      throw new BridgeCallError("Bridge call rejected: JOB_ALREADY_RUNNING", {
+        code: "rejected",
+        method: "start_finalize_job",
+        reason: "JOB_ALREADY_RUNNING",
+      });
     }
-    const doc: FinalizeReportDocument = {
-      reportId,
-      sessionId: "mock-session",
-      createdAt: new Date().toISOString(),
-      libraryRevision,
-      status,
-      blockers: summary.blockers,
-      warnings: summary.warnings,
-      summary,
-      audit: summary.auditTail,
-      cleanup,
+    const startedAt = new Date().toISOString();
+    const jobId = `finalize-mock-${Date.now()}`;
+    finalizeCancelRequested = false;
+    state.pipelineRunning = true;
+    finalizeJob = {
+      ...idleFinalizeJobSnapshot(),
+      jobId,
+      status: "running",
+      progress: 0,
+      message: "사전 조건 확인",
+      startedAt,
     };
-    lastFinalizeReport = doc;
-    libraryRevision += 1;
-    emitSnapshotInvalidation("libraryRevision", { libraryRevision });
-    return {
-      status,
-      reportId,
-      reportPath: `finalize/${reportId}.json`,
-      libraryRevision,
-      blockers: summary.blockers,
-      warnings: summary.warnings,
-      cleanup,
-    } as FinalizeResult;
+    if (finalizeJobTimer !== undefined) {
+      clearTimeout(finalizeJobTimer);
+    }
+    finalizeJobTimer = setTimeout(() => {
+      finalizeJobTimer = undefined;
+      state.pipelineRunning = false;
+      if (finalizeCancelRequested) {
+        finalizeJob = {
+          ...finalizeJob,
+          status: "cancelled",
+          message: "취소됨",
+          finishedAt: new Date().toISOString(),
+          result: {
+            status: "cancelled",
+            reportId: null,
+            reportPath: null,
+            libraryRevision,
+            blockers: [],
+            warnings: [],
+            cleanup: { previewedEmptyDirs: [], removedEmptyDirs: [] },
+          },
+        };
+        finalizeCancelRequested = false;
+        emitSnapshotInvalidation("pipelinePhase", { pipelinePhase: "idle" });
+        return;
+      }
+      const summary = buildMockFinalizeSummary();
+      const status =
+        summary.blockers.length > 0
+          ? "blocked"
+          : summary.warnings.length > 0
+            ? "complete_with_warnings"
+            : "complete";
+      const reportId = `finalize-mock-${Date.now()}`;
+      const cleanup: FinalizeResult["cleanup"] = {
+        previewedEmptyDirs: [],
+        removedEmptyDirs: [],
+      };
+      if (request.includeCleanup && summary.blockers.length === 0) {
+        cleanup.previewedEmptyDirs = ["duplicate/empty-slot", "organized/empty-slot"];
+        cleanup.removedEmptyDirs = [...cleanup.previewedEmptyDirs];
+      }
+      const doc: FinalizeReportDocument = {
+        reportId,
+        sessionId: "mock-session",
+        createdAt: new Date().toISOString(),
+        libraryRevision,
+        status,
+        blockers: summary.blockers,
+        warnings: summary.warnings,
+        summary,
+        audit: summary.auditTail,
+        cleanup,
+      };
+      lastFinalizeReport = doc;
+      libraryRevision += 1;
+      const result = {
+        status,
+        reportId,
+        reportPath: `finalize/${reportId}.json`,
+        libraryRevision,
+        blockers: summary.blockers,
+        warnings: summary.warnings,
+        cleanup,
+      } as FinalizeResult;
+      finalizeJob = {
+        ...finalizeJob,
+        status: "succeeded",
+        progress: 100,
+        message: "처리 완료",
+        finishedAt: new Date().toISOString(),
+        result,
+      };
+      emitSnapshotInvalidation("libraryRevision", { libraryRevision });
+    }, 0);
+    return { ...finalizeJob };
+  },
+
+  async getFinalizeJob() {
+    return { ...finalizeJob };
   },
 
   async getFinalizeReport(reportId: string) {
@@ -1064,7 +1131,10 @@ export const mockBridge: NovelGuardBridge = {
   },
 
   async cancelFinalize() {
-    state.pipelineRunning = false;
+    if (finalizeJob.status !== "running") {
+      return;
+    }
+    finalizeCancelRequested = true;
   },
 
   async getAppInfo() {

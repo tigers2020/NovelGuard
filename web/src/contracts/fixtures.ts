@@ -1,4 +1,5 @@
 import type { AppSnapshot } from "../types/snapshot";
+import { idleFinalizeJobSnapshot } from "../types/finalizeJob";
 import { idleResolveAutoApproveJobSnapshot } from "../types/resolveAutoApproveJob";
 import type { ReviewRowsPage } from "../types/review";
 import type { QualityRowsPage } from "../types/quality";
@@ -67,6 +68,7 @@ export const validAppSnapshot: AppSnapshot = {
     selectedCount: 0,
   },
   resolveAutoApproveJob: idleResolveAutoApproveJobSnapshot(),
+  finalizeJob: idleFinalizeJobSnapshot(),
 };
 
 export const validReviewRowsPage: ReviewRowsPage = {

@@ -177,6 +177,10 @@ def validate_app_snapshot(snapshot: Any) -> None:
     if job is None:
         raise SnapshotContractError("AppSnapshot missing required field: resolveAutoApproveJob")
     validate_resolve_auto_approve_job_snapshot(job)
+    finalize_job = snapshot.get("finalizeJob")
+    if finalize_job is None:
+        raise SnapshotContractError("AppSnapshot missing required field: finalizeJob")
+    validate_finalize_job_snapshot(finalize_job)
 
 
 def clamp_query_limit(query: dict[str, Any]) -> int:
@@ -489,6 +493,15 @@ class ResolveAutoApproveJobError(Exception):
         return json.dumps({"reason": self.reason}, ensure_ascii=False)
 
 
+class FinalizeJobError(Exception):
+    def __init__(self, reason: str, message: str | None = None) -> None:
+        self.reason = reason
+        super().__init__(message or reason)
+
+    def __str__(self) -> str:
+        return json.dumps({"reason": self.reason}, ensure_ascii=False)
+
+
 def validate_app_setting_response(payload: Any) -> None:
     if not isinstance(payload, dict):
         raise PageContractError("AppSettingResponse must be a dict")
@@ -627,6 +640,18 @@ def validate_resolve_auto_approve_job_snapshot(payload: Any) -> None:
     summary = payload.get("summary")
     if summary is not None:
         validate_resolve_auto_approve_summary(summary)
+
+
+def validate_finalize_job_snapshot(payload: Any) -> None:
+    from application.finalize_job import validate_finalize_job_snapshot as _validate
+
+    try:
+        _validate(payload)
+    except ValueError as exc:
+        raise SnapshotContractError(str(exc)) from exc
+    result = payload.get("result")
+    if result is not None:
+        validate_finalize_result(result)
 
 
 def validate_resolve_auto_approve_summary(payload: Any) -> None:

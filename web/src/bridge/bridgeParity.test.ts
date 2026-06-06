@@ -504,17 +504,36 @@ describe("snapshot invalidation", () => {
     expect(preview.previewedEmptyDirs).toContain("organized/empty-slot");
   });
 
-  it("mockBridge runFinalizeVerification returns report id and getFinalizeReport round-trips", async () => {
-    const result = await mockBridge.runFinalizeVerification({ includeCleanup: false });
-    expect(result.reportId).toBeTruthy();
-    expect(["complete", "complete_with_warnings", "blocked"]).toContain(result.status);
-    if (result.reportId == null) {
-      throw new Error("expected reportId from runFinalizeVerification");
+  it("mockBridge startFinalizeJob returns immediately and getFinalizeReport round-trips", async () => {
+    const started = await mockBridge.startFinalizeJob({ includeCleanup: false });
+    expect(started.status).toBe("running");
+    await vi.waitFor(async () => {
+      const job = await mockBridge.getFinalizeJob();
+      expect(job.status).toBe("succeeded");
+    });
+    const job = await mockBridge.getFinalizeJob();
+    const result = job.result;
+    expect(result?.reportId).toBeTruthy();
+    expect(["complete", "complete_with_warnings", "blocked"]).toContain(result?.status);
+    if (result?.reportId == null) {
+      throw new Error("expected reportId from startFinalizeJob");
     }
 
     const report = await mockBridge.getFinalizeReport(result.reportId);
     expect(report.reportId).toBe(result.reportId);
     expect(report.summary).toBeDefined();
+  });
+
+  it("mockBridge startFinalizeJob rejects duplicate start while running", async () => {
+    const first = await mockBridge.startFinalizeJob({ includeCleanup: false });
+    expect(first.status).toBe("running");
+    await expect(mockBridge.startFinalizeJob({ includeCleanup: false })).rejects.toMatchObject({
+      reason: "JOB_ALREADY_RUNNING",
+    });
+    await vi.waitFor(async () => {
+      const job = await mockBridge.getFinalizeJob();
+      expect(["succeeded", "cancelled", "failed"]).toContain(job.status);
+    });
   });
 
   it("mockBridge getFinalizeReport rejects unknown report id", async () => {

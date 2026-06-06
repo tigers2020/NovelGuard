@@ -21,10 +21,10 @@ import type {
 import type {
   FinalizeCleanupPreview,
   FinalizeReportDocument,
-  FinalizeResult,
   FinalizeSummary,
   RunFinalizeRequest,
 } from "../types/finalize";
+import type { FinalizeJobSnapshot } from "../types/finalizeJob";
 import type { SelectionScope } from "../types/selection";
 import type { AppInfo } from "../types/appInfo";
 import type { FileRowsPage, FileRowsQuery } from "../types/fileRows";
@@ -65,7 +65,8 @@ export interface NovelGuardBridge {
   getLogsArtifacts(): Promise<LogsArtifactsResponse>;
   getFinalizeSummary(): Promise<FinalizeSummary>;
   previewFinalizeCleanup(): Promise<FinalizeCleanupPreview>;
-  runFinalizeVerification(request: RunFinalizeRequest): Promise<FinalizeResult>;
+  startFinalizeJob(request: RunFinalizeRequest): Promise<FinalizeJobSnapshot>;
+  getFinalizeJob(): Promise<FinalizeJobSnapshot>;
   getFinalizeReport(reportId: string): Promise<FinalizeReportDocument>;
   cancelFinalize(): Promise<void>;
   /** Mock emits events; production bridge may no-op until host push exists. */

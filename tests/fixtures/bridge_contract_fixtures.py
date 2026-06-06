@@ -85,4 +85,14 @@ VALID_SNAPSHOT: dict[str, Any] = {
         "finishedAt": None,
         "summary": None,
     },
+    "finalizeJob": {
+        "jobId": None,
+        "status": "idle",
+        "progress": 0,
+        "message": "",
+        "startedAt": None,
+        "finishedAt": None,
+        "result": None,
+        "error": None,
+    },
 }

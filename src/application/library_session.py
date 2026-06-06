@@ -184,6 +184,12 @@ class LibrarySession:
         self._resolve_auto_approve_running = False
         self._resolve_auto_approve_cancel_requested = False
         self._resolve_auto_approve_thread: threading.Thread | None = None
+        from application.finalize_job import idle_finalize_job_snapshot
+
+        self._finalize_job = idle_finalize_job_snapshot()
+        self._finalize_running = False
+        self._finalize_cancel_requested = False
+        self._finalize_thread: threading.Thread | None = None
         self._settings = settings or AppSettings()
 
     @property
@@ -434,6 +440,7 @@ class LibrarySession:
                 finalize_warning_count=self._finalize_warning_count,
                 scan_options=self._scan_options_labels(),
                 resolve_auto_approve_job=self._resolve_auto_approve_job,
+                finalize_job=self._finalize_job,
             )
 
     def query_review_rows(self, query: dict[str, Any]) -> dict[str, Any]:
@@ -1105,16 +1112,37 @@ class LibrarySession:
                 audit_log_path=resolved_audit,
             )
 
-    def run_finalize_verification(self, request: dict[str, Any]) -> dict[str, Any]:
+    def finalize_job_snapshot(self) -> dict[str, Any]:
+        with self._lock:
+            return dict(self._finalize_job)
+
+    def is_finalize_job_running(self) -> bool:
+        with self._lock:
+            return self._finalize_running
+
+    def start_finalize_job(self, request: dict[str, Any]) -> dict[str, Any]:
+        from app.bridge_contract import FinalizeJobError
+        from application.finalize_job import (
+            _iso_now,
+            build_finalize_job_snapshot,
+            new_finalize_job_id,
+        )
+
         with self._lock:
             if not self._index.folder_path:
                 raise RuntimeError("NO_LIBRARY")
+            if self._finalize_running:
+                raise FinalizeJobError("JOB_ALREADY_RUNNING")
             if self._apply_in_progress or self._pipeline_running:
                 raise RuntimeError("LIBRARY_BUSY")
             if self._finalize_runner is None:
                 raise RuntimeError("FINALIZE_NOT_CONFIGURED")
-            runner = self._finalize_runner
+
             include_cleanup = bool(request.get("includeCleanup"))
+            job_id = new_finalize_job_id()
+            started_at = _iso_now()
+            self._finalize_running = True
+            self._finalize_cancel_requested = False
             self._cancel_requested = False
             self._pipeline_running = True
             self._pipeline_phase = "finalize"
@@ -1122,23 +1150,44 @@ class LibrarySession:
             self._pipeline_label = "사전 조건 확인"
             self._pipeline_cancellable = True
             self._finalize_last_status = "running"
+            self._finalize_job = build_finalize_job_snapshot(
+                job_id=job_id,
+                status="running",
+                progress=0,
+                message="사전 조건 확인",
+                started_at=started_at,
+            )
+            captured_include_cleanup = include_cleanup
+            runner = self._finalize_runner
 
-        result: dict[str, Any] = {}
-        error: str | None = None
+        self._start_finalize_worker(captured_include_cleanup, runner)
+        with self._lock:
+            return dict(self._finalize_job)
 
-        def _run() -> None:
-            nonlocal result, error
+    def _start_finalize_worker(self, include_cleanup: bool, runner: Any) -> None:
+        def _worker() -> None:
+            from application.finalize_job import _iso_now, build_finalize_job_snapshot
+
+            final_status = "succeeded"
+            error_message: str | None = None
+            result: dict[str, Any] | None = None
+
+            def on_step(_step: str, pct: int, label: str) -> None:
+                with self._lock:
+                    if not self._finalize_running:
+                        return
+                    self._pipeline_percent = pct
+                    self._pipeline_label = label
+                    current = dict(self._finalize_job)
+                    current["progress"] = pct
+                    current["message"] = label
+                    self._finalize_job = current
+
+            def cancel_check() -> bool:
+                with self._lock:
+                    return self._finalize_cancel_requested or self._cancel_requested
+
             try:
-
-                def on_step(step: str, pct: int, label: str) -> None:
-                    with self._lock:
-                        self._pipeline_percent = pct
-                        self._pipeline_label = label
-
-                def cancel_check() -> bool:
-                    with self._lock:
-                        return self._cancel_requested
-
                 result = runner.run(
                     self,
                     include_cleanup=include_cleanup,
@@ -1146,36 +1195,83 @@ class LibrarySession:
                     on_step=on_step,
                 )
             except Exception as exc:
-                error = str(exc)
-
-        thread = threading.Thread(target=_run, daemon=True)
-        thread.start()
-        thread.join()
-
-        with self._lock:
-            self._pipeline_running = False
-            self._pipeline_cancellable = False
-            self._pipeline_phase = "idle"
-            self._pipeline_percent = 0
-            self._pipeline_label = "대기 중"
-            if error is not None:
-                self._finalize_last_status = "error"
-                return {
+                _LOGGER.exception("finalize job failed")
+                final_status = "failed"
+                error_message = str(exc)
+                result = {
                     "status": "error",
                     "reportId": None,
                     "reportPath": None,
-                    "libraryRevision": self._library_revision,
+                    "libraryRevision": self.library_revision(),
                     "blockers": [],
                     "warnings": [],
                     "cleanup": {"previewedEmptyDirs": [], "removedEmptyDirs": []},
-                    "errorMessage": error,
+                    "errorMessage": error_message,
                 }
-            return result
+            else:
+                if cancel_check():
+                    final_status = "cancelled"
+                elif result.get("status") == "cancelled":
+                    final_status = "cancelled"
+                elif result.get("status") == "error":
+                    final_status = "failed"
+                    error_message = str(result.get("errorMessage") or "finalize error")
+
+            if final_status == "succeeded" and result is not None:
+                result_status = str(result.get("status", "error"))
+                if result_status == "cancelled":
+                    final_status = "cancelled"
+                elif result_status == "error":
+                    final_status = "failed"
+                    error_message = str(result.get("errorMessage") or "finalize error")
+
+            finished_at = _iso_now()
+            with self._lock:
+                started_at = self._finalize_job.get("startedAt")
+                progress = int(self._finalize_job.get("progress", 0) or 0)
+                if final_status == "succeeded" and result is not None:
+                    self._finalize_last_status = str(result.get("status", "error"))
+                    message = "처리 완료"
+                    progress = 100
+                elif final_status == "cancelled":
+                    self._finalize_last_status = "idle"
+                    message = "취소됨"
+                elif final_status == "failed":
+                    self._finalize_last_status = "error"
+                    message = "처리 실패"
+                else:
+                    message = "처리 완료"
+
+                self._finalize_job = build_finalize_job_snapshot(
+                    job_id=self._finalize_job.get("jobId"),
+                    status=final_status,
+                    progress=progress,
+                    message=message,
+                    started_at=started_at if isinstance(started_at, str) else None,
+                    finished_at=finished_at,
+                    result=result,
+                    error=error_message if final_status == "failed" else None,
+                )
+                self._pipeline_running = False
+                self._pipeline_cancellable = False
+                self._pipeline_phase = "idle"
+                self._pipeline_percent = 0
+                self._pipeline_label = "대기 중"
+                self._finalize_running = False
+                self._finalize_cancel_requested = False
+                self._finalize_thread = None
+
+        thread = threading.Thread(target=_worker, name="novelguard-finalize", daemon=True)
+        with self._lock:
+            self._finalize_thread = thread
+        thread.start()
 
     def cancel_finalize(self) -> None:
         with self._lock:
-            if self._pipeline_phase == "finalize" and self._pipeline_running:
-                self._cancel_requested = True
+            if not self._finalize_running:
+                return
+            self._finalize_cancel_requested = True
+            self._cancel_requested = True
 
     def read_finalize_report(self, save_root: Path | None, report_id: str) -> dict[str, Any]:
         from application.finalize_report import read_finalize_report

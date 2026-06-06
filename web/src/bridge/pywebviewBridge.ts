@@ -15,7 +15,8 @@ import type {
   UpdateReviewDecisionsResult,
 } from "../types/reviewDecisions";
 import type { SelectionScope } from "../types/selection";
-import type { FinalizeReportDocument, FinalizeResult, FinalizeSummary, RunFinalizeRequest } from "../types/finalize";
+import type { FinalizeReportDocument, FinalizeSummary, RunFinalizeRequest } from "../types/finalize";
+import type { FinalizeJobSnapshot } from "../types/finalizeJob";
 import type { AppInfo } from "../types/appInfo";
 import type { WorkMode } from "../types/snapshot";
 import type { FileRowsPage, FileRowsQuery } from "../types/fileRows";
@@ -169,9 +170,13 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
       callBridge(() => call(api, "preview_finalize_cleanup"), {
         method: "preview_finalize_cleanup",
       }),
-    runFinalizeVerification: (request: RunFinalizeRequest) =>
-      callBridge(() => call<FinalizeResult>(api, "run_finalize_verification", request), {
-        method: "run_finalize_verification",
+    startFinalizeJob: (request: RunFinalizeRequest) =>
+      callBridge(() => call<FinalizeJobSnapshot>(api, "start_finalize_job", request), {
+        method: "start_finalize_job",
+      }),
+    getFinalizeJob: () =>
+      callBridge(() => call<FinalizeJobSnapshot>(api, "get_finalize_job"), {
+        method: "get_finalize_job",
       }),
     getFinalizeReport: (reportId: string) =>
       callBridge(() => call<FinalizeReportDocument>(api, "get_finalize_report", reportId), {
