@@ -35,4 +35,7 @@ PYWEBVIEW_API_METHODS: tuple[str, ...] = (
     "get_finalize_job",
     "get_finalize_report",
     "cancel_finalize",
+    "get_recovery_state",
+    "preview_undo_plan",
+    "execute_undo_plan",
 )

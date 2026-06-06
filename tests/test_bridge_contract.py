@@ -17,6 +17,7 @@ from app.bridge_contract import (
     FinalizeError,
     InvalidSelectionScopeError,
     PreviewApplyError,
+    RecoveryError,
     RepairApplyError,
     RepairPreviewError,
     SnapshotContractError,
@@ -31,9 +32,12 @@ from app.bridge_contract import (
     validate_move_preview,
     validate_quality_repair_preview,
     validate_quality_rows_page,
+    validate_recovery_state,
     validate_resolve_auto_approve_summary,
     validate_review_rows_page,
     validate_selection_scope,
+    validate_undo_dry_run_plan,
+    validate_undo_execution_result,
 )
 from app.bridge_parity import PYWEBVIEW_API_METHODS
 from app.selection_fingerprint import selection_fingerprint
@@ -41,6 +45,7 @@ from app.session_factory import create_bridge_api, create_library_session
 from application.app_settings import AppSettings
 from application.file_row_query import normalize_file_rows_query, text_sort_key
 from application.library_folder_persistence import normalize_library_folder_path
+from application.move_source_hash import content_hash_for_move
 from application.ports.filesystem_apply import ApplyRowResult
 from application.quality_analyzer import analyze_quality
 from application.scan_settings import SettingsValidationError, parse_extension_filter
@@ -106,9 +111,9 @@ def test_clamp_query_limit_max_200() -> None:
 
 def test_pywebview_api_methods_match_locked_contract() -> None:
     """Canonical list: app.bridge_parity.PYWEBVIEW_API_METHODS (mirrors bridgeParity.ts)."""
-    assert len(PYWEBVIEW_API_METHODS) == 32
+    assert len(PYWEBVIEW_API_METHODS) == 35
     assert PYWEBVIEW_API_METHODS[0] == "get_app_info"
-    assert PYWEBVIEW_API_METHODS[-1] == "cancel_finalize"
+    assert PYWEBVIEW_API_METHODS[-1] == "execute_undo_plan"
 
 
 def test_bridge_api_exposes_pywebview_methods() -> None:
@@ -3581,3 +3586,247 @@ def test_query_review_rows_available_while_background_analysis(
 
     release_relation.set()
     _scan_until_idle(api)
+
+
+def _recovery_undo_manifest_dict(
+    *,
+    library_id: str,
+    operation_id: str = "op-1",
+    from_path: str = "chapter.txt",
+    to_path: str = "chapter.txt",
+    after_hash: str | None = "abc",
+    drift_policy: str = "strict",
+    collision_policy: str = "block",
+    undo_plan_id: str = "plan-1",
+    status: str = "pending",
+) -> dict[str, Any]:
+    return {
+        "schemaVersion": 1,
+        "undoPlanId": undo_plan_id,
+        "runId": "run-1",
+        "libraryId": library_id,
+        "createdAt": "2026-06-06T12:00:00Z",
+        "sealedAt": "2026-06-06T12:00:01Z",
+        "status": status,
+        "sourceBatchKind": "move_apply",
+        "sourcePreviewToken": "token",
+        "libraryRevisionAtSeal": 2,
+        "runStatus": "partially_applied",
+        "summary": {
+            "appliedCount": 1,
+            "skippedCount": 0,
+            "failedCount": 0,
+            "recoverableCount": 1,
+            "manualCount": 0,
+            "unrecoverableCount": 0,
+        },
+        "idempotencyKey": "key",
+        "failedRowId": None,
+        "failedError": None,
+        "items": [
+            {
+                "operationId": operation_id,
+                "sequence": 1,
+                "operationType": "move_duplicate",
+                "undoAction": "move_back",
+                "fromPath": from_path,
+                "toPath": to_path,
+                "backupPath": None,
+                "recoverability": "recoverable",
+                "manualRequired": False,
+                "driftPolicy": drift_policy,
+                "collisionPolicy": collision_policy,
+                "checkpointRef": {"beforeHash": "before", "afterHash": after_hash},
+            }
+        ],
+    }
+
+
+def _write_recovery_manifest(session, payload: dict[str, Any]) -> None:
+    undo_dir = session.undo_plans_dir()
+    undo_dir.mkdir(parents=True, exist_ok=True)
+    path = undo_dir / f"{payload['undoPlanId']}.json"
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _recoverable_undo_layout(tmp_path: Path, *, content: str = "hello") -> tuple[Path, str]:
+    library = tmp_path / "lib"
+    library.mkdir()
+    dup_root = tmp_path / "duplicate" / "lib"
+    dup_root.mkdir(parents=True)
+    moved = dup_root / "chapter.txt"
+    moved.write_text(content, encoding="utf-8")
+    after_hash = content_hash_for_move(moved, size_bytes=moved.stat().st_size)
+    return library, after_hash
+
+
+def test_get_recovery_state_no_manifest() -> None:
+    api = _memory_api()
+    state = api.get_recovery_state()
+    validate_recovery_state(state)
+    assert state["hasActivePlan"] is False
+    assert state["undoPlanId"] is None
+
+
+def test_get_recovery_state_validated_manifest(tmp_path: Path) -> None:
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    payload = _recovery_undo_manifest_dict(library_id=session.library_id())
+    _write_recovery_manifest(session, payload)
+    api = create_bridge_api(session)
+    state = api.get_recovery_state()
+    validate_recovery_state(state)
+    assert state["hasActivePlan"] is True
+    assert state["undoPlanId"] == "plan-1"
+    assert state["batchKind"] == "move_apply"
+    assert state["appliedCount"] == 1
+
+
+def test_preview_undo_plan_no_manifest(tmp_path: Path) -> None:
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    with pytest.raises(RecoveryError) as exc_info:
+        api.preview_undo_plan({"undoPlanId": "missing-plan"})
+    assert exc_info.value.reason == "UNDO_PLAN_NOT_FOUND"
+
+
+def test_preview_undo_plan_valid_plan_serialized(tmp_path: Path) -> None:
+    library, after_hash = _recoverable_undo_layout(tmp_path)
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(library))
+    payload = _recovery_undo_manifest_dict(
+        library_id=session.library_id(),
+        after_hash=after_hash,
+    )
+    _write_recovery_manifest(session, payload)
+    api = create_bridge_api(session)
+    plan = api.preview_undo_plan({"undoPlanId": "plan-1"})
+    validate_undo_dry_run_plan(plan)
+    assert plan["recoverableCount"] == 1
+    assert plan["blockedCount"] == 0
+    assert plan["manualRequiredCount"] == 0
+    assert plan["items"][0]["status"] == "recoverable"
+    assert plan["previewToken"]
+
+
+def test_execute_undo_plan_no_preview_error(tmp_path: Path) -> None:
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    with pytest.raises(RecoveryError) as exc_info:
+        api.execute_undo_plan({"undoPlanId": "plan-1", "previewToken": "missing"})
+    assert exc_info.value.reason == "NO_PENDING_UNDO_PREVIEW"
+
+
+def test_execute_undo_plan_success_serialized(tmp_path: Path) -> None:
+    library, after_hash = _recoverable_undo_layout(tmp_path)
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(library))
+    payload = _recovery_undo_manifest_dict(
+        library_id=session.library_id(),
+        after_hash=after_hash,
+    )
+    _write_recovery_manifest(session, payload)
+    api = create_bridge_api(session)
+    preview = api.preview_undo_plan({"undoPlanId": "plan-1"})
+    result = api.execute_undo_plan(
+        {"undoPlanId": "plan-1", "previewToken": preview["previewToken"]}
+    )
+    validate_undo_execution_result(result)
+    assert result["noOp"] is False
+    assert result["recoveredCount"] == 1
+    assert result["manifestStatus"] == "completed"
+    assert (library / "chapter.txt").read_text(encoding="utf-8") == "hello"
+
+
+def test_execute_undo_plan_repeat_no_op_serialized(tmp_path: Path) -> None:
+    library, after_hash = _recoverable_undo_layout(tmp_path)
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(library))
+    payload = _recovery_undo_manifest_dict(
+        library_id=session.library_id(),
+        after_hash=after_hash,
+    )
+    _write_recovery_manifest(session, payload)
+    api = create_bridge_api(session)
+    preview = api.preview_undo_plan({"undoPlanId": "plan-1"})
+    api.execute_undo_plan({"undoPlanId": "plan-1", "previewToken": preview["previewToken"]})
+    repeat_preview = api.preview_undo_plan({"undoPlanId": "plan-1"})
+    repeat = api.execute_undo_plan(
+        {"undoPlanId": "plan-1", "previewToken": repeat_preview["previewToken"]}
+    )
+    validate_undo_execution_result(repeat)
+    assert repeat["noOp"] is True
+    assert repeat["manifestStatus"] == "completed"
+    assert repeat["recoveredCount"] == 0
+
+
+def test_execute_undo_plan_partial_result_serialized(tmp_path: Path) -> None:
+    library = tmp_path / "lib"
+    library.mkdir()
+    dup_root = tmp_path / "duplicate" / "lib"
+    dup_root.mkdir(parents=True)
+    first = dup_root / "a.txt"
+    second = dup_root / "b.txt"
+    first.write_text("one", encoding="utf-8")
+    second.write_text("two", encoding="utf-8")
+    first_hash = content_hash_for_move(first, size_bytes=first.stat().st_size)
+    second_hash = content_hash_for_move(second, size_bytes=second.stat().st_size)
+
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(library))
+    payload = _recovery_undo_manifest_dict(
+        library_id=session.library_id(),
+        operation_id="op-1",
+        from_path="a.txt",
+        to_path="a.txt",
+        after_hash=first_hash,
+    )
+    payload["items"] = [
+        {
+            "operationId": "op-1",
+            "sequence": 1,
+            "operationType": "move_duplicate",
+            "undoAction": "move_back",
+            "fromPath": "a.txt",
+            "toPath": "a.txt",
+            "backupPath": None,
+            "recoverability": "recoverable",
+            "manualRequired": False,
+            "driftPolicy": "strict",
+            "collisionPolicy": "block",
+            "checkpointRef": {"beforeHash": "before-a", "afterHash": first_hash},
+        },
+        {
+            "operationId": "op-2",
+            "sequence": 2,
+            "operationType": "move_duplicate",
+            "undoAction": "move_back",
+            "fromPath": "b.txt",
+            "toPath": "b.txt",
+            "backupPath": None,
+            "recoverability": "recoverable",
+            "manualRequired": False,
+            "driftPolicy": "strict",
+            "collisionPolicy": "block",
+            "checkpointRef": {"beforeHash": "before-b", "afterHash": second_hash},
+        },
+    ]
+    payload["summary"]["appliedCount"] = 2
+    payload["summary"]["recoverableCount"] = 2
+    _write_recovery_manifest(session, payload)
+    (library / "b.txt").write_text("occupied", encoding="utf-8")
+
+    api = create_bridge_api(session)
+    preview = api.preview_undo_plan({"undoPlanId": "plan-1"})
+    assert preview["recoverableCount"] == 1
+    assert preview["blockedCount"] == 1
+    result = api.execute_undo_plan(
+        {"undoPlanId": "plan-1", "previewToken": preview["previewToken"]}
+    )
+    validate_undo_execution_result(result)
+    assert result["recoveredCount"] == 1
+    assert result["excludedCount"] == 1
+    assert any(item["status"] == "recovered" for item in result["items"])
+    assert any(item["status"] == "excluded" for item in result["items"])

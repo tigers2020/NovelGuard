@@ -484,6 +484,15 @@ class FinalizeError(Exception):
         return json.dumps({"reason": self.reason, "details": self.details}, ensure_ascii=False)
 
 
+class RecoveryError(Exception):
+    def __init__(self, reason: str, message: str | None = None) -> None:
+        self.reason = reason
+        super().__init__(message or reason)
+
+    def __str__(self) -> str:
+        return json.dumps({"reason": self.reason}, ensure_ascii=False)
+
+
 class ResolveAutoApproveJobError(Exception):
     def __init__(self, reason: str, message: str | None = None) -> None:
         self.reason = reason
@@ -708,3 +717,109 @@ def validate_selection_scope(selection: Any) -> None:
             raise InvalidSelectionScopeError("excludeRowIds must be an array")
         return
     raise InvalidSelectionScopeError(f"Unknown SelectionScope type: {scope_type}")
+
+
+def validate_recovery_state(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise PageContractError("RecoveryState must be a dict")
+    if not isinstance(payload.get("hasActivePlan"), bool):
+        raise PageContractError("RecoveryState.hasActivePlan must be bool")
+    for key in (
+        "appliedCount",
+        "recoverableCount",
+        "manualRequiredCount",
+        "blockedCount",
+        "unrecoverableCount",
+    ):
+        if not isinstance(payload.get(key), int):
+            raise PageContractError(f"RecoveryState.{key} must be int")
+    if payload["hasActivePlan"]:
+        for key in ("undoPlanId", "runId", "batchKind", "manifestStatus", "sealedAt"):
+            if not isinstance(payload.get(key), str):
+                raise PageContractError(f"RecoveryState.{key} must be str when hasActivePlan")
+    else:
+        for key in (
+            "undoPlanId",
+            "runId",
+            "batchKind",
+            "manifestStatus",
+            "sealedAt",
+        ):
+            if payload.get(key) is not None:
+                raise PageContractError(f"RecoveryState.{key} must be null when inactive")
+
+
+def validate_undo_dry_run_plan(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise PageContractError("UndoDryRunPlan must be a dict")
+    for key in (
+        "undoPlanId",
+        "libraryId",
+        "runId",
+        "previewToken",
+    ):
+        if not isinstance(payload.get(key), str) or not payload[key].strip():
+            raise PageContractError(f"UndoDryRunPlan.{key} must be a non-empty string")
+    for key in (
+        "totalCount",
+        "recoverableCount",
+        "blockedCount",
+        "manualRequiredCount",
+    ):
+        if not isinstance(payload.get(key), int):
+            raise PageContractError(f"UndoDryRunPlan.{key} must be int")
+    items = payload.get("items")
+    if not isinstance(items, list):
+        raise PageContractError("UndoDryRunPlan.items must be a list")
+    for item in items:
+        if not isinstance(item, dict):
+            raise PageContractError("UndoDryRunPlan item must be a dict")
+        for key in ("operationId", "fromPath", "toPath", "status"):
+            if not isinstance(item.get(key), str):
+                raise PageContractError(f"UndoDryRunPlan item missing {key}")
+        if item["status"] not in ("recoverable", "blocked", "manual_required"):
+            raise PageContractError("UndoDryRunPlan item.status invalid")
+        reason = item.get("reason")
+        if reason is not None and not isinstance(reason, str):
+            raise PageContractError("UndoDryRunPlan item.reason must be string or null")
+
+
+def validate_undo_execution_result(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise PageContractError("UndoExecutionResult must be a dict")
+    if not isinstance(payload.get("undoPlanId"), str):
+        raise PageContractError("UndoExecutionResult.undoPlanId must be str")
+    if payload.get("manifestStatus") not in (
+        "pending",
+        "executing",
+        "completed",
+        "partial",
+        "expired",
+        "superseded",
+    ):
+        raise PageContractError("UndoExecutionResult.manifestStatus invalid")
+    if not isinstance(payload.get("noOp"), bool):
+        raise PageContractError("UndoExecutionResult.noOp must be bool")
+    for key in (
+        "recoveredCount",
+        "alreadyRecoveredCount",
+        "failedCount",
+        "excludedCount",
+    ):
+        if not isinstance(payload.get(key), int):
+            raise PageContractError(f"UndoExecutionResult.{key} must be int")
+    items = payload.get("items")
+    if not isinstance(items, list):
+        raise PageContractError("UndoExecutionResult.items must be a list")
+    for item in items:
+        if not isinstance(item, dict):
+            raise PageContractError("UndoExecutionResult item must be a dict")
+        if not isinstance(item.get("operationId"), str):
+            raise PageContractError("UndoExecutionResult item.operationId must be str")
+        if item.get("status") not in (
+            "recovered",
+            "already_recovered",
+            "recovery_failed",
+            "excluded",
+        ):
+            raise PageContractError("UndoExecutionResult item.status invalid")

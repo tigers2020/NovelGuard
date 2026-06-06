@@ -17,6 +17,7 @@ import type {
   PreviewApplyErrorCode,
 } from "../types/movePreview";
 import { validateSelectionScope } from "../types/selection";
+import { EMPTY_RECOVERY_STATE } from "../contracts/recoveryContract";
 import { validateAppSnapshot } from "../contracts/snapshotContract";
 import { validateMovePreviewResult } from "../contracts/movePreviewContract";
 import {
@@ -1135,6 +1136,24 @@ export const mockBridge: NovelGuardBridge = {
       return;
     }
     finalizeCancelRequested = true;
+  },
+
+  async getRecoveryState() {
+    return { ...EMPTY_RECOVERY_STATE };
+  },
+
+  async previewUndoPlan() {
+    throw new BridgeCallError("UNDO_PLAN_NOT_FOUND", {
+      code: "rejected",
+      method: "preview_undo_plan",
+    });
+  },
+
+  async executeUndoPlan() {
+    throw new BridgeCallError("NO_PENDING_UNDO_PREVIEW", {
+      code: "rejected",
+      method: "execute_undo_plan",
+    });
   },
 
   async getAppInfo() {

@@ -25,6 +25,13 @@ import type {
   RunFinalizeRequest,
 } from "../types/finalize";
 import type { FinalizeJobSnapshot } from "../types/finalizeJob";
+import type {
+  ExecuteUndoPlanRequest,
+  PreviewUndoPlanRequest,
+  RecoveryState,
+  UndoDryRunPlan,
+  UndoExecutionResult,
+} from "../types/recovery";
 import type { SelectionScope } from "../types/selection";
 import type { AppInfo } from "../types/appInfo";
 import type { FileRowsPage, FileRowsQuery } from "../types/fileRows";
@@ -69,6 +76,9 @@ export interface NovelGuardBridge {
   getFinalizeJob(): Promise<FinalizeJobSnapshot>;
   getFinalizeReport(reportId: string): Promise<FinalizeReportDocument>;
   cancelFinalize(): Promise<void>;
+  getRecoveryState(): Promise<RecoveryState>;
+  previewUndoPlan(request: PreviewUndoPlanRequest): Promise<UndoDryRunPlan>;
+  executeUndoPlan(request: ExecuteUndoPlanRequest): Promise<UndoExecutionResult>;
   /** Mock emits events; production bridge may no-op until host push exists. */
   subscribeSnapshotInvalidation(
     listener: (event: SnapshotInvalidationEvent) => void,
