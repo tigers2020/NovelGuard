@@ -10,10 +10,15 @@ from pathlib import Path
 
 import pytest
 
+from large_library_gate import (
+    SMOKE_SCRIPT as SMOKE,
+    assert_slo_report,
+    require_full_fixture,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "packaging" / "fixtures" / "library-large" / "manifest.json"
 GENERATOR = ROOT / "scripts" / "generate_large_library_fixture.py"
-SMOKE = ROOT / "scripts" / "large_library_loading_smoke.py"
 
 
 def _load_generator_module():
@@ -61,6 +66,7 @@ def test_generator_produces_expected_structure(
     assert dup_a.read_text(encoding="utf-8") == dup_b.read_text(encoding="utf-8")
 
 
+@pytest.mark.large_library
 def test_generator_main_exit_zero() -> None:
     result = subprocess.run(
         [sys.executable, str(GENERATOR)],
@@ -126,3 +132,24 @@ def test_smoke_slo_fail_exits_nonzero(monkeypatch: pytest.MonkeyPatch, tmp_path:
         ["large_library_loading_smoke.py", "--folder", str(fixture), "--skip-generate"],
     )
     assert mod.main() == 1
+
+
+@pytest.mark.large_library
+def test_large_library_full_slo_gate() -> None:
+    fixture = require_full_fixture()
+    result = subprocess.run(
+        [sys.executable, str(SMOKE), "--folder", str(fixture), "--skip-generate"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=900,
+    )
+    if result.returncode != 0 and not result.stdout.strip():
+        pytest.fail(
+            "large-library SLO gate subprocess failed before JSON report:\n"
+            f"exit={result.returncode}\n"
+            f"stderr:\n{result.stderr}"
+        )
+    report = json.loads(result.stdout)
+    assert_slo_report(report)

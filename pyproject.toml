@@ -33,8 +33,11 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
-addopts = "-v --tb=short"
+pythonpath = ["src", "tests"]
+addopts = "-v --tb=short -m 'not large_library'"
+markers = [
+    "large_library: full ~7.2k-library performance SLO gate (opt-in; excluded from default pytest)",
+]
 
 [tool.ruff]
 line-length = 100

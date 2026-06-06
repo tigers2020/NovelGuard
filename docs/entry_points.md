@@ -84,6 +84,23 @@ npm run test:e2e
 
 Uses Vite dev server (`playwright.config.ts` `webServer`). Injects `__NOVELGUARD_TEST_BRIDGE_FAIL__` for failure-path smoke tests.
 
+## Large-library perf gate (opt-in)
+
+Default `python -m pytest` runs mini/smoke shape tests only. The full ~7,200-file SLO gate is opt-in:
+
+```bash
+python scripts/generate_large_library_fixture.py
+python -m pytest -m large_library
+```
+
+Strict mode (fail instead of skip when the generated fixture is missing):
+
+```bash
+REQUIRE_LARGE_LIBRARY=1 python -m pytest -m large_library
+```
+
+SLO thresholds match `scripts/large_library_loading_smoke.py` (`query_file_rows_p95_ms` ≤ 5000, `query_review_rows_first_ms` ≤ 10000). Operator sign-off: [docs/release/smoke-record-large-library.md](release/smoke-record-large-library.md).
+
 ## Grid perf (PR-12)
 
 ```bash
