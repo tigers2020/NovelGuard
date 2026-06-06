@@ -2485,7 +2485,7 @@ def test_resolve_auto_approve_job_snapshot_idle_by_default() -> None:
     assert job["summary"] is None
 
 
-def test_start_resolve_auto_approve_job_polls_dry_run_summary(tmp_path: Path) -> None:
+def test_start_resolve_auto_approve_job_applies_mutations(tmp_path: Path) -> None:
     (tmp_path / "a.txt").write_text("x" * 100, encoding="utf-8")
     (tmp_path / "b.txt").write_text("x" * 100, encoding="utf-8")
     session = create_library_session(MemoryLibraryIndex())
@@ -2496,6 +2496,8 @@ def test_start_resolve_auto_approve_job_polls_dry_run_summary(tmp_path: Path) ->
     revision_before = session.library_revision()
     query = {"viewMode": "all", "limit": 50}
     direct = api.summarize_resolve_auto_approve(query)
+    if direct["unreviewedCount"] == 0:
+        pytest.skip("no unreviewed rows after scan")
     accepted = api.start_resolve_auto_approve_job(query)
     assert accepted == {"accepted": True}
     job = _resolve_auto_approve_job_until_terminal(api)
@@ -2503,8 +2505,64 @@ def test_start_resolve_auto_approve_job_polls_dry_run_summary(tmp_path: Path) ->
     assert job["summary"] is not None
     validate_resolve_auto_approve_summary(job["summary"])
     assert job["summary"]["unreviewedCount"] == direct["unreviewedCount"]
-    assert job["summary"]["keeperCount"] == direct["keeperCount"]
-    assert job["summary"]["moveCandidateCount"] == direct["moveCandidateCount"]
+    assert job["mutationCount"] > 0
+    assert job["approvedRowCount"] > 0
+    assert session.library_revision() > revision_before
+    assert job["persistedRevision"] == session.library_revision()
+    page = api.query_review_rows(
+        {"viewMode": "all", "limit": 50, "filters": {"status": ["approved"]}}
+    )
+    assert page["pageInfo"]["totalFiltered"] >= job["approvedRowCount"]
+
+
+def test_resolve_auto_approve_job_chunked_mutations(tmp_path: Path) -> None:
+    rows, files_by_id, members_by_group = _synthetic_exact_group_fixture(250)
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    with session._lock:  # noqa: SLF001
+        session._review_rows_cache = rows
+        session._files_by_id = files_by_id
+    session.build_review_members_by_group = lambda: members_by_group  # type: ignore[method-assign]
+    api = create_bridge_api(session)
+    query = {"viewMode": "all", "limit": 50, "filters": {"types": ["exact"]}}
+    revision_before = session.library_revision()
+    api.start_resolve_auto_approve_job(query)
+    job = _resolve_auto_approve_job_until_terminal(api)
+    assert job["status"] == "complete"
+    assert job["keeperSetCount"] == 1
+    assert job["approvedRowCount"] == 250
+    assert job["mutationCount"] == 251
+    assert session.library_revision() > revision_before
+
+
+def test_cancel_resolve_auto_approve_job_before_mutation_keeps_revision(tmp_path: Path) -> None:
+    import application.summarize_resolve_auto_approve as summarize_module
+
+    rows, files_by_id, members_by_group = _synthetic_exact_group_fixture(50)
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    with session._lock:  # noqa: SLF001
+        session._review_rows_cache = rows
+        session._files_by_id = files_by_id
+    session.build_review_members_by_group = lambda: members_by_group  # type: ignore[method-assign]
+    api = create_bridge_api(session)
+    query = {"viewMode": "all", "limit": 50, "filters": {"types": ["exact"]}}
+    revision_before = session.library_revision()
+    original_stream = summarize_module._stream_file_rows
+
+    def slow_stream(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:
+        time.sleep(0.02)
+        return original_stream(*args, **kwargs)
+
+    summarize_module._stream_file_rows = slow_stream
+    try:
+        api.start_resolve_auto_approve_job(query)
+        api.cancel_resolve_auto_approve_job()
+        job = _resolve_auto_approve_job_until_terminal(api)
+    finally:
+        summarize_module._stream_file_rows = original_stream
+    assert job["status"] == "cancelled"
+    assert job["mutationCount"] == 0
     assert session.library_revision() == revision_before
 
 

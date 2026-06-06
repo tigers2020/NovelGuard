@@ -875,6 +875,22 @@ export const mockBridge: NovelGuardBridge = {
         resolveAutoApproveCancelRequested = false;
         return;
       }
+      const rows = mergedReviewRows();
+      let keeperSetCount = 0;
+      if (preview.keeperRowIds.length > 0) {
+        keeperSetCount = applyMockReviewCommand(
+          rows.filter((row) => preview.keeperRowIds.includes(row.id)),
+          "setKeeper",
+        );
+      }
+      const approvedRowCount = applyMockReviewCommand(
+        rows.filter((row) => preview.approveRowIds.includes(row.id)),
+        "approve",
+      );
+      const mutationCount = keeperSetCount + approvedRowCount;
+      if (mutationCount > 0) {
+        libraryRevision += 1;
+      }
       resolveAutoApproveJob = {
         ...idleResolveAutoApproveJobSnapshot(),
         status: "complete",
@@ -887,7 +903,11 @@ export const mockBridge: NovelGuardBridge = {
         eligibleCount: preview.unreviewedCount,
         skippedConflictCount: preview.skippedConflictCount,
         skippedExcludedCount: preview.skippedExcludedCount,
-        label: "집계 완료",
+        keeperSetCount,
+        approvedRowCount,
+        mutationCount,
+        persistedRevision: mutationCount > 0 ? libraryRevision : null,
+        label: "처리 완료",
         startedAt,
         finishedAt: new Date().toISOString(),
         summary: preview,
