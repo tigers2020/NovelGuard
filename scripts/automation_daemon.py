@@ -59,11 +59,7 @@ def _install_signal_handlers(*, startup_ignore_seconds: float, debug: bool) -> N
             signal.signal(signal.SIGBREAK, _on_signal)
 
     # On Windows a handler that only "returns" can still leave a pending KeyboardInterrupt.
-    if (
-        startup_ignore_seconds > 0
-        and sys.platform == "win32"
-        and not debug
-    ):
+    if startup_ignore_seconds > 0 and sys.platform == "win32" and not debug:
         signal.signal(signal.SIGINT, signal.SIG_IGN)
         if hasattr(signal, "SIGBREAK"):
             signal.signal(signal.SIGBREAK, signal.SIG_IGN)
