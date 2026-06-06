@@ -635,19 +635,11 @@ class LibrarySession:
                     current = dict(self._resolve_auto_approve_job)
                     current.update(
                         {
-                            "processedRows": counts.get(
-                                "processedRows", current["processedRows"]
-                            ),
+                            "processedRows": counts.get("processedRows", current["processedRows"]),
                             "totalRows": counts.get("totalRows", current["totalRows"]),
-                            "scannedCount": counts.get(
-                                "scannedCount", current["scannedCount"]
-                            ),
-                            "eligibleCount": counts.get(
-                                "eligibleCount", current["eligibleCount"]
-                            ),
-                            "keeperCount": counts.get(
-                                "keeperCount", current["keeperCount"]
-                            ),
+                            "scannedCount": counts.get("scannedCount", current["scannedCount"]),
+                            "eligibleCount": counts.get("eligibleCount", current["eligibleCount"]),
+                            "keeperCount": counts.get("keeperCount", current["keeperCount"]),
                             "moveCandidateCount": counts.get(
                                 "moveCandidateCount", current["moveCandidateCount"]
                             ),
