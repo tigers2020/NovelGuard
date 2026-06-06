@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -23,6 +24,8 @@ from domain.duplicate_near import (
 from domain.models import FileRecord
 from domain.quality import QualityIssue
 from infrastructure.sqlite_file_rows_page import query_sqlite_file_rows_page
+
+_LOGGER = logging.getLogger(__name__)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS files (
@@ -319,30 +322,35 @@ class SqliteLibraryIndex:
         rows: list[tuple[str, str | None, bool, str | None]],
     ) -> None:
         """Replace 1:1 review enrichment rows for folder (file_id, group_id, is_keeper, group_key)."""
-        with self._connect() as conn:
-            conn.execute(
-                "DELETE FROM file_review_projection WHERE folder_path = ?",
-                (folder_path,),
-            )
-            if not rows:
-                return
-            conn.executemany(
-                """
-                INSERT INTO file_review_projection (
-                  folder_path, file_id, duplicate_group_id, is_keeper, duplicate_group_key
-                ) VALUES (?, ?, ?, ?, ?)
-                """,
-                [
-                    (
-                        folder_path,
-                        file_id,
-                        duplicate_group_id,
-                        1 if is_keeper else 0,
-                        duplicate_group_key,
-                    )
-                    for file_id, duplicate_group_id, is_keeper, duplicate_group_key in rows
-                ],
-            )
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    "DELETE FROM file_review_projection WHERE folder_path = ?",
+                    (folder_path,),
+                )
+                if not rows:
+                    return
+                conn.executemany(
+                    """
+                    INSERT INTO file_review_projection (
+                      folder_path, file_id, duplicate_group_id, is_keeper, duplicate_group_key
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            folder_path,
+                            file_id,
+                            duplicate_group_id,
+                            1 if is_keeper else 0,
+                            duplicate_group_key,
+                        )
+                        for file_id, duplicate_group_id, is_keeper, duplicate_group_key in rows
+                    ],
+                )
+        except sqlite3.OperationalError as exc:
+            if "locked" in str(exc).lower() or "busy" in str(exc).lower():
+                _LOGGER.debug("sqlite busy during replace_file_review_projection: %s", exc)
+            raise
 
     def query_file_rows_page(self, normalized: NormalizedFileRowsQuery) -> dict[str, Any]:
         if self._current_folder is None:
