@@ -166,6 +166,179 @@ def test_move_apply_recovery_manifest_shape(tmp_path: Path) -> None:
     assert checkpoint["rowId"] == "file:g1:f1"
 
 
+def _move_undo_manifest_dict(
+    *,
+    operation_id: str = "op-1",
+    from_path: str = "chapter.txt",
+    to_path: str = "chapter.txt",
+    after_hash: str | None = "abc",
+    drift_policy: str = "strict",
+    collision_policy: str = "block",
+) -> dict:
+    return {
+        "schemaVersion": 1,
+        "undoPlanId": "plan-1",
+        "runId": "run-1",
+        "libraryId": "a" * 64,
+        "createdAt": "2026-06-06T12:00:00Z",
+        "sealedAt": "2026-06-06T12:00:01Z",
+        "status": "pending",
+        "sourceBatchKind": "move_apply",
+        "sourcePreviewToken": "token",
+        "libraryRevisionAtSeal": 2,
+        "runStatus": "completed",
+        "summary": {"appliedCount": 1, "failedCount": 0},
+        "idempotencyKey": "key",
+        "failedRowId": None,
+        "failedError": None,
+        "items": [
+            {
+                "operationId": operation_id,
+                "sequence": 1,
+                "operationType": "move_duplicate",
+                "undoAction": "move_back",
+                "fromPath": from_path,
+                "toPath": to_path,
+                "backupPath": None,
+                "recoverability": "recoverable",
+                "manualRequired": False,
+                "driftPolicy": drift_policy,
+                "collisionPolicy": collision_policy,
+                "checkpointRef": {"beforeHash": "before", "afterHash": after_hash},
+            }
+        ],
+    }
+
+
+def test_undo_dry_run_recovers_when_layout_matches(tmp_path: Path) -> None:
+    from application.move_source_hash import content_hash_for_move
+    from application.undo_dry_run_planner import plan_move_undo_dry_run
+    from application.undo_manifest_loader import parse_and_validate_undo_manifest
+
+    library = tmp_path / "lib"
+    library.mkdir()
+    dup_root = tmp_path / "duplicate" / "lib"
+    dup_root.mkdir(parents=True)
+    moved = dup_root / "chapter.txt"
+    moved.write_text("hello", encoding="utf-8")
+    after_hash = content_hash_for_move(moved, size_bytes=moved.stat().st_size)
+
+    manifest = parse_and_validate_undo_manifest(_move_undo_manifest_dict(after_hash=after_hash))
+    plan = plan_move_undo_dry_run(library_root=library, manifest=manifest)
+    assert plan.recoverable_count == 1
+    assert plan.blocked_count == 0
+    assert plan.items[0].status == "recoverable"
+    assert plan.items[0].reason is None
+
+
+def test_undo_dry_run_blocks_when_current_file_missing(tmp_path: Path) -> None:
+    from application.undo_dry_run_planner import plan_move_undo_dry_run
+    from application.undo_manifest_loader import parse_and_validate_undo_manifest
+
+    library = tmp_path / "lib"
+    library.mkdir()
+    manifest = parse_and_validate_undo_manifest(_move_undo_manifest_dict())
+    plan = plan_move_undo_dry_run(library_root=library, manifest=manifest)
+    assert plan.blocked_count == 1
+    assert plan.items[0].reason == "dest_missing"
+
+
+def test_undo_dry_run_blocks_when_source_occupied(tmp_path: Path) -> None:
+    from application.move_source_hash import content_hash_for_move
+    from application.undo_dry_run_planner import plan_move_undo_dry_run
+    from application.undo_manifest_loader import parse_and_validate_undo_manifest
+
+    library = tmp_path / "lib"
+    library.mkdir()
+    (library / "chapter.txt").write_text("occupied", encoding="utf-8")
+    dup_root = tmp_path / "duplicate" / "lib"
+    dup_root.mkdir(parents=True)
+    moved = dup_root / "chapter.txt"
+    moved.write_text("hello", encoding="utf-8")
+    after_hash = content_hash_for_move(moved, size_bytes=moved.stat().st_size)
+
+    manifest = parse_and_validate_undo_manifest(_move_undo_manifest_dict(after_hash=after_hash))
+    plan = plan_move_undo_dry_run(library_root=library, manifest=manifest)
+    assert plan.blocked_count == 1
+    assert plan.items[0].reason == "source_occupied"
+
+
+def test_undo_dry_run_blocks_on_metadata_drift_strict(tmp_path: Path) -> None:
+    from application.undo_dry_run_planner import plan_move_undo_dry_run
+    from application.undo_manifest_loader import parse_and_validate_undo_manifest
+
+    library = tmp_path / "lib"
+    library.mkdir()
+    dup_root = tmp_path / "duplicate" / "lib"
+    dup_root.mkdir(parents=True)
+    (dup_root / "chapter.txt").write_text("changed", encoding="utf-8")
+
+    manifest = parse_and_validate_undo_manifest(
+        _move_undo_manifest_dict(after_hash="stale-hash", drift_policy="strict")
+    )
+    plan = plan_move_undo_dry_run(library_root=library, manifest=manifest)
+    assert plan.blocked_count == 1
+    assert plan.items[0].reason == "dest_changed"
+
+
+def test_undo_dry_run_manual_required_on_metadata_drift(tmp_path: Path) -> None:
+    from application.undo_dry_run_planner import plan_move_undo_dry_run
+    from application.undo_manifest_loader import parse_and_validate_undo_manifest
+
+    library = tmp_path / "lib"
+    library.mkdir()
+    dup_root = tmp_path / "duplicate" / "lib"
+    dup_root.mkdir(parents=True)
+    (dup_root / "chapter.txt").write_text("changed", encoding="utf-8")
+
+    manifest = parse_and_validate_undo_manifest(
+        _move_undo_manifest_dict(after_hash="stale-hash", drift_policy="manual")
+    )
+    plan = plan_move_undo_dry_run(library_root=library, manifest=manifest)
+    assert plan.manual_required_count == 1
+    assert plan.items[0].reason == "dest_changed"
+
+
+def test_undo_manifest_loader_rejects_unsealed() -> None:
+    from application.undo_manifest_errors import UndoManifestValidationError
+    from application.undo_manifest_loader import parse_and_validate_undo_manifest
+
+    payload = _move_undo_manifest_dict()
+    payload["sealedAt"] = ""
+    with pytest.raises(UndoManifestValidationError) as exc:
+        parse_and_validate_undo_manifest(payload)
+    assert exc.value.code == "MANIFEST_UNSEALED"
+
+
+def test_undo_manifest_loader_rejects_duplicate_operation_ids() -> None:
+    from application.undo_manifest_errors import UndoManifestValidationError
+    from application.undo_manifest_loader import parse_and_validate_undo_manifest
+
+    payload = _move_undo_manifest_dict()
+    payload["items"].append(dict(payload["items"][0]))
+    with pytest.raises(UndoManifestValidationError) as exc:
+        parse_and_validate_undo_manifest(payload)
+    assert exc.value.code == "DUPLICATE_OPERATION_ID"
+
+
+def test_undo_dry_run_is_idempotent(tmp_path: Path) -> None:
+    from application.move_source_hash import content_hash_for_move
+    from application.undo_dry_run_planner import plan_move_undo_dry_run
+    from application.undo_manifest_loader import parse_and_validate_undo_manifest
+
+    library = tmp_path / "lib"
+    library.mkdir()
+    dup_root = tmp_path / "duplicate" / "lib"
+    dup_root.mkdir(parents=True)
+    moved = dup_root / "chapter.txt"
+    moved.write_text("hello", encoding="utf-8")
+    after_hash = content_hash_for_move(moved, size_bytes=moved.stat().st_size)
+    manifest = parse_and_validate_undo_manifest(_move_undo_manifest_dict(after_hash=after_hash))
+    first = plan_move_undo_dry_run(library_root=library, manifest=manifest)
+    second = plan_move_undo_dry_run(library_root=library, manifest=manifest)
+    assert first.to_dict() == second.to_dict()
+
+
 def test_sqlite_session_rebinds_db_on_select_folder(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

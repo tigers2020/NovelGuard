@@ -12,6 +12,14 @@ UndoManifestStatus = Literal[
 CheckpointItemStatus = Literal["applied", "failed", "skipped"]
 Recoverability = Literal["recoverable", "manual", "unrecoverable"]
 UndoAction = Literal["move_back"]
+DryRunItemStatus = Literal["recoverable", "blocked", "manual_required"]
+DryRunItemReason = Literal[
+    "dest_missing",
+    "dest_changed",
+    "source_occupied",
+    "malformed_item",
+    "unsupported_operation",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,4 +161,50 @@ class UndoManifest:
             "idempotencyKey": self.idempotency_key,
             "failedRowId": self.failed_row_id,
             "failedError": self.failed_error,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class UndoDryRunItemResult:
+    operation_id: str
+    sequence: int
+    from_path: str
+    to_path: str
+    status: DryRunItemStatus
+    reason: DryRunItemReason | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "operationId": self.operation_id,
+            "sequence": self.sequence,
+            "fromPath": self.from_path,
+            "toPath": self.to_path,
+            "status": self.status,
+            "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class UndoDryRunPlan:
+    undo_plan_id: str
+    manifest_path: str | None
+    library_id: str
+    run_id: str
+    total_count: int
+    recoverable_count: int
+    blocked_count: int
+    manual_required_count: int
+    items: tuple[UndoDryRunItemResult, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "undoPlanId": self.undo_plan_id,
+            "manifestPath": self.manifest_path,
+            "libraryId": self.library_id,
+            "runId": self.run_id,
+            "totalCount": self.total_count,
+            "recoverableCount": self.recoverable_count,
+            "blockedCount": self.blocked_count,
+            "manualRequiredCount": self.manual_required_count,
+            "items": [item.to_dict() for item in self.items],
         }

@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from application.undo_manifest_errors import UndoManifestValidationError
+
 
 class JsonlRecoveryStore:
     def __init__(
@@ -33,6 +35,24 @@ class JsonlRecoveryStore:
     def write_undo_manifest(self, manifest: dict[str, Any]) -> Path:
         undo_plan_id = manifest["undoPlanId"]
         self._undo_plans_dir.mkdir(parents=True, exist_ok=True)
-        path = self._undo_plans_dir / f"{undo_plan_id}.json"
+        path = self.undo_manifest_path(undo_plan_id)
         path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         return path
+
+    def undo_manifest_path(self, undo_plan_id: str) -> Path:
+        return self._undo_plans_dir / f"{undo_plan_id}.json"
+
+    def read_undo_manifest_raw(self, undo_plan_id: str) -> dict[str, Any]:
+        path = self.undo_manifest_path(undo_plan_id)
+        if not path.is_file():
+            raise UndoManifestValidationError(
+                "MANIFEST_NOT_FOUND",
+                f"undo plan not found: {undo_plan_id}",
+            )
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise UndoManifestValidationError("MANIFEST_MALFORMED", "invalid JSON") from exc
+        if not isinstance(payload, dict):
+            raise UndoManifestValidationError("MANIFEST_MALFORMED", "manifest must be an object")
+        return payload

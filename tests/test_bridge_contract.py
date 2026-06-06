@@ -2008,6 +2008,37 @@ def test_apply_success_writes_recovery_manifest(
     assert len(manifest["items"]) == 1
 
 
+def test_undo_dry_run_after_apply_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("NOVELGUARD_LOCALAPPDATA", str(tmp_path / "local"))
+    api = _duplicate_api(tmp_path)
+    page = api.query_review_rows({"viewMode": "all", "limit": 50})
+    move_row = next(row for row in page["rows"] if row.get("proposedAction") == "move_duplicate")
+    sel = {"type": "explicit_rows", "rowIds": [move_row["id"]]}
+    preview = api.get_move_preview(sel)
+    api.apply_resolved_actions({"selection": sel, "previewToken": preview["previewToken"]})
+
+    from application.recovery_store import JsonlRecoveryStore
+    from application.undo_dry_run_planner import plan_move_undo_from_store
+
+    store = JsonlRecoveryStore(
+        checkpoints_path=api._session.recovery_checkpoints_path(),
+        undo_plans_dir=api._session.undo_plans_dir(),
+    )
+    manifest_files = list(api._session.undo_plans_dir().glob("*.json"))
+    assert len(manifest_files) == 1
+    undo_plan_id = json.loads(manifest_files[0].read_text(encoding="utf-8"))["undoPlanId"]
+
+    plan = plan_move_undo_from_store(
+        library_root=tmp_path,
+        store=store,
+        undo_plan_id=undo_plan_id,
+    )
+    assert plan.recoverable_count == 1
+    assert plan.blocked_count == 0
+    assert plan.total_count == 1
+    assert plan.manifest_path is not None
+
+
 def test_get_duplicate_group_detail_members_and_keeper(tmp_path: Path) -> None:
     api = _duplicate_api(tmp_path)
     page = api.query_review_rows({"viewMode": "groups", "limit": 50})
