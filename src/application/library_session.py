@@ -178,6 +178,12 @@ class LibrarySession:
         self._finalize_runner: Any = None
         self._near_groups_by_id: dict[str, NearDuplicateGroup] = {}
         self._relation_groups_by_id: dict[str, RelationGroup] = {}
+        from application.resolve_auto_approve_job import idle_resolve_auto_approve_job_snapshot
+
+        self._resolve_auto_approve_job = idle_resolve_auto_approve_job_snapshot()
+        self._resolve_auto_approve_running = False
+        self._resolve_auto_approve_cancel_requested = False
+        self._resolve_auto_approve_thread: threading.Thread | None = None
         self._settings = settings or AppSettings()
 
     @property
@@ -427,6 +433,7 @@ class LibrarySession:
                 finalize_blocker_count=self._finalize_blocker_count,
                 finalize_warning_count=self._finalize_warning_count,
                 scan_options=self._scan_options_labels(),
+                resolve_auto_approve_job=self._resolve_auto_approve_job,
             )
 
     def query_review_rows(self, query: dict[str, Any]) -> dict[str, Any]:
@@ -552,6 +559,185 @@ class LibrarySession:
                 files_by_id=self._files_by_id,
                 members_by_group=self.build_review_members_by_group(),
             )
+
+    def resolve_auto_approve_job_snapshot(self) -> dict[str, Any]:
+        with self._lock:
+            return dict(self._resolve_auto_approve_job)
+
+    def is_resolve_auto_approve_job_running(self) -> bool:
+        with self._lock:
+            return self._resolve_auto_approve_running
+
+    def start_resolve_auto_approve_job(self, query: dict[str, Any]) -> dict[str, Any]:
+        from app.bridge_contract import ResolveAutoApproveJobError
+        from application.resolve_auto_approve_job import (
+            _iso_now,
+            build_resolve_auto_approve_job_snapshot,
+        )
+        from application.summarize_resolve_auto_approve import has_unreviewed_resolve_targets
+
+        with self._lock:
+            if self._resolve_auto_approve_running:
+                raise ResolveAutoApproveJobError("JOB_ALREADY_RUNNING")
+            if not has_unreviewed_resolve_targets(self._review_rows_cache, query):
+                raise ResolveAutoApproveJobError("NO_UNREVIEWED_TARGETS")
+
+            started_at = _iso_now()
+            self._resolve_auto_approve_running = True
+            self._resolve_auto_approve_cancel_requested = False
+            self._resolve_auto_approve_job = build_resolve_auto_approve_job_snapshot(
+                status="running",
+                phase="summarize",
+                label="미검토 대상 집계 중…",
+                started_at=started_at,
+            )
+            captured_query = dict(query)
+
+        self._append_resolve_auto_approve_audit("resolve_auto_approve_job_started")
+        self._start_resolve_auto_approve_worker(captured_query)
+        return {"accepted": True}
+
+    def cancel_resolve_auto_approve_job(self) -> None:
+        with self._lock:
+            if not self._resolve_auto_approve_running:
+                return
+            self._resolve_auto_approve_cancel_requested = True
+
+    def _append_resolve_auto_approve_audit(self, event: str, **fields: Any) -> None:
+        try:
+            from application.audit_log import AuditLog
+
+            AuditLog(self.audit_log_path()).append(event, **fields)
+        except RuntimeError:
+            pass
+
+    def _start_resolve_auto_approve_worker(self, query: dict[str, Any]) -> None:
+        def _worker() -> None:
+            from application.resolve_auto_approve_job import (
+                ResolveAutoApproveJobCancelled,
+                _iso_now,
+                build_resolve_auto_approve_job_snapshot,
+                run_resolve_auto_approve_dry_run,
+            )
+
+            final_status = "complete"
+            error_message: str | None = None
+            summary: dict[str, Any] | None = None
+
+            def _cancel_check() -> bool:
+                with self._lock:
+                    return self._resolve_auto_approve_cancel_requested
+
+            def _on_progress(counts: dict[str, int]) -> None:
+                with self._lock:
+                    if not self._resolve_auto_approve_running:
+                        return
+                    current = dict(self._resolve_auto_approve_job)
+                    current.update(
+                        {
+                            "processedRows": counts.get("processedRows", current["processedRows"]),
+                            "totalRows": counts.get("totalRows", current["totalRows"]),
+                            "scannedCount": counts.get("scannedCount", current["scannedCount"]),
+                            "eligibleCount": counts.get("eligibleCount", current["eligibleCount"]),
+                            "keeperCount": counts.get("keeperCount", current["keeperCount"]),
+                            "moveCandidateCount": counts.get(
+                                "moveCandidateCount", current["moveCandidateCount"]
+                            ),
+                            "skippedConflictCount": counts.get(
+                                "skippedConflictCount", current["skippedConflictCount"]
+                            ),
+                            "skippedExcludedCount": counts.get(
+                                "skippedExcludedCount", current["skippedExcludedCount"]
+                            ),
+                            "label": "미검토 대상 집계 중…",
+                        }
+                    )
+                    self._resolve_auto_approve_job = current
+
+            try:
+                with self._lock:
+                    rows = list(self._review_rows_cache)
+                    files_by_id = dict(self._files_by_id)
+                    members_by_group = self.build_review_members_by_group()
+
+                summary = run_resolve_auto_approve_dry_run(
+                    rows,
+                    query,
+                    files_by_id=files_by_id,
+                    members_by_group=members_by_group,
+                    on_progress=_on_progress,
+                    cancel_check=_cancel_check,
+                )
+            except ResolveAutoApproveJobCancelled:
+                final_status = "cancelled"
+            except Exception as exc:
+                _LOGGER.exception("resolve auto-approve dry-run job failed")
+                final_status = "error"
+                error_message = str(exc)
+            else:
+                if _cancel_check():
+                    final_status = "cancelled"
+
+            finished_at = _iso_now()
+            with self._lock:
+                started_at = self._resolve_auto_approve_job.get("startedAt")
+                if final_status == "complete" and summary is not None:
+                    self._resolve_auto_approve_job = build_resolve_auto_approve_job_snapshot(
+                        status="complete",
+                        phase="idle",
+                        processed_rows=int(summary["unreviewedCount"]),
+                        total_rows=int(summary["unreviewedCount"]),
+                        keeper_count=int(summary["keeperCount"]),
+                        move_candidate_count=int(summary["moveCandidateCount"]),
+                        scanned_count=int(summary["unreviewedCount"]),
+                        eligible_count=int(summary["unreviewedCount"]),
+                        skipped_conflict_count=int(summary["skippedConflictCount"]),
+                        skipped_excluded_count=int(summary["skippedExcludedCount"]),
+                        label="집계 완료",
+                        started_at=started_at if isinstance(started_at, str) else None,
+                        finished_at=finished_at,
+                        summary=summary,
+                    )
+                elif final_status == "cancelled":
+                    self._resolve_auto_approve_job = build_resolve_auto_approve_job_snapshot(
+                        status="cancelled",
+                        phase="idle",
+                        label="취소됨",
+                        error=None,
+                        started_at=started_at if isinstance(started_at, str) else None,
+                        finished_at=finished_at,
+                    )
+                else:
+                    self._resolve_auto_approve_job = build_resolve_auto_approve_job_snapshot(
+                        status="error",
+                        phase="idle",
+                        label="집계 실패",
+                        error=error_message or "unknown error",
+                        started_at=started_at if isinstance(started_at, str) else None,
+                        finished_at=finished_at,
+                    )
+                self._resolve_auto_approve_running = False
+                self._resolve_auto_approve_cancel_requested = False
+                self._resolve_auto_approve_thread = None
+
+            if final_status == "complete":
+                self._append_resolve_auto_approve_audit("resolve_auto_approve_job_completed")
+            elif final_status == "cancelled":
+                self._append_resolve_auto_approve_audit("resolve_auto_approve_job_cancelled")
+            else:
+                self._append_resolve_auto_approve_audit(
+                    "resolve_auto_approve_job_error",
+                    error=error_message,
+                )
+
+        thread = threading.Thread(
+            target=_worker,
+            name="novelguard-resolve-auto-approve",
+            daemon=True,
+        )
+        with self._lock:
+            self._resolve_auto_approve_thread = thread
+        thread.start()
 
     def library_revision(self) -> int:
         with self._lock:
@@ -726,7 +912,12 @@ class LibrarySession:
 
     def is_apply_or_scan_busy(self) -> bool:
         with self._lock:
-            return self._apply_in_progress or self._pipeline_running or self._post_scan_running
+            return (
+                self._apply_in_progress
+                or self._pipeline_running
+                or self._post_scan_running
+                or self._resolve_auto_approve_running
+            )
 
     def configure_finalize(self, runner: Any) -> None:
         with self._lock:

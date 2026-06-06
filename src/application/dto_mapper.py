@@ -91,7 +91,15 @@ def build_snapshot(
     finalize_warning_count: int = 0,
     connection: str = "Library session (Python)",
     scan_options: list[str] | None = None,
+    resolve_auto_approve_job: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    from application.resolve_auto_approve_job import idle_resolve_auto_approve_job_snapshot
+
+    job = (
+        resolve_auto_approve_job
+        if resolve_auto_approve_job is not None
+        else idle_resolve_auto_approve_job_snapshot()
+    )
     return {
         "route": "work",
         "theme": "dark",
@@ -154,4 +162,5 @@ def build_snapshot(
             "issueCount": total_quality_issue_count,
             "selectedCount": 0,
         },
+        "resolveAutoApproveJob": job,
     }

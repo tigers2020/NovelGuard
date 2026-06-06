@@ -1,3 +1,5 @@
+import type { ResolveAutoApproveJobSnapshot } from "./resolveAutoApproveJob";
+
 export interface PipelineBackgroundSnapshot {
   active: boolean;
   phase: string;
@@ -91,4 +93,5 @@ export interface AppSnapshot {
     issueCount: number;
     selectedCount: number;
   };
+  resolveAutoApproveJob: ResolveAutoApproveJobSnapshot;
 }

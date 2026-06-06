@@ -23,6 +23,8 @@ PYWEBVIEW_API_METHODS: tuple[str, ...] = (
     "update_review_decisions",
     "summarize_auto_select_keepers",
     "summarize_resolve_auto_approve",
+    "start_resolve_auto_approve_job",
+    "cancel_resolve_auto_approve_job",
     "get_app_setting",
     "set_app_setting",
     "query_log_entries",

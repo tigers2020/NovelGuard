@@ -12,6 +12,7 @@ from app.bridge_contract import (
     FinalizeError,
     PreviewApplyError,
     QualityQueryError,
+    ResolveAutoApproveJobError,
     clamp_query_limit,
     validate_app_info,
     validate_app_setting_response,
@@ -235,6 +236,17 @@ class BridgeApi:
         payload = self._session.summarize_resolve_auto_approve(query)
         validate_resolve_auto_approve_summary(payload)
         return payload
+
+    def start_resolve_auto_approve_job(self, query: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(query, dict) or not query.get("viewMode"):
+            raise PreviewApplyError("INVALID_REVIEW_COMMAND", "query.viewMode required")
+        try:
+            return self._session.start_resolve_auto_approve_job(query)
+        except ResolveAutoApproveJobError as exc:
+            raise PreviewApplyError(exc.reason, str(exc)) from exc
+
+    def cancel_resolve_auto_approve_job(self) -> None:
+        self._session.cancel_resolve_auto_approve_job()
 
     def get_app_info(self) -> dict[str, Any]:
         payload = version.get_app_info()
