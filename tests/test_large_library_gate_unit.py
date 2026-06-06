@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
-
 from large_library_gate import (
     FILE_ROWS_P95_SLO_MS,
     REVIEW_ROWS_FIRST_SLO_MS,
     assert_slo_report,
+    require_full_fixture,
 )
 
 
@@ -40,3 +41,12 @@ def test_assert_slo_report_fails_with_clear_slo_message() -> None:
     assert "query_file_rows_p95_ms" in message
     assert str(FILE_ROWS_P95_SLO_MS) in message
     assert json.dumps(report["timings"], indent=2) in message
+
+
+def test_require_full_fixture_fails_when_required_and_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("REQUIRE_LARGE_LIBRARY", "1")
+    monkeypatch.setattr("large_library_gate.FULL_FIXTURE_DIR", tmp_path / "missing")
+    with pytest.raises(pytest.fail.Exception):
+        require_full_fixture()

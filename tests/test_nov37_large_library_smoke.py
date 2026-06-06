@@ -9,9 +9,10 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from large_library_gate import (
     SMOKE_SCRIPT as SMOKE,
+)
+from large_library_gate import (
     assert_slo_report,
     require_full_fixture,
 )
