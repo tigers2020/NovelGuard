@@ -25,6 +25,7 @@ from app.bridge_contract import (
     validate_app_snapshot,
     validate_duplicate_group_detail,
     validate_file_rows_page,
+    validate_finalize_job_snapshot,
     validate_finalize_result,
     validate_finalize_summary,
     validate_move_preview,
@@ -105,7 +106,7 @@ def test_clamp_query_limit_max_200() -> None:
 
 def test_pywebview_api_methods_match_locked_contract() -> None:
     """Canonical list: app.bridge_parity.PYWEBVIEW_API_METHODS (mirrors bridgeParity.ts)."""
-    assert len(PYWEBVIEW_API_METHODS) == 31
+    assert len(PYWEBVIEW_API_METHODS) == 32
     assert PYWEBVIEW_API_METHODS[0] == "get_app_info"
     assert PYWEBVIEW_API_METHODS[-1] == "cancel_finalize"
 
@@ -3137,6 +3138,94 @@ def test_get_finalize_summary_after_scan(tmp_path: Path) -> None:
     assert summary["scanState"] == "success"
 
 
+def _finalize_job_until_terminal(api: BridgeApi) -> dict[str, Any]:
+    deadline = time.monotonic() + 30.0
+    job = api.get_finalize_job()
+    while time.monotonic() < deadline and job["status"] == "running":
+        time.sleep(0.02)
+        job = api.get_finalize_job()
+    return job
+
+
+def test_finalize_job_snapshot_idle_by_default() -> None:
+    snap = _memory_api().get_snapshot()
+    job = snap["finalizeJob"]
+    validate_finalize_job_snapshot(job)
+    assert job["status"] == "idle"
+    assert job["result"] is None
+
+
+def test_start_finalize_job_returns_immediately(tmp_path: Path) -> None:
+    (tmp_path / "solo.txt").write_text("hello", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    started = time.perf_counter()
+    job = api.start_finalize_job({"includeCleanup": False})
+    elapsed = time.perf_counter() - started
+    validate_finalize_job_snapshot(job)
+    assert elapsed < 0.5
+    assert job["status"] == "running"
+    terminal = _finalize_job_until_terminal(api)
+    assert terminal["status"] == "succeeded"
+    assert terminal["result"] is not None
+    validate_finalize_result(terminal["result"])
+
+
+def test_start_finalize_job_rejects_when_already_running(tmp_path: Path) -> None:
+    import application.finalize_runner as finalize_runner_module
+
+    original_run = finalize_runner_module.FinalizeRunner.run
+
+    def slow_run(self: Any, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        time.sleep(0.05)
+        return original_run(self, *args, **kwargs)
+
+    (tmp_path / "solo.txt").write_text("hello", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    finalize_runner_module.FinalizeRunner.run = slow_run
+    try:
+        api.start_finalize_job({"includeCleanup": False})
+        with pytest.raises(FinalizeError, match="JOB_ALREADY_RUNNING"):
+            api.start_finalize_job({"includeCleanup": False})
+        _finalize_job_until_terminal(api)
+    finally:
+        finalize_runner_module.FinalizeRunner.run = original_run
+
+
+def test_cancel_finalize_during_job_marks_cancelled(tmp_path: Path) -> None:
+    import application.finalize_runner as finalize_runner_module
+
+    original_run = finalize_runner_module.FinalizeRunner.run
+
+    def slow_run(self: Any, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        time.sleep(0.05)
+        return original_run(self, *args, **kwargs)
+
+    (tmp_path / "solo.txt").write_text("hello", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    finalize_runner_module.FinalizeRunner.run = slow_run
+    try:
+        api.start_finalize_job({"includeCleanup": False})
+        api.cancel_finalize()
+        job = _finalize_job_until_terminal(api)
+    finally:
+        finalize_runner_module.FinalizeRunner.run = original_run
+    assert job["status"] == "cancelled"
+    assert job["result"] is not None
+    assert job["result"]["status"] == "cancelled"
+
+
 def test_finalize_complete_clean_library(tmp_path: Path) -> None:
     (tmp_path / "solo.txt").write_text("hello", encoding="utf-8")
     session = create_library_session(MemoryLibraryIndex())
@@ -3144,7 +3233,11 @@ def test_finalize_complete_clean_library(tmp_path: Path) -> None:
     api = create_bridge_api(session)
     api.start_scan()
     _scan_until_idle(api)
-    result = api.run_finalize_verification({"includeCleanup": False})
+    api.start_finalize_job({"includeCleanup": False})
+    job = _finalize_job_until_terminal(api)
+    assert job["status"] == "succeeded"
+    result = job["result"]
+    assert result is not None
     validate_finalize_result(result)
     assert result["status"] in ("complete", "complete_with_warnings")
     assert result["blockers"] == []
@@ -3164,7 +3257,11 @@ def test_finalize_blocked_exact_duplicate_queue(tmp_path: Path) -> None:
     summary = api.get_finalize_summary()
     assert summary["resolve"]["queueCount"] > 0
     assert summary["resolve"]["exactUnresolvedQueueCount"] > 0
-    result = api.run_finalize_verification({"includeCleanup": False})
+    api.start_finalize_job({"includeCleanup": False})
+    job = _finalize_job_until_terminal(api)
+    assert job["status"] == "succeeded"
+    result = job["result"]
+    assert result is not None
     assert result["status"] == "blocked"
     assert result["reportId"]
     report = api.get_finalize_report(result["reportId"])
@@ -3346,7 +3443,7 @@ def test_finalize_while_scan_raises_library_busy(tmp_path: Path) -> None:
     api = create_bridge_api(session)
     api.start_scan()
     with pytest.raises(FinalizeError) as exc_info:
-        api.run_finalize_verification({"includeCleanup": False})
+        api.start_finalize_job({"includeCleanup": False})
     assert exc_info.value.reason == "LIBRARY_BUSY"
 
 

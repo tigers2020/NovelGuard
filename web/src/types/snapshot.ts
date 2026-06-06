@@ -1,3 +1,4 @@
+import type { FinalizeJobSnapshot } from "./finalizeJob";
 import type { ResolveAutoApproveJobSnapshot } from "./resolveAutoApproveJob";
 
 export interface PipelineBackgroundSnapshot {
@@ -94,4 +95,5 @@ export interface AppSnapshot {
     selectedCount: number;
   };
   resolveAutoApproveJob: ResolveAutoApproveJobSnapshot;
+  finalizeJob: FinalizeJobSnapshot;
 }

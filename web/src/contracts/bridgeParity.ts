@@ -29,7 +29,8 @@ export const NOVEL_GUARD_BRIDGE_METHODS = [
   "getLogsArtifacts",
   "getFinalizeSummary",
   "previewFinalizeCleanup",
-  "runFinalizeVerification",
+  "startFinalizeJob",
+  "getFinalizeJob",
   "getFinalizeReport",
   "cancelFinalize",
 ] as const satisfies readonly (keyof NovelGuardBridge)[];
@@ -63,7 +64,8 @@ export const PYWEBVIEW_API_METHODS = [
   "get_logs_artifacts",
   "get_finalize_summary",
   "preview_finalize_cleanup",
-  "run_finalize_verification",
+  "start_finalize_job",
+  "get_finalize_job",
   "get_finalize_report",
   "cancel_finalize",
 ] as const;

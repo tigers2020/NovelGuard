@@ -92,13 +92,18 @@ def build_snapshot(
     connection: str = "Library session (Python)",
     scan_options: list[str] | None = None,
     resolve_auto_approve_job: dict[str, Any] | None = None,
+    finalize_job: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    from application.finalize_job import idle_finalize_job_snapshot
     from application.resolve_auto_approve_job import idle_resolve_auto_approve_job_snapshot
 
     job = (
         resolve_auto_approve_job
         if resolve_auto_approve_job is not None
         else idle_resolve_auto_approve_job_snapshot()
+    )
+    finalize = (
+        finalize_job if finalize_job is not None else idle_finalize_job_snapshot()
     )
     return {
         "route": "work",
@@ -163,4 +168,5 @@ def build_snapshot(
             "selectedCount": 0,
         },
         "resolveAutoApproveJob": job,
+        "finalizeJob": finalize,
     }

@@ -10,6 +10,7 @@ from app.apply_resolved_actions import ApplyResolvedActionsUseCase
 from app.bridge_contract import (
     FileRowQueryError,
     FinalizeError,
+    FinalizeJobError,
     PreviewApplyError,
     QualityQueryError,
     ResolveAutoApproveJobError,
@@ -20,7 +21,7 @@ from app.bridge_contract import (
     validate_duplicate_group_detail,
     validate_file_rows_page,
     validate_finalize_cleanup_preview,
-    validate_finalize_result,
+    validate_finalize_job_snapshot,
     validate_finalize_summary,
     validate_log_entries_page,
     validate_logs_artifacts_response,
@@ -329,23 +330,26 @@ class BridgeApi:
 
         return payload
 
-    def run_finalize_verification(self, request: dict[str, Any]) -> dict[str, Any]:
+    def start_finalize_job(self, request: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(request, dict):
             raise FinalizeError("INVALID_REQUEST", "request must be a dict")
 
         try:
-            payload = self._session.run_finalize_verification(request)
-
+            payload = self._session.start_finalize_job(request)
         except RuntimeError as exc:
             reason = str(exc)
-
             if reason in ("NO_LIBRARY", "LIBRARY_BUSY", "FINALIZE_NOT_CONFIGURED"):
                 raise FinalizeError(reason) from exc
-
             raise
+        except FinalizeJobError as exc:
+            raise FinalizeError(exc.reason, str(exc)) from exc
 
-        validate_finalize_result(payload)
+        validate_finalize_job_snapshot(payload)
+        return payload
 
+    def get_finalize_job(self) -> dict[str, Any]:
+        payload = self._session.finalize_job_snapshot()
+        validate_finalize_job_snapshot(payload)
         return payload
 
     def get_finalize_report(self, report_id: str) -> dict[str, Any]:
