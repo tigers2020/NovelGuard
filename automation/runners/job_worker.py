@@ -19,8 +19,15 @@ from automation.runners.config import load_config, repo_path, repo_root
 from automation.runners.cursor_runner import (
     PROMPT_DELIVERY,
     is_cursor_proc_running,
+    request_cancel,
     run_prompt,
     run_prompt_streaming,
+)
+from automation.runners.cursor_stall import (
+    CursorOutputTracker,
+    cursor_stall_config,
+    diagnose_cursor_stall,
+    write_stall_diagnosis,
 )
 from automation.runners.queue import JobQueue, JobRecord
 from automation.runners.runtime_state import get_runtime_state
@@ -318,45 +325,77 @@ def process_job(cfg: dict[str, Any], record: JobRecord, *, prompt: str) -> dict[
             state.cursor_output_buffered = False
 
         if tui:
-            last_line_at = time.time()
-            buffered_monitor_stop = threading.Event()
+            stall_seconds, stall_max_retries, stall_poll = cursor_stall_config(cfg)
+            stall_retries = 0
+            cursor = None
 
-            def on_line(_stream: str, line: str) -> None:
-                nonlocal last_line_at
-                last_line_at = time.time()
-                if state is not None:
-                    state.cursor_output_buffered = False
-                emit_mod.emit_or_print("cursor", "cursor.line", line)
-
-            def _buffered_monitor() -> None:
-                while not buffered_monitor_stop.wait(5.0):
-                    if not is_cursor_proc_running():
-                        break
-                    if time.time() - last_line_at >= 30.0 and state is not None:
-                        state.cursor_output_buffered = True
-
-            monitor_thread = threading.Thread(target=_buffered_monitor, daemon=True)
-            monitor_thread.start()
-
+            log_file = log_path.open("w", encoding="utf-8")
             try:
-                with log_path.open("w", encoding="utf-8") as log_file:
-                    log_file.write(f"prompt_log: {prompt_log}\n\n")
-                    log_file.flush()
-                    cursor = run_prompt_streaming(
-                        repo,
-                        prompt,
-                        cfg,
-                        on_line=on_line,
-                        cancel_event=get_cancel_event(),
-                        log_file=log_file,
-                    )
-                    log_file.write(
-                        f"\n--- stdout ---\n{cursor.stdout}\n\n"
-                        f"--- stderr ---\n{cursor.stderr}\n"
-                    )
+                log_file.write(f"prompt_log: {prompt_log}\n\n")
+                log_file.flush()
+
+                for attempt in range(stall_max_retries + 1):
+                    tracker = CursorOutputTracker()
+                    monitor_stop = threading.Event()
+                    stall_cancelled = threading.Event()
+
+                    def on_line(
+                        stream: str, line: str, *, _tracker: CursorOutputTracker = tracker
+                    ) -> None:
+                        _tracker.note_line(stream, line)
+                        if state is not None:
+                            state.cursor_output_buffered = False
+                        emit_mod.emit_or_print("cursor", "cursor.line", line)
+
+                    def _stall_monitor(
+                        *,
+                        _tracker: CursorOutputTracker = tracker,
+                        _attempt: int = attempt,
+                    ) -> None:
+                        while not monitor_stop.wait(stall_poll):
+                            if not is_cursor_proc_running():
+                                break
+                            idle = _tracker.idle_seconds()
+                            if state is not None and idle >= 30.0:
+                                state.cursor_output_buffered = True
+                            if idle >= stall_seconds and is_cursor_proc_running():
+                                diagnosis = diagnose_cursor_stall(
+                                    tracker=_tracker,
+                                    attempt=_attempt + 1,
+                                    log_path=str(log_path),
+                                )
+                                write_stall_diagnosis(diagnosis, log_file=log_file)
+                                request_cancel()
+                                stall_cancelled.set()
+                                break
+
+                    monitor_thread = threading.Thread(target=_stall_monitor, daemon=True)
+                    monitor_thread.start()
+                    try:
+                        cursor = run_prompt_streaming(
+                            repo,
+                            prompt,
+                            cfg,
+                            on_line=on_line,
+                            cancel_event=get_cancel_event(),
+                            log_file=log_file,
+                        )
+                    finally:
+                        monitor_stop.set()
+                        monitor_thread.join(timeout=1.0)
+
+                    if stall_cancelled.is_set() and attempt < stall_max_retries:
+                        stall_retries += 1
+                        log_file.write(f"\n--- stall retry {stall_retries} ---\n")
+                        log_file.flush()
+                        continue
+                    break
+
+                log_file.write(
+                    f"\n--- stdout ---\n{cursor.stdout}\n\n" f"--- stderr ---\n{cursor.stderr}\n"
+                )
             finally:
-                buffered_monitor_stop.set()
-                monitor_thread.join(timeout=1.0)
+                log_file.close()
                 if state is not None:
                     state.cursor_running = False
         else:
@@ -381,6 +420,8 @@ def process_job(cfg: dict[str, Any], record: JobRecord, *, prompt: str) -> dict[
             "log_path": str(log_path),
             "interrupted": cursor.interrupted,
         }
+        if tui:
+            result["cursor"]["stall_retries"] = stall_retries
 
         if git_prepare:
             diff_stat = _git(repo, "diff", "--stat", check=False)
