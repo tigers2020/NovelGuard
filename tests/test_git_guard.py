@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from automation.runners.git_guard import (
     ALLOW_ENV,
     branch_change_error,

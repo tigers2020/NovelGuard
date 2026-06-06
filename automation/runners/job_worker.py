@@ -30,10 +30,10 @@ from automation.runners.cursor_stall import (
     diagnose_cursor_stall,
     write_stall_diagnosis,
 )
+from automation.runners.git_guard import branch_change_error
 from automation.runners.queue import JobQueue, JobRecord
 from automation.runners.runtime_state import get_runtime_state
 from automation.runners.worker_context import get_cancel_event, stop_requested
-from automation.runners.git_guard import branch_change_error
 from automation.runners.worker_lock import (
     clear_lock,
     clear_stale_file_lock,
