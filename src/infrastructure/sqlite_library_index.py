@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from application.bridge_timing import sqlite_query_span
 from application.dto_mapper import empty_file_rows_page
 from application.file_row_query import NormalizedFileRowsQuery, text_sort_key
 from application.library_folder_persistence import normalize_library_folder_path
@@ -354,8 +355,13 @@ class SqliteLibraryIndex:
     def query_file_rows_page(self, normalized: NormalizedFileRowsQuery) -> dict[str, Any]:
         if self._current_folder is None:
             return empty_file_rows_page(normalized.wire_cursor)
-        with self._connect() as conn:
-            return query_sqlite_file_rows_page(conn, self._current_folder, normalized)
+        with sqlite_query_span("file_rows_page") as span:
+            span.limit = normalized.limit
+            span.offset = normalized.cursor_offset
+            with self._connect() as conn:
+                page = query_sqlite_file_rows_page(conn, self._current_folder, normalized)
+            span.row_count = len(page.get("rows", []))
+            return page
 
     @property
     def folder_path(self) -> str | None:
@@ -364,29 +370,32 @@ class SqliteLibraryIndex:
     def files(self) -> list[FileRecord]:
         if self._current_folder is None:
             return []
-        with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT id, relative_path, name, size_bytes, modified_at_ns, extension,
-                       content_sha256, encoding_status
-                FROM files WHERE folder_path = ?
-                ORDER BY relative_path
-                """,
-                (self._current_folder,),
-            ).fetchall()
-        return [
-            FileRecord(
-                id=row[0],
-                relative_path=row[1],
-                name=row[2],
-                size_bytes=row[3],
-                modified_at_ns=row[4],
-                extension=row[5],
-                content_sha256=row[6],
-                encoding_status=row[7],
-            )
-            for row in rows
-        ]
+        with sqlite_query_span("files_full_load") as span:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT id, relative_path, name, size_bytes, modified_at_ns, extension,
+                           content_sha256, encoding_status
+                    FROM files WHERE folder_path = ?
+                    ORDER BY relative_path
+                    """,
+                    (self._current_folder,),
+                ).fetchall()
+            records = [
+                FileRecord(
+                    id=row[0],
+                    relative_path=row[1],
+                    name=row[2],
+                    size_bytes=row[3],
+                    modified_at_ns=row[4],
+                    extension=row[5],
+                    content_sha256=row[6],
+                    encoding_status=row[7],
+                )
+                for row in rows
+            ]
+            span.row_count = len(records)
+            return records
 
     def file_count(self) -> int:
         if self._current_folder is None:

@@ -41,6 +41,7 @@ from application.app_settings import (
     InvalidSettingValueError,
     UnknownSettingKeyError,
 )
+from application.bridge_timing import instrument_bridge_api
 from application.file_row_query import normalize_file_rows_query
 from application.library_session import LibrarySession
 from application.log_query import LogQueryError
@@ -48,6 +49,7 @@ from application.review_errors import ReviewDecisionError
 from application.scan_settings import SettingsValidationError
 
 
+@instrument_bridge_api
 class BridgeApi:
     """Expose methods to ``window.pywebview.api`` (snake_case)."""
 

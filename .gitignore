@@ -30,6 +30,7 @@ MANIFEST
 
 # Packaging-generated (scripts/package_windows.py)
 src/app/_build_stamp.py
+packaging/fixtures/library-large/generated/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
