@@ -1,0 +1,32 @@
+---
+description: Git branch safety — no branch creation without human approval
+alwaysApply: true
+---
+
+# Git safety
+
+Full workflow: [docs/agents/git-safety.md](../../docs/agents/git-safety.md).
+
+## Branch policy
+
+**Do not create, switch, rename, delete, merge, or rebase branches** unless the user explicitly asked for that exact operation.
+
+Default: work on the **current branch only**. No `git checkout -b`, `git switch -c`, `git branch <name>`, or branch switches "to be safe."
+
+If a branch op seems useful → **stop**, report the exact command, wait for human approval.
+
+## Forbidden (never run without explicit approval)
+
+- `git checkout -b`, `git switch -c`, `git branch <name>`, `git branch -D`
+- `git checkout <branch>`, `git switch <branch>`
+- `git merge`, `git rebase`, `git reset --hard`, `git worktree add`
+
+## Allowed (typical)
+
+- `git status`, `git diff`, `git log`, `git rev-parse`, `git branch --show-current`
+- `git add`, `git commit` — only when user/job explicitly allows
+- `git checkout -- <file>` (restore paths, not branches)
+
+## Automation
+
+Runner may create job branches via `prepare_branch`; agents still must not branch-hop mid-job.

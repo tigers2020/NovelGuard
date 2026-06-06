@@ -10,7 +10,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from automation.linear.router import build_job_payload, dedupe_key, route_linear_webhook
+from automation.linear.linear_ids import route_debug
+from automation.linear.router import (
+    _labels_changed,
+    _state_changed,
+    build_job_payload,
+    dedupe_key,
+    route_linear_webhook,
+)
 from automation.runners.config import load_config, repo_root
 from automation.runners.queue import JobQueue
 
@@ -67,20 +74,29 @@ def process_linear_webhook(
     team_names = set(linear.get("team_names") or ["NoverGuard", "NovelGuard"])
     repo_key = str(linear.get("repo_key") or "novelguard")
 
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+
     route = route_linear_webhook(
         payload,
         project_names=project_names,
         team_names=team_names,
+        cfg=cfg,
     )
     if route is None:
-        return WebhookResult(status="ignored", message="No automation route for this event")
+        detail = ""
+        if _labels_changed(payload) or _state_changed(payload, data):
+            detail = f" ({route_debug(data, cfg)})"
+        return WebhookResult(
+            status="ignored",
+            message=f"No automation route for this event{detail}",
+        )
 
     cache = dedupe or DedupeCache(float(linear.get("dedupe_ttl_seconds") or 120))
-    key = dedupe_key(payload, route)
+    key = dedupe_key(payload, route, cfg=cfg)
     if cache.check_and_set(key):
         return WebhookResult(status="deduped", message=f"Duplicate suppressed: {key}")
 
-    job_payload = build_job_payload(payload, route, repo_key=repo_key)
+    job_payload = build_job_payload(payload, route, repo_key=repo_key, cfg=cfg)
 
     queue_path = Path(cfg.get("queue", {}).get("path", "automation/jobs/queue.sqlite"))
     if not queue_path.is_absolute():
@@ -88,10 +104,6 @@ def process_linear_webhook(
 
     queue = JobQueue(queue_path)
     stats = queue.stats()
-
-    if stats["running"] > 0 or stats["queued"] > 0:
-        # Still enqueue — worker is serial; avoids lost events.
-        pass
 
     try:
         queue.enqueue(job_payload)

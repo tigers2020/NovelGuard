@@ -29,6 +29,24 @@ Stop and report on instruction conflict.
 - No commit, push, PR, merge, or publish without explicit approval.
 - Opt-in only: `persona/`, legacy `protocols/`, Superpowers ceremony.
 
+## Git branch policy
+
+**No branch creation without a special reason.** Default: stay on the current branch; do not open a new branch “to be safe” or “for cleanup.”
+
+Agents **must not** create, rename, switch, delete, merge, or rebase branches unless the user explicitly requested that exact operation.
+
+Forbidden for agents (also enforced by `scripts/git_guard.py` on automation PATH):
+
+- `git checkout -b`, `git switch -c`, `git branch <name>`, `git branch -D`
+- `git merge`, `git rebase`, `git reset --hard`, `git worktree add`
+- `git checkout <branch>`, `git switch <branch>` (branch switches)
+
+Work only on the **current** branch. If a branch operation seems necessary, stop and report the exact command — do not run it.
+
+Orchestrator (`prepare_branch`) may create job branches; agents may still `git status`, `git diff`, `git add`, `git commit` when the job allows.
+
+Details: [docs/agents/git-safety.md](docs/agents/git-safety.md).
+
 ---
 
 ## Routing

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBridge, useRefreshSnapshot, useSnapshot } from "../../app/providers/snapshotHooks";
 import { BridgeCallError } from "../../bridge/bridgeErrors";
+import { withDegradedBridgeRetry } from "../../features/shared/useDegradedBridgeQuery";
 import { formatBytes } from "../../lib/format";
 import type {
   FileRow,
@@ -19,10 +20,10 @@ import {
   persistShellFileDockLayout,
 } from "./shellFileDockStorage";
 import { deriveShellFileDockState } from "./shellFileDockState";
+import { shouldClearRowsOnFetchFailure } from "./shellFileDockQueryPolicy";
 
 const SEARCH_DEBOUNCE_MS = 220;
 const PAGE_LIMIT = 100;
-const RETRY_DELAYS_MS = [1000, 3000, 5000] as const;
 
 type SortState = {
   field: FileRowSortField;
@@ -113,28 +114,22 @@ export function ShellFileDock({
       }
       try {
         setQueryError(null);
-        for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
-          try {
-            const page = await bridge.queryFileRows(buildQuery(cursor));
-            setRows((prev) => (append ? [...prev, ...page.rows] : page.rows));
-            setFilteredCount(page.pageInfo.totalFiltered);
-            setNextCursor(page.pageInfo.nextCursor);
-            setHasMore(page.pageInfo.hasMore);
-            setDegraded(false);
-            return;
-          } catch (err) {
-            const isTimeout = err instanceof BridgeCallError && err.code === "timeout";
-            if (!isTimeout) {
-              throw err;
-            }
-            setDegraded(true);
-            setQueryError(null);
-            if (attempt >= RETRY_DELAYS_MS.length) {
-              return;
-            }
-            await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
-          }
+        const result = await withDegradedBridgeRetry(() => bridge.queryFileRows(buildQuery(cursor)));
+        if (result.ok) {
+          const page = result.value;
+          setRows((prev) => (append ? [...prev, ...page.rows] : page.rows));
+          setFilteredCount(page.pageInfo.totalFiltered);
+          setNextCursor(page.pageInfo.nextCursor);
+          setHasMore(page.pageInfo.hasMore);
+          setDegraded(false);
+          return;
         }
+        if (result.timedOut) {
+          setDegraded(true);
+          setQueryError(null);
+          return;
+        }
+        throw result.error;
       } catch (err) {
         const message =
           err instanceof BridgeCallError && err.reason
@@ -143,7 +138,7 @@ export function ShellFileDock({
               ? err.message
               : "Failed to load files";
         setQueryError(message);
-        if (!append) {
+        if (shouldClearRowsOnFetchFailure(false, append)) {
           setRows([]);
           setFilteredCount(0);
           setNextCursor(null);

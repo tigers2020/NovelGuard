@@ -16,6 +16,7 @@ from typing import Any, Iterator
 
 from automation.runners import emit as emit_mod
 from automation.runners.config import load_config, repo_path, repo_root
+from automation.runners.context_compressor import compress_job_context
 from automation.runners.cursor_runner import (
     PROMPT_DELIVERY,
     is_cursor_proc_running,
@@ -29,6 +30,7 @@ from automation.runners.cursor_stall import (
     diagnose_cursor_stall,
     write_stall_diagnosis,
 )
+from automation.runners.git_guard import branch_change_error
 from automation.runners.queue import JobQueue, JobRecord
 from automation.runners.runtime_state import get_runtime_state
 from automation.runners.worker_context import get_cancel_event, stop_requested
@@ -59,6 +61,37 @@ def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProc
 @contextmanager
 def repo_lock(lock_path: Path) -> Iterator[None]:
     lock_path.parent.mkdir(parents=True, exist_ok=True)
+    if sys.platform == "win32":
+        import msvcrt
+
+        last_exc: OSError | None = None
+        for attempt in range(12):
+            clear_stale_file_lock(lock_path)
+            try:
+                handle = open(lock_path, "a+b")
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            except OSError as exc:
+                last_exc = exc
+                if attempt < 11:
+                    time.sleep(0.15 * (attempt + 1))
+                    continue
+                raise RuntimeError(f"Repo busy (lock exists): {lock_path}") from exc
+            try:
+                handle.seek(0)
+                handle.truncate()
+                handle.write(f"pid={os.getpid()} ts={time.time()}\n".encode())
+                handle.flush()
+                yield
+            finally:
+                try:
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+                finally:
+                    handle.close()
+            return
+        if last_exc is not None:
+            raise RuntimeError(f"Repo busy (lock exists): {lock_path}") from last_exc
+        return
+
     clear_stale_file_lock(lock_path)
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
     try:
@@ -98,10 +131,14 @@ _LEGACY_PROMPT_ALIASES: dict[str, str] = {
     "01a-linear-spec.md": "linear/todo/write-spec.md",
     "01b-linear-grill-plan.md": "linear/backlog/grill-plan.md",
     "01c-linear-spec-revise.md": "linear/todo/revise-spec.md",
-    "01d-linear-todo-list.md": "linear/todo/write-todo-list.md",
+    "01d-linear-todo-list.md": "linear/todo/write-task-list.md",
     "02-linear-in-progress-implement.md": "linear/in-progress/implement.md",
     "03-linear-in-review-verification.md": "linear/in-review/verify.md",
     "linear-issue-created.md": "linear/backlog/create-research.md",
+}
+
+_PROMPT_PATH_ALIASES: dict[str, str] = {
+    "linear/todo/write-todo-list.md": "linear/todo/write-task-list.md",
 }
 
 
@@ -110,6 +147,9 @@ def _resolve_prompt_file(prompts_dir: Path, prompt_file: str) -> str:
     direct = prompts_dir / prompt_file
     if direct.is_file():
         return prompt_file
+    path_alias = _PROMPT_PATH_ALIASES.get(prompt_file)
+    if path_alias and (prompts_dir / path_alias).is_file():
+        return path_alias
     alias = _LEGACY_PROMPT_ALIASES.get(prompt_file)
     if alias and (prompts_dir / alias).is_file():
         return alias
@@ -132,6 +172,16 @@ def render_prompt(cfg: dict[str, Any], payload: dict[str, Any], branch: str) -> 
     template = template_path.read_text(encoding="utf-8")
     meta = payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
     linear_event = meta.get("linear_event") if isinstance(meta, dict) else None
+    raw_context = "\n".join(
+        [
+            str(payload.get("task") or ""),
+            str(meta.get("route_reason") or ""),
+            json.dumps(linear_event or {}, ensure_ascii=False),
+        ]
+    )
+    memory_result = compress_job_context(cfg, payload=payload, raw_context=raw_context)
+    memory = memory_result.get("memory")
+    memory_json = json.dumps(memory, ensure_ascii=False, indent=2) if memory else "{}"
     replacements = {
         "{{TASK}}": str(payload["task"]),
         "{{JOB_ID}}": str(payload["id"]),
@@ -145,6 +195,8 @@ def render_prompt(cfg: dict[str, Any], payload: dict[str, Any], branch: str) -> 
             ensure_ascii=False,
             separators=(",", ":"),
         ),
+        "{{CONTEXT_MEMORY_JSON}}": memory_json,
+        "{{NEXT_PROMPT}}": str((memory or {}).get("next_prompt") or payload.get("task") or ""),
     }
     rendered = template
     for key, value in replacements.items():
@@ -155,6 +207,13 @@ def render_prompt(cfg: dict[str, Any], payload: dict[str, Any], branch: str) -> 
 def _working_tree_dirty(repo: Path) -> bool:
     status = _git(repo, "status", "--porcelain", check=False)
     return bool((status.stdout or "").strip())
+
+
+def _current_branch(repo: Path) -> str:
+    result = _git(repo, "rev-parse", "--abbrev-ref", "HEAD", check=False)
+    if result.returncode != 0:
+        return "?"
+    return (result.stdout or "").strip()
 
 
 def prepare_branch(
@@ -324,6 +383,9 @@ def process_job(cfg: dict[str, Any], record: JobRecord, *, prompt: str) -> dict[
             state.log_path = str(log_path)
             state.cursor_output_buffered = False
 
+        agent_branch = _current_branch(repo)
+        result["start_branch"] = agent_branch
+
         if tui:
             stall_seconds, stall_max_retries, stall_poll = cursor_stall_config(cfg)
             stall_retries = 0
@@ -396,8 +458,9 @@ def process_job(cfg: dict[str, Any], record: JobRecord, *, prompt: str) -> dict[
                 )
             finally:
                 log_file.close()
-                if state is not None:
-                    state.cursor_running = False
+
+            if state is not None:
+                state.cursor_running = False
         else:
             cursor = run_prompt(repo, prompt, cfg)
             log_path.write_text(
@@ -423,6 +486,15 @@ def process_job(cfg: dict[str, Any], record: JobRecord, *, prompt: str) -> dict[
         if tui:
             result["cursor"]["stall_retries"] = stall_retries
 
+        end_branch = _current_branch(repo)
+        result["end_branch"] = end_branch
+        branch_err = branch_change_error(agent_branch, end_branch)
+        if branch_err:
+            result["branch_guard_failed"] = True
+            result["branch_guard_error"] = branch_err
+            with log_path.open("a", encoding="utf-8") as log_file:
+                log_file.write(f"\n--- branch guard ---\n{branch_err}\n")
+
         if git_prepare:
             diff_stat = _git(repo, "diff", "--stat", check=False)
             result["diff_stat"] = diff_stat.stdout or ""
@@ -430,7 +502,7 @@ def process_job(cfg: dict[str, Any], record: JobRecord, *, prompt: str) -> dict[
         result["verify"] = run_verify(cfg, payload, repo)
         result["verify_ok"] = all(v["returncode"] == 0 for v in result["verify"])
 
-        ok = cursor.returncode == 0 and result["verify_ok"]
+        ok = cursor.returncode == 0 and result["verify_ok"] and branch_err is None
         result["status"] = "succeeded" if ok else "failed"
 
     result["log_path"] = str(log_path)

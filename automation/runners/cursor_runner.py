@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, Any, TextIO
 
+from automation.runners.git_guard import prepend_git_guard_path
+
 PROMPT_DELIVERY = "subprocess-stdin"
 
 _active_proc: subprocess.Popen[str] | None = None
@@ -85,6 +87,17 @@ def _logs_dir(cfg: dict[str, Any]) -> Path:
     return logs_dir
 
 
+def _append_log_line(log_file: TextIO | None, raw: str) -> None:
+    if log_file is None or log_file.closed:
+        return
+    try:
+        log_file.write(raw if raw.endswith("\n") else raw + "\n")
+        log_file.flush()
+    except (OSError, ValueError):
+        # Parent may close the log during interrupt shutdown while readers drain.
+        pass
+
+
 def _read_stream(
     stream: IO[str] | None,
     stream_name: str,
@@ -99,9 +112,7 @@ def _read_stream(
             line = raw.rstrip("\n\r")
             lines.append(raw if raw.endswith("\n") else raw + "\n")
             on_line(stream_name, line)
-            if log_file is not None:
-                log_file.write(raw if raw.endswith("\n") else raw + "\n")
-                log_file.flush()
+            _append_log_line(log_file, raw)
     finally:
         stream.close()
 
@@ -170,6 +181,7 @@ def run_prompt_streaming(
         text=True,
         encoding="utf-8",
         errors="replace",
+        env=prepend_git_guard_path(),
     )
 
     with _proc_lock:
@@ -196,35 +208,38 @@ def run_prompt_streaming(
     interrupted = False
     returncode: int | None = None
 
-    while returncode is None:
-        if cancel_event is not None and cancel_event.is_set():
-            interrupted = True
-            request_cancel()
-        with _proc_lock:
-            if _cancel_requested:
+    try:
+        while returncode is None:
+            if cancel_event is not None and cancel_event.is_set():
                 interrupted = True
+                request_cancel()
+            with _proc_lock:
+                if _cancel_requested:
+                    interrupted = True
 
-        returncode = proc.poll()
-        if returncode is not None:
-            break
-        time.sleep(0.1)
+            returncode = proc.poll()
+            if returncode is not None:
+                break
+            time.sleep(0.1)
 
-    if returncode is None:
-        returncode = proc.wait()
-
-    stdout_thread.join(timeout=30)
-    stderr_thread.join(timeout=30)
-    stdin_thread.join(timeout=5)
-
-    with _proc_lock:
-        _active_proc = None
+        if returncode is None:
+            returncode = proc.wait()
+    finally:
+        if proc.poll() is None:
+            try:
+                proc.terminate()
+            except OSError:
+                pass
+        stdout_thread.join(timeout=30)
+        stderr_thread.join(timeout=30)
+        stdin_thread.join(timeout=5)
+        with _proc_lock:
+            _active_proc = None
 
     if interrupted and returncode == 0:
         returncode = -1
 
-    if log_file is not None:
-        log_file.write(f"returncode: {returncode}\n")
-        log_file.flush()
+    _append_log_line(log_file, f"returncode: {returncode}\n")
 
     return CursorRunResult(
         command=display_cmd,
@@ -268,6 +283,7 @@ def run_prompt(
         capture_output=True,
         encoding="utf-8",
         errors="replace",
+        env=prepend_git_guard_path(),
     )
     display_cmd = cmd + [f"<stdin:{stdin_path.name}>"]
 

@@ -1,0 +1,21 @@
+{
+  "action": "update",
+  "type": "Issue",
+  "webhookId": "wh-stateid-in-review-001",
+  "updatedFrom": {
+    "stateId": "0be134b7-bc56-4ba6-ba76-6b0a705e2ded"
+  },
+  "data": {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "identifier": "NOV-36",
+    "title": "Large library loading stability",
+    "url": "https://linear.app/zkaufman/issue/NOV-36/example",
+    "teamId": "97047174-6453-4458-b170-a9bf5f7b52e0",
+    "projectId": "20965ebc-3ea7-4787-9310-f15ad9019007",
+    "stateId": "31a91042-9d59-49eb-8821-43ddd92ed76d",
+    "labelIds": [
+      "41269879-fa85-478c-bca6-3329340d8069",
+      "75d4a692-8214-4592-8f45-f29f93162b45"
+    ]
+  }
+}

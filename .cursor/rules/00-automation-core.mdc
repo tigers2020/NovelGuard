@@ -9,6 +9,7 @@ Read [AGENTS.md](../../AGENTS.md) first. It is canonical.
 
 Load only matching scoped rule/docs for current task:
 
+- Git / branch ops -> `05-git-safety.mdc`
 - Automation scripts -> `10-runner-safety.mdc`
 - Tests / verify -> `30-verify-gates.mdc`
 - `web/**` UI -> `40-web-tailwind.mdc`

@@ -1,0 +1,28 @@
+{
+  "action": "update",
+  "type": "Issue",
+  "webhookId": "wh-labelids-only-001",
+  "updatedFrom": {
+    "labelIds": ["bffa5b70-6009-4c1c-8f6a-f7fd62e79621"]
+  },
+  "data": {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "identifier": "NOV-42",
+    "title": "Slice 1 CI gate + operator sign-off",
+    "url": "https://linear.app/zkaufman/issue/NOV-42/example",
+    "project": {
+      "name": "NovelGuard"
+    },
+    "team": {
+      "name": "NoverGuard"
+    },
+    "state": {
+      "id": "49a46ce6-eb18-4377-95ae-b76f655a77b7",
+      "name": "Todo"
+    },
+    "labelIds": [
+      "bffa5b70-6009-4c1c-8f6a-f7fd62e79621",
+      "f3424dcd-6d2c-47f9-a8fe-5f4d5b626d27"
+    ]
+  }
+}

@@ -4,7 +4,8 @@ Minimal context for queued jobs. IDE sessions use [AGENTS.md](../../AGENTS.md) +
 
 ## Safety
 
-- Repo only; dedicated branch per job.
+- Repo only; dedicated branch per job (orchestrator creates via `prepare_branch`).
+- **Agents must not** create, switch, merge, rebase, or hard-reset branches — enforced by `git_guard` on agent PATH; job fails if branch changes during cursor run.
 - **No commit** unless job frontmatter / payload says `commit: true`.
 - **No merge** to `main`/`master` without human approval.
 - No destructive file moves without dry-run note + approval.

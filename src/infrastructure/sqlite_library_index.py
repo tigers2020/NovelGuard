@@ -5,12 +5,12 @@ from __future__ import annotations
 import json
 import logging
 import sqlite3
-import time
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from application.bridge_timing import sqlite_query_span
 from application.dto_mapper import empty_file_rows_page
 from application.file_row_query import NormalizedFileRowsQuery, text_sort_key
 from application.library_folder_persistence import normalize_library_folder_path
@@ -24,6 +24,8 @@ from domain.duplicate_near import (
 from domain.models import FileRecord
 from domain.quality import QualityIssue
 from infrastructure.sqlite_file_rows_page import query_sqlite_file_rows_page
+
+_LOGGER = logging.getLogger(__name__)
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS files (
@@ -320,52 +322,46 @@ class SqliteLibraryIndex:
         rows: list[tuple[str, str | None, bool, str | None]],
     ) -> None:
         """Replace 1:1 review enrichment rows for folder (file_id, group_id, is_keeper, group_key)."""
-        with self._connect() as conn:
-            conn.execute(
-                "DELETE FROM file_review_projection WHERE folder_path = ?",
-                (folder_path,),
-            )
-            if not rows:
-                return
-            conn.executemany(
-                """
-                INSERT INTO file_review_projection (
-                  folder_path, file_id, duplicate_group_id, is_keeper, duplicate_group_key
-                ) VALUES (?, ?, ?, ?, ?)
-                """,
-                [
-                    (
-                        folder_path,
-                        file_id,
-                        duplicate_group_id,
-                        1 if is_keeper else 0,
-                        duplicate_group_key,
-                    )
-                    for file_id, duplicate_group_id, is_keeper, duplicate_group_key in rows
-                ],
-            )
+        try:
+            with self._connect() as conn:
+                conn.execute(
+                    "DELETE FROM file_review_projection WHERE folder_path = ?",
+                    (folder_path,),
+                )
+                if not rows:
+                    return
+                conn.executemany(
+                    """
+                    INSERT INTO file_review_projection (
+                      folder_path, file_id, duplicate_group_id, is_keeper, duplicate_group_key
+                    ) VALUES (?, ?, ?, ?, ?)
+                    """,
+                    [
+                        (
+                            folder_path,
+                            file_id,
+                            duplicate_group_id,
+                            1 if is_keeper else 0,
+                            duplicate_group_key,
+                        )
+                        for file_id, duplicate_group_id, is_keeper, duplicate_group_key in rows
+                    ],
+                )
+        except sqlite3.OperationalError as exc:
+            if "locked" in str(exc).lower() or "busy" in str(exc).lower():
+                _LOGGER.debug("sqlite busy during replace_file_review_projection: %s", exc)
+            raise
 
     def query_file_rows_page(self, normalized: NormalizedFileRowsQuery) -> dict[str, Any]:
         if self._current_folder is None:
             return empty_file_rows_page(normalized.wire_cursor)
-        t0 = time.perf_counter()
-        with self._connect() as conn:
-            page = query_sqlite_file_rows_page(conn, self._current_folder, normalized)
-        elapsed_ms = int((time.perf_counter() - t0) * 1000)
-        logging.getLogger(__name__).debug(
-            "%s",
-            json.dumps(
-                {
-                    "event": "sqlite_query",
-                    "query_type": "file_rows_page",
-                    "query_ms": elapsed_ms,
-                    "row_count": len(page.get("rows", [])),
-                    "limit": normalized.limit,
-                    "offset": normalized.cursor_offset,
-                }
-            ),
-        )
-        return page
+        with sqlite_query_span("file_rows_page") as span:
+            span.limit = normalized.limit
+            span.offset = normalized.cursor_offset
+            with self._connect() as conn:
+                page = query_sqlite_file_rows_page(conn, self._current_folder, normalized)
+            span.row_count = len(page.get("rows", []))
+            return page
 
     @property
     def folder_path(self) -> str | None:
@@ -374,29 +370,32 @@ class SqliteLibraryIndex:
     def files(self) -> list[FileRecord]:
         if self._current_folder is None:
             return []
-        with self._connect() as conn:
-            rows = conn.execute(
-                """
-                SELECT id, relative_path, name, size_bytes, modified_at_ns, extension,
-                       content_sha256, encoding_status
-                FROM files WHERE folder_path = ?
-                ORDER BY relative_path
-                """,
-                (self._current_folder,),
-            ).fetchall()
-        return [
-            FileRecord(
-                id=row[0],
-                relative_path=row[1],
-                name=row[2],
-                size_bytes=row[3],
-                modified_at_ns=row[4],
-                extension=row[5],
-                content_sha256=row[6],
-                encoding_status=row[7],
-            )
-            for row in rows
-        ]
+        with sqlite_query_span("files_full_load") as span:
+            with self._connect() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT id, relative_path, name, size_bytes, modified_at_ns, extension,
+                           content_sha256, encoding_status
+                    FROM files WHERE folder_path = ?
+                    ORDER BY relative_path
+                    """,
+                    (self._current_folder,),
+                ).fetchall()
+            records = [
+                FileRecord(
+                    id=row[0],
+                    relative_path=row[1],
+                    name=row[2],
+                    size_bytes=row[3],
+                    modified_at_ns=row[4],
+                    extension=row[5],
+                    content_sha256=row[6],
+                    encoding_status=row[7],
+                )
+                for row in rows
+            ]
+            span.row_count = len(records)
+            return records
 
     def file_count(self) -> int:
         if self._current_folder is None:
