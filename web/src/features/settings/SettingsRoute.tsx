@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useBridge } from "../../app/providers/snapshotHooks";
 import { AppInfoDiagnostics } from "../AppInfoDiagnostics";
+import { UI_FALLBACK } from "../../lib/uiFallbackCopy";
 import type { AppSettingKey, AppSettingValue } from "../../types/settings";
 
 type SettingsSection = "scan" | "app";
@@ -24,7 +25,7 @@ export function SettingsRoute() {
       setExtensionFilter(String(ext.value));
       setIncludeHidden(Boolean(hidden.value));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load settings");
+      setError(err instanceof Error ? err.message : UI_FALLBACK.loadSettings);
     } finally {
       setLoading(false);
     }
@@ -40,7 +41,7 @@ export function SettingsRoute() {
     try {
       await bridge.setAppSetting(key, value);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save setting");
+      setError(err instanceof Error ? err.message : UI_FALLBACK.saveSetting);
       await loadSettings();
     }
   };

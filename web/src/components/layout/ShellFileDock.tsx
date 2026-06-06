@@ -3,6 +3,7 @@ import { useBridge, useRefreshSnapshot, useSnapshot } from "../../app/providers/
 import { BridgeCallError } from "../../bridge/bridgeErrors";
 import { withDegradedBridgeRetry } from "../../features/shared/useDegradedBridgeQuery";
 import { formatBytes } from "../../lib/format";
+import { UI_FALLBACK, collapsedFileDockSrSummary } from "../../lib/uiFallbackCopy";
 import type {
   FileRow,
   FileRowColumnPreset,
@@ -136,7 +137,7 @@ export function ShellFileDock({
             ? err.reason
             : err instanceof Error
               ? err.message
-              : "Failed to load files";
+              : UI_FALLBACK.loadFiles;
         setQueryError(message);
         if (shouldClearRowsOnFetchFailure(false, append)) {
           setRows([]);
@@ -389,7 +390,7 @@ export function ShellFileDock({
 
       {!expanded && library.fileCount > 0 && (
         <p className="sr-only">
-          Total size {formatBytes(library.totalBytes)}; issues {summary.issueCount}
+          {collapsedFileDockSrSummary(formatBytes(library.totalBytes), summary.issueCount)}
         </p>
       )}
     </section>

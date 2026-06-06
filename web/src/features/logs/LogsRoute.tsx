@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useBridge } from "../../app/providers/snapshotHooks";
+import { UI_FALLBACK } from "../../lib/uiFallbackCopy";
 import type { LogEntry, LogLevel, LogsArtifactsResponse } from "../../types/logs";
 
 export function LogsRoute() {
@@ -28,7 +29,7 @@ export function LogsRoute() {
         prev && artifactPage.artifacts.some((item) => item.id === prev) ? prev : null,
       );
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to load logs");
+      setError(err instanceof Error ? err.message : UI_FALLBACK.loadLogs);
     } finally {
       setLoading(false);
     }
