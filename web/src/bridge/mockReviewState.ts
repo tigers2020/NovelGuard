@@ -94,6 +94,16 @@ export function summarizeMockResolveAutoApprove(
   query: ReviewRowsQuery,
 ): ResolveAutoApproveSummary {
   const base = summarizeMockAutoSelectKeepers(rows, query);
+  const mergedQuery: ReviewRowsQuery = {
+    ...query,
+    filters: {
+      ...query.filters,
+      status: ["unreviewed"],
+    },
+  };
+  const unreviewedFileRows = filterReviewRows(rows, mergedQuery).filter(
+    (row) => row.rowKind === "file" && row.status === "unreviewed",
+  );
   const skippedRows = filterReviewRows(rows, query).filter(
     (row) =>
       row.rowKind === "file" &&
@@ -110,7 +120,7 @@ export function summarizeMockResolveAutoApprove(
     skippedConflictCount: skippedRows.filter((row) => row.status === "conflict").length,
     skippedExcludedCount: skippedRows.filter((row) => row.status === "excluded").length,
     keeperRowIds: base.keeperRowIds,
-    approveRowIds: fileRows.map((row) => row.id),
+    approveRowIds: unreviewedFileRows.map((row) => row.id),
     samples: {
       keepers: [],
       moveCandidates: [],

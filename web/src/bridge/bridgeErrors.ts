@@ -47,7 +47,9 @@ export class BridgeCallError extends Error {
     | "FINALIZE_NOT_CONFIGURED"
     | "INVALID_REQUEST"
     | "REPORT_NOT_FOUND"
-    | "INVALID_SETTING_VALUE";
+    | "INVALID_SETTING_VALUE"
+    | "JOB_ALREADY_RUNNING"
+    | "NO_UNREVIEWED_TARGETS";
   readonly details?: ApplyFailedDetails;
 
   constructor(
@@ -67,7 +69,9 @@ export class BridgeCallError extends Error {
         | "FINALIZE_NOT_CONFIGURED"
         | "INVALID_REQUEST"
         | "REPORT_NOT_FOUND"
-        | "INVALID_SETTING_VALUE";
+        | "INVALID_SETTING_VALUE"
+        | "JOB_ALREADY_RUNNING"
+        | "NO_UNREVIEWED_TARGETS";
       details?: ApplyFailedDetails;
       cause?: unknown;
     },
