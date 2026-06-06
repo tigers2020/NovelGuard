@@ -29,6 +29,7 @@ from app.bridge_contract import (
     validate_move_preview,
     validate_quality_repair_preview,
     validate_quality_rows_page,
+    validate_resolve_auto_approve_summary,
     validate_review_rows_page,
     validate_selection_scope,
 )
@@ -103,7 +104,7 @@ def test_clamp_query_limit_max_200() -> None:
 
 def test_pywebview_api_methods_match_locked_contract() -> None:
     """Canonical list: app.bridge_parity.PYWEBVIEW_API_METHODS (mirrors bridgeParity.ts)."""
-    assert len(PYWEBVIEW_API_METHODS) == 28
+    assert len(PYWEBVIEW_API_METHODS) == 29
     assert PYWEBVIEW_API_METHODS[0] == "get_app_info"
     assert PYWEBVIEW_API_METHODS[-1] == "cancel_finalize"
 
@@ -2352,6 +2353,134 @@ def test_summarize_auto_select_keepers_counts_unreviewed_file_rows(tmp_path: Pat
     assert summary["keeperCount"] <= summary["targetCount"]
     assert summary["moveCandidateCount"] == max(0, summary["targetCount"] - summary["keeperCount"])
     assert isinstance(summary["keeperRowIds"], list)
+
+
+def _synthetic_exact_group_fixture(
+    count: int,
+    *,
+    group_id: str = "exact:" + "a" * 64,
+) -> tuple[list[dict[str, object]], dict[str, FileRecord], dict[str, set[str]]]:
+    rows: list[dict[str, object]] = []
+    files_by_id: dict[str, FileRecord] = {}
+    member_ids: set[str] = set()
+    for index in range(count):
+        file_id = f"{index:064x}"
+        member_ids.add(file_id)
+        files_by_id[file_id] = FileRecord(
+            id=file_id,
+            relative_path=f"dup/file-{index}.txt",
+            name=f"file-{index}.txt",
+            size_bytes=100 + index,
+            modified_at_ns=index,
+            extension=".txt",
+            content_sha256=f"{index:064x}",
+        )
+        rows.append(
+            {
+                "id": f"file:dup-{file_id}",
+                "rowKind": "file",
+                "groupId": group_id,
+                "type": "exact",
+                "status": "unreviewed",
+                "name": f"file-{index}.txt",
+                "proposedAction": "move_duplicate",
+            }
+        )
+    return rows, files_by_id, {group_id: member_ids}
+
+
+def test_summarize_resolve_auto_approve_full_filter_no_500_cap() -> None:
+    from application.auto_select_summary import summarize_auto_select_keepers
+    from application.summarize_resolve_auto_approve import summarize_resolve_auto_approve
+
+    rows, files_by_id, members_by_group = _synthetic_exact_group_fixture(600)
+    query = {"viewMode": "all", "limit": 50, "filters": {"types": ["exact"]}}
+    capped = summarize_auto_select_keepers(rows, query, files_by_id=files_by_id)
+    full = summarize_resolve_auto_approve(
+        rows,
+        query,
+        files_by_id=files_by_id,
+        members_by_group=members_by_group,
+    )
+    validate_resolve_auto_approve_summary(full)
+    assert capped["targetCount"] == 500
+    assert full["unreviewedCount"] == 600
+    assert full["moveCandidateCount"] == 599
+    assert full["keeperCount"] == 1
+
+
+def test_summarize_resolve_auto_approve_keeper_uses_full_group_membership() -> None:
+    from application.summarize_resolve_auto_approve import summarize_resolve_auto_approve
+
+    group_id = "exact:" + "b" * 64
+    large_id = "a" * 64
+    small_id = "c" * 64
+    files_by_id = {
+        large_id: FileRecord(
+            id=large_id,
+            relative_path="large.txt",
+            name="large.txt",
+            size_bytes=200,
+            modified_at_ns=1,
+            extension=".txt",
+            content_sha256="1" * 64,
+        ),
+        small_id: FileRecord(
+            id=small_id,
+            relative_path="small.txt",
+            name="small.txt",
+            size_bytes=50,
+            modified_at_ns=2,
+            extension=".txt",
+            content_sha256="2" * 64,
+        ),
+    }
+    rows = [
+        {
+            "id": f"file:dup-{large_id}",
+            "rowKind": "file",
+            "groupId": group_id,
+            "type": "exact",
+            "status": "approved",
+            "name": "large.txt",
+            "proposedAction": "keep",
+        },
+        {
+            "id": f"file:dup-{small_id}",
+            "rowKind": "file",
+            "groupId": group_id,
+            "type": "exact",
+            "status": "unreviewed",
+            "name": "small.txt",
+            "proposedAction": "move_duplicate",
+        },
+    ]
+    summary = summarize_resolve_auto_approve(
+        rows,
+        {"viewMode": "all", "limit": 50, "filters": {"types": ["exact"]}},
+        files_by_id=files_by_id,
+        members_by_group={group_id: {large_id, small_id}},
+    )
+    assert summary["unreviewedCount"] == 1
+    assert summary["keeperCount"] == 0
+    assert summary["moveCandidateCount"] == 1
+
+
+def test_summarize_resolve_auto_approve_bridge_counts_unreviewed_file_rows(tmp_path: Path) -> None:
+    (tmp_path / "a.txt").write_text("x" * 100, encoding="utf-8")
+    (tmp_path / "b.txt").write_text("x" * 100, encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    summary = api.summarize_resolve_auto_approve({"viewMode": "all", "limit": 50})
+    validate_resolve_auto_approve_summary(summary)
+    assert summary["unreviewedCount"] >= 0
+    assert summary["keeperCount"] <= summary["unreviewedCount"]
+    assert summary["moveCandidateCount"] == max(
+        0, summary["unreviewedCount"] - summary["keeperCount"]
+    )
 
 
 def test_relation_token_precedence_v2_is_version_not_numeric() -> None:

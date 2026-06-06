@@ -1,4 +1,5 @@
 import type { AutoSelectKeepersSummary } from "../types/autoSelectSummary";
+import type { ResolveAutoApproveSummary } from "../types/resolveAutoApproveSummary";
 import type { ReviewRow, ReviewRowsQuery } from "../types/review";
 import type { ReviewDecisionCommand } from "../types/reviewDecisions";
 import { filterReviewRows } from "./mockData";
@@ -85,6 +86,37 @@ export function summarizeMockAutoSelectKeepers(
     nearCount,
     relationCount,
     keeperRowIds,
+  };
+}
+
+export function summarizeMockResolveAutoApprove(
+  rows: ReviewRow[],
+  query: ReviewRowsQuery,
+): ResolveAutoApproveSummary {
+  const base = summarizeMockAutoSelectKeepers(rows, query);
+  const skippedRows = filterReviewRows(rows, query).filter(
+    (row) =>
+      row.rowKind === "file" &&
+      (row.status === "conflict" || row.status === "excluded") &&
+      (row.type === "exact" || row.type === "near" || row.type === "relation"),
+  );
+  return {
+    unreviewedCount: base.targetCount,
+    keeperCount: base.keeperCount,
+    moveCandidateCount: base.moveCandidateCount,
+    exactCount: base.exactCount,
+    nearCount: base.nearCount,
+    relationCount: base.relationCount,
+    skippedConflictCount: skippedRows.filter((row) => row.status === "conflict").length,
+    skippedExcludedCount: skippedRows.filter((row) => row.status === "excluded").length,
+    keeperRowIds: base.keeperRowIds,
+    samples: {
+      keepers: [],
+      moveCandidates: [],
+      exact: [],
+      near: [],
+      relation: [],
+    },
   };
 }
 

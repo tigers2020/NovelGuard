@@ -27,6 +27,7 @@ from app.bridge_contract import (
     validate_quality_issue_detail,
     validate_quality_repair_preview,
     validate_quality_rows_page,
+    validate_resolve_auto_approve_summary,
     validate_review_rows_page,
     validate_selection_scope,
 )
@@ -227,6 +228,13 @@ class BridgeApi:
         if not isinstance(query, dict) or not query.get("viewMode"):
             raise PreviewApplyError("INVALID_REVIEW_COMMAND", "query.viewMode required")
         return self._session.summarize_auto_select_keepers(query)
+
+    def summarize_resolve_auto_approve(self, query: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(query, dict) or not query.get("viewMode"):
+            raise PreviewApplyError("INVALID_REVIEW_COMMAND", "query.viewMode required")
+        payload = self._session.summarize_resolve_auto_approve(query)
+        validate_resolve_auto_approve_summary(payload)
+        return payload
 
     def get_app_info(self) -> dict[str, Any]:
         payload = version.get_app_info()
