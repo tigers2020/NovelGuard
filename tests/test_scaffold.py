@@ -321,6 +321,211 @@ def test_undo_manifest_loader_rejects_duplicate_operation_ids() -> None:
     assert exc.value.code == "DUPLICATE_OPERATION_ID"
 
 
+def _undo_test_store(tmp_path: Path):
+    from application.recovery_store import JsonlRecoveryStore
+
+    return JsonlRecoveryStore(
+        checkpoints_path=tmp_path / "recovery-checkpoints.jsonl",
+        undo_plans_dir=tmp_path / "undo-plans",
+    )
+
+
+def _write_undo_manifest(store, payload: dict) -> None:
+    store.write_undo_manifest(payload)
+
+
+def _recoverable_layout(tmp_path: Path, *, content: str = "hello") -> tuple[Path, str]:
+    from application.move_source_hash import content_hash_for_move
+
+    library = tmp_path / "lib"
+    library.mkdir()
+    dup_root = tmp_path / "duplicate" / "lib"
+    dup_root.mkdir(parents=True)
+    moved = dup_root / "chapter.txt"
+    moved.write_text(content, encoding="utf-8")
+    after_hash = content_hash_for_move(moved, size_bytes=moved.stat().st_size)
+    return library, after_hash
+
+
+def test_undo_execute_full_success(tmp_path: Path) -> None:
+    from application.undo_dry_run_planner import plan_move_undo_dry_run
+    from application.undo_manifest_loader import parse_and_validate_undo_manifest
+    from application.undo_move_executor import execute_move_undo_from_store
+
+    library, after_hash = _recoverable_layout(tmp_path)
+    payload = _move_undo_manifest_dict(after_hash=after_hash)
+    store = _undo_test_store(tmp_path)
+    _write_undo_manifest(store, payload)
+    manifest = parse_and_validate_undo_manifest(payload)
+    plan = plan_move_undo_dry_run(library_root=library, manifest=manifest)
+
+    result = execute_move_undo_from_store(library_root=library, store=store, plan=plan)
+
+    assert result.no_op is False
+    assert result.manifest_status == "completed"
+    assert result.recovered_count == 1
+    assert result.failed_count == 0
+    assert (library / "chapter.txt").read_text(encoding="utf-8") == "hello"
+    assert not (tmp_path / "duplicate" / "lib" / "chapter.txt").exists()
+
+    updated = json.loads(store.undo_manifest_path("plan-1").read_text(encoding="utf-8"))
+    assert updated["status"] == "completed"
+    assert updated["execution"]["recoveredCount"] == 1
+
+
+def test_undo_execute_partial_failure(tmp_path: Path) -> None:
+    from application.move_source_hash import content_hash_for_move
+    from application.undo_dry_run_planner import plan_move_undo_dry_run
+    from application.undo_manifest_loader import parse_and_validate_undo_manifest
+    from application.undo_move_executor import execute_move_undo_from_store
+
+    library = tmp_path / "lib"
+    library.mkdir()
+    dup_root = tmp_path / "duplicate" / "lib"
+    dup_root.mkdir(parents=True)
+    first = dup_root / "a.txt"
+    second = dup_root / "b.txt"
+    first.write_text("one", encoding="utf-8")
+    second.write_text("two", encoding="utf-8")
+    first_hash = content_hash_for_move(first, size_bytes=first.stat().st_size)
+    second_hash = content_hash_for_move(second, size_bytes=second.stat().st_size)
+
+    payload = _move_undo_manifest_dict(after_hash=first_hash)
+    payload["items"] = [
+        {
+            "operationId": "op-1",
+            "sequence": 1,
+            "operationType": "move_duplicate",
+            "undoAction": "move_back",
+            "fromPath": "a.txt",
+            "toPath": "a.txt",
+            "backupPath": None,
+            "recoverability": "recoverable",
+            "manualRequired": False,
+            "driftPolicy": "strict",
+            "collisionPolicy": "block",
+            "checkpointRef": {"beforeHash": "h1", "afterHash": first_hash},
+        },
+        {
+            "operationId": "op-2",
+            "sequence": 2,
+            "operationType": "move_duplicate",
+            "undoAction": "move_back",
+            "fromPath": "b.txt",
+            "toPath": "b.txt",
+            "backupPath": None,
+            "recoverability": "recoverable",
+            "manualRequired": False,
+            "driftPolicy": "strict",
+            "collisionPolicy": "block",
+            "checkpointRef": {"beforeHash": "h2", "afterHash": second_hash},
+        },
+    ]
+    store = _undo_test_store(tmp_path)
+    _write_undo_manifest(store, payload)
+    manifest = parse_and_validate_undo_manifest(payload)
+    plan = plan_move_undo_dry_run(library_root=library, manifest=manifest)
+    assert plan.recoverable_count == 2
+    second.unlink()
+
+    result = execute_move_undo_from_store(library_root=library, store=store, plan=plan)
+
+    assert result.manifest_status == "partial"
+    assert result.recovered_count == 1
+    assert result.failed_count == 1
+    assert (library / "a.txt").exists()
+    assert not (library / "b.txt").exists()
+    updated = json.loads(store.undo_manifest_path("plan-1").read_text(encoding="utf-8"))
+    assert updated["status"] == "partial"
+
+
+def test_undo_execute_blocks_source_collision_at_recheck(tmp_path: Path) -> None:
+    from application.undo_dry_run_planner import plan_move_undo_dry_run
+    from application.undo_manifest_loader import parse_and_validate_undo_manifest
+    from application.undo_move_executor import execute_move_undo_from_store
+
+    library, after_hash = _recoverable_layout(tmp_path)
+    payload = _move_undo_manifest_dict(after_hash=after_hash)
+    store = _undo_test_store(tmp_path)
+    _write_undo_manifest(store, payload)
+    manifest = parse_and_validate_undo_manifest(payload)
+    plan = plan_move_undo_dry_run(library_root=library, manifest=manifest)
+    assert plan.recoverable_count == 1
+    (library / "chapter.txt").write_text("occupied", encoding="utf-8")
+
+    result = execute_move_undo_from_store(library_root=library, store=store, plan=plan)
+
+    assert result.recovered_count == 0
+    assert result.failed_count == 1
+    assert result.items[0].status == "recovery_failed"
+    assert result.items[0].reason == "source_occupied"
+    assert (tmp_path / "duplicate" / "lib" / "chapter.txt").exists()
+
+
+def test_undo_execute_blocks_missing_file_before_execution(tmp_path: Path) -> None:
+    from application.undo_dry_run_planner import plan_move_undo_dry_run
+    from application.undo_manifest_loader import parse_and_validate_undo_manifest
+    from application.undo_move_executor import execute_move_undo_from_store
+
+    library, after_hash = _recoverable_layout(tmp_path)
+    (tmp_path / "duplicate" / "lib" / "chapter.txt").unlink()
+    payload = _move_undo_manifest_dict(after_hash=after_hash)
+    store = _undo_test_store(tmp_path)
+    _write_undo_manifest(store, payload)
+    manifest = parse_and_validate_undo_manifest(payload)
+    plan = plan_move_undo_dry_run(library_root=library, manifest=manifest)
+    assert plan.blocked_count == 1
+
+    result = execute_move_undo_from_store(library_root=library, store=store, plan=plan)
+
+    assert result.recovered_count == 0
+    assert result.excluded_count == 1
+    assert result.items[0].status == "excluded"
+    assert result.items[0].reason == "dest_missing"
+
+
+def test_undo_execute_repeat_is_idempotent(tmp_path: Path) -> None:
+    from application.undo_dry_run_planner import plan_move_undo_dry_run
+    from application.undo_manifest_loader import parse_and_validate_undo_manifest
+    from application.undo_move_executor import execute_move_undo_from_store
+
+    library, after_hash = _recoverable_layout(tmp_path)
+    payload = _move_undo_manifest_dict(after_hash=after_hash)
+    store = _undo_test_store(tmp_path)
+    _write_undo_manifest(store, payload)
+    manifest = parse_and_validate_undo_manifest(payload)
+    plan = plan_move_undo_dry_run(library_root=library, manifest=manifest)
+
+    first = execute_move_undo_from_store(library_root=library, store=store, plan=plan)
+    second = execute_move_undo_from_store(library_root=library, store=store, plan=plan)
+
+    assert first.recovered_count == 1
+    assert second.no_op is True
+    assert second.manifest_status == "completed"
+    assert (library / "chapter.txt").read_text(encoding="utf-8") == "hello"
+
+
+def test_undo_execute_skips_manual_required_items(tmp_path: Path) -> None:
+    from application.undo_dry_run_planner import plan_move_undo_dry_run
+    from application.undo_manifest_loader import parse_and_validate_undo_manifest
+    from application.undo_move_executor import execute_move_undo_from_store
+
+    library, after_hash = _recoverable_layout(tmp_path, content="changed")
+    payload = _move_undo_manifest_dict(after_hash="stale-hash", drift_policy="manual")
+    store = _undo_test_store(tmp_path)
+    _write_undo_manifest(store, payload)
+    manifest = parse_and_validate_undo_manifest(payload)
+    plan = plan_move_undo_dry_run(library_root=library, manifest=manifest)
+    assert plan.manual_required_count == 1
+
+    result = execute_move_undo_from_store(library_root=library, store=store, plan=plan)
+
+    assert result.recovered_count == 0
+    assert result.excluded_count == 1
+    assert result.items[0].status == "excluded"
+    assert (tmp_path / "duplicate" / "lib" / "chapter.txt").exists()
+
+
 def test_undo_dry_run_is_idempotent(tmp_path: Path) -> None:
     from application.move_source_hash import content_hash_for_move
     from application.undo_dry_run_planner import plan_move_undo_dry_run
