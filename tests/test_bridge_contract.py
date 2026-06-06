@@ -1915,8 +1915,11 @@ def test_start_scan_during_apply_raises_library_busy(tmp_path: Path) -> None:
 
 
 def test_partial_apply_batch_records_audit_and_raises(
-    tmp_path: Path, tmp_path_factory: pytest.TempPathFactory
+    tmp_path: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setenv("NOVELGUARD_LOCALAPPDATA", str(tmp_path / "local"))
     audit_file = tmp_path_factory.mktemp("audit") / "apply-audit.jsonl"
     fs = _FailOnNthMoveAdapter(fail_on=3)
     api = _quad_duplicate_api(tmp_path, audit_path=audit_file, filesystem=fs)
@@ -1949,6 +1952,56 @@ def test_partial_apply_batch_records_audit_and_raises(
     assert outcomes.count("ok") == 2
     assert outcomes.count("error") == 1
     assert api.get_snapshot()["work"]["resolve"]["hasPendingApply"] is False
+
+    checkpoints_path = api._session.recovery_checkpoints_path()
+    assert checkpoints_path.exists()
+    checkpoints = [
+        json.loads(line) for line in checkpoints_path.read_text(encoding="utf-8").splitlines() if line
+    ]
+    assert len(checkpoints) == 2
+    assert all(cp["operationType"] == "move_duplicate" for cp in checkpoints)
+    assert [cp["sequence"] for cp in checkpoints] == [1, 2]
+
+    undo_plans = list(api._session.undo_plans_dir().glob("*.json"))
+    assert len(undo_plans) == 1
+    manifest = json.loads(undo_plans[0].read_text(encoding="utf-8"))
+    assert manifest["runStatus"] == "partially_applied"
+    assert manifest["summary"]["appliedCount"] == 2
+    assert manifest["summary"]["failedCount"] == 1
+    assert manifest["failedRowId"] is not None
+    assert len(manifest["items"]) == 2
+    failed_row = exc.value.details.get("failedRowId")
+    assert manifest["failedRowId"] == failed_row
+
+
+def test_apply_success_writes_recovery_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("NOVELGUARD_LOCALAPPDATA", str(tmp_path / "local"))
+    api = _duplicate_api(tmp_path)
+    page = api.query_review_rows({"viewMode": "all", "limit": 50})
+    move_row = next(row for row in page["rows"] if row.get("proposedAction") == "move_duplicate")
+    sel = {"type": "explicit_rows", "rowIds": [move_row["id"]]}
+    preview = api.get_move_preview(sel)
+    api.apply_resolved_actions({"selection": sel, "previewToken": preview["previewToken"]})
+
+    checkpoints_path = api._session.recovery_checkpoints_path()
+    assert checkpoints_path.exists()
+    checkpoints = [
+        json.loads(line) for line in checkpoints_path.read_text(encoding="utf-8").splitlines() if line
+    ]
+    assert len(checkpoints) == 1
+    assert checkpoints[0]["status"] == "applied"
+    assert checkpoints[0]["sourcePath"]
+    assert checkpoints[0]["destinationPath"]
+
+    undo_plans = list(api._session.undo_plans_dir().glob("*.json"))
+    assert len(undo_plans) == 1
+    manifest = json.loads(undo_plans[0].read_text(encoding="utf-8"))
+    assert manifest["runStatus"] == "completed"
+    assert manifest["summary"]["appliedCount"] == 1
+    assert manifest["summary"]["failedCount"] == 0
+    assert len(manifest["items"]) == 1
 
 
 def test_get_duplicate_group_detail_members_and_keeper(tmp_path: Path) -> None:

@@ -238,6 +238,27 @@ class LibrarySession:
             path: Path = self._runtime_paths.repair_backup_root
             return path
 
+    def library_id(self) -> str:
+        with self._lock:
+            if self._runtime_paths is None:
+                raise RuntimeError("Library runtime paths not configured")
+            library_id: str = self._runtime_paths.library_id
+            return library_id
+
+    def recovery_checkpoints_path(self) -> Path:
+        with self._lock:
+            if self._runtime_paths is None:
+                raise RuntimeError("Library runtime paths not configured")
+            path: Path = self._runtime_paths.recovery_checkpoints_path
+            return path
+
+    def undo_plans_dir(self) -> Path:
+        with self._lock:
+            if self._runtime_paths is None:
+                raise RuntimeError("Library runtime paths not configured")
+            path: Path = self._runtime_paths.undo_plans_dir
+            return path
+
     def select_folder(self, path: str | None = None) -> None:
         remember_folder = path is None
         folder = path

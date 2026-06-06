@@ -9,7 +9,9 @@ from app.bridge_contract import ApplyFailedError, PreviewApplyError
 from app.preview_apply_guard import PreviewApplyGuard
 from application.audit_log import AuditLog
 from application.library_session import LibrarySession
+from application.move_apply_recovery_run import MoveApplyRecoveryRun
 from application.move_source_hash import content_hash_for_move
+from application.recovery_store import JsonlRecoveryStore
 from application.plan_fingerprint import plan_fingerprint
 from application.ports.filesystem_apply import FilesystemApplyPort
 from domain.apply_path_policy import (
@@ -26,11 +28,14 @@ class ApplyResolvedActionsUseCase:
         guard: PreviewApplyGuard,
         audit: AuditLog,
         filesystem: FilesystemApplyPort,
+        *,
+        recovery_store: JsonlRecoveryStore | None = None,
     ) -> None:
         self._session = session
         self._guard = guard
         self._audit = audit
         self._filesystem = filesystem
+        self._recovery_store = recovery_store
 
     def execute(self, *, preview_token: str, library_revision_at_validate: int) -> None:
         if self._session.is_apply_or_scan_busy():
@@ -64,12 +69,21 @@ class ApplyResolvedActionsUseCase:
         succeeded = 0
         failed_row_id: str | None = None
         error_message: str | None = None
+        recovery_run: MoveApplyRecoveryRun | None = None
+        if self._recovery_store is not None:
+            recovery_run = MoveApplyRecoveryRun(
+                self._recovery_store,
+                library_id=self._session.library_id(),
+                preview_token=preview_token,
+                library_revision_at_start=library_revision_at_validate,
+            )
 
         try:
             self._audit.append(
                 "apply_started",
                 previewToken=preview_token,
                 libraryRevision=pending.library_revision,
+                runId=recovery_run.run_id if recovery_run is not None else None,
             )
 
             for op in operations:
@@ -143,6 +157,9 @@ class ApplyResolvedActionsUseCase:
                     break
 
                 succeeded += 1
+                operation_id: str | None = None
+                if recovery_run is not None:
+                    operation_id = recovery_run.record_applied(op, dest_path=dest)
                 self._audit.append(
                     "apply_row",
                     previewToken=preview_token,
@@ -151,6 +168,8 @@ class ApplyResolvedActionsUseCase:
                     source=op.source_path,
                     dest=op.dest_path,
                     outcome="ok",
+                    operationId=operation_id,
+                    runId=recovery_run.run_id if recovery_run is not None else None,
                 )
 
             if succeeded >= 1:
@@ -206,6 +225,13 @@ class ApplyResolvedActionsUseCase:
             self._guard.clear()
             self._session.set_has_pending_apply(False)
         finally:
+            if recovery_run is not None and (succeeded > 0 or failed_row_id is not None):
+                recovery_run.seal(
+                    succeeded=succeeded,
+                    failed_row_id=failed_row_id,
+                    failed_error=error_message,
+                    library_revision_at_seal=self._session.library_revision(),
+                )
             self._session.set_apply_in_progress(False)
 
     def _finish_empty(self) -> None:
