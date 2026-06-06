@@ -24,11 +24,11 @@ from app.runtime_paths import (
 from application.app_settings import AppSettings
 from application.audit_log import AuditLog
 from application.library_session import LibrarySession
-from application.recovery_store import JsonlRecoveryStore
 from application.log_buffer import attach_session_log_handler
 from application.ports.filesystem_apply import FilesystemApplyPort
 from application.ports.filesystem_repair import FilesystemRepairPort
 from application.ports.library_index import LibraryIndexPort
+from application.recovery_store import JsonlRecoveryStore
 from application.settings_store import SettingsStore
 from infrastructure.filesystem_scanner import ScanStreamResult, scan_folder_stream
 from infrastructure.local_filesystem_apply import LocalFilesystemApplyAdapter

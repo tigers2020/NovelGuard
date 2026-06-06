@@ -7,7 +7,6 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from hashlib import sha256
 from pathlib import Path
-from typing import Any
 
 from application.move_source_hash import content_hash_for_move
 from application.recovery_store import JsonlRecoveryStore

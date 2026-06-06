@@ -11,9 +11,9 @@ from application.audit_log import AuditLog
 from application.library_session import LibrarySession
 from application.move_apply_recovery_run import MoveApplyRecoveryRun
 from application.move_source_hash import content_hash_for_move
-from application.recovery_store import JsonlRecoveryStore
 from application.plan_fingerprint import plan_fingerprint
 from application.ports.filesystem_apply import FilesystemApplyPort
+from application.recovery_store import JsonlRecoveryStore
 from domain.apply_path_policy import (
     DEFAULT_MOVE_DUPLICATE_FOLDER,
     resolve_duplicate_destination_path,
