@@ -25,12 +25,19 @@ Commit under test:
 4. [ ] Scan section reaches success; `deepAnalysisStatus` becomes `complete` **or** error banner is shown with actionable message.
 5. [ ] Resolve tab loads duplicate groups after deep analysis completes (smoke sample: open one group).
 
-## Slice 1 (NOV-36) — degraded loading
+## Slice 1 (NOV-36 / [NOV-42](https://linear.app/zkaufman/issue/NOV-42)) — degraded loading
 
-1. [ ] FileDock first page within 30s of indexReady OR degraded banner (no hard timeout alert)
-2. [ ] Resolve first page within 30s; no full-preload stall when >500 rows
-3. [ ] Partial rows remain visible during retry
-4. [ ] DEBUG logs contain `bridge_timing`, `lock_wait`, `sqlite_query`, `post_scan_phase` events
+Canonical operator path: `F:\kiwi\text\소설\정리` (machine-specific; never run in CI).  
+Design reference: [spec 034 §8](../superpowers/specs/034-2026-06-05-infra-large-library-loading-stability-design.md).
+
+1. [ ] Select `F:\kiwi\text\소설\정리` (or approved staging copy) and start scan.
+2. [ ] **FileDock** first page within 30s of `indexReady` **or** degraded banner (`백그라운드 분석 중 — 목록 일부만 표시됨`); no hard timeout alert.
+3. [ ] Open **Resolve**; first page within 30s; no full-preload stall when `totalFiltered > 500`.
+4. [ ] Partial rows remain visible during bridge retry (no empty-table wipe on timeout).
+5. [ ] UI shows **no bare** `BridgeCallError code=timeout` strings (banner only).
+6. [ ] DEBUG logs contain `bridge_timing`, `lock_wait`, `sqlite_query`, `post_scan_phase` events.
+
+Post checklist: record `## Operator sign-off` on [NOV-42](https://linear.app/zkaufman/issue/NOV-42) with PASS/FAIL and notes.
 
 ## Automated regression (developer / CI)
 
