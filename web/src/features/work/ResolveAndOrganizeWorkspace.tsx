@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { SortingState } from "@tanstack/react-table";
 import { useBridge, useRefreshSnapshot, useSnapshot } from "../../app/providers/snapshotHooks";
-import { BridgeCallError } from "../../bridge/bridgeErrors";
+import { withDegradedBridgeRetry } from "../shared/useDegradedBridgeQuery";
 import type {
   DuplicateGroupDetail,
   DuplicateGroupMemberDetail,
@@ -63,9 +63,7 @@ export function ResolveAndOrganizeWorkspace({
   const refreshSnapshot = useRefreshSnapshot();
   const snapshot = useSnapshot();
   const resolve = snapshot.work.resolve;
-  const pipelineBusy = Boolean(snapshot.pipeline.background?.active);
-  const deepAnalysisRunning = snapshot.work.scan.deepAnalysisStatus === "running";
-  const isExpectedSlow = pipelineBusy || deepAnalysisRunning;
+  const deepAnalysisComplete = snapshot.work.scan.deepAnalysisComplete;
 
   const [viewMode, setViewMode] = useState<ReviewViewMode>("action");
   const [facetExpanded, setFacetExpanded] = useState(() => loadResolveFacetExpanded());
@@ -85,7 +83,7 @@ export function ResolveAndOrganizeWorkspace({
   const [selectedRow, setSelectedRow] = useState<ReviewRow | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [degraded, setDegraded] = useState(false);
-  const showDegradedBanner = degraded || isExpectedSlow;
+  const showDegradedBanner = degraded || !deepAnalysisComplete;
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnSizing, setColumnSizing] = useState<Record<string, number>>(loadColumnSizing);
   const [detail, setDetail] = useState<DuplicateGroupDetail | null>(null);
@@ -179,15 +177,36 @@ export function ResolveAndOrganizeWorkspace({
       try {
         while (true) {
           if (seq !== loadSeqRef.current) return;
-          const page = await bridge.queryReviewRows({ ...currentQuery, cursor });
+          const result = await withDegradedBridgeRetry(() =>
+            bridge.queryReviewRows({ ...currentQuery, cursor }),
+          );
           if (seq !== loadSeqRef.current) return;
 
+          if (!result.ok) {
+            if (result.timedOut) {
+              setDegraded(true);
+              setQueryError(null);
+            } else {
+              setQueryError(
+                result.error instanceof Error ? result.error.message : "Failed to load rows",
+              );
+              if (accumulated.length === 0) {
+                setRows([]);
+                setFilteredCount(0);
+                setNextCursor(null);
+              }
+            }
+            return;
+          }
+
+          const page = result.value;
           accumulated = accumulated.concat(page.rows);
           cursor = page.pageInfo.nextCursor;
 
           setRows(accumulated);
           setFilteredCount(page.pageInfo.totalFiltered);
           setNextCursor(cursor);
+          setDegraded(false);
 
           if (!cursor || accumulated.length >= page.pageInfo.totalFiltered) break;
         }
@@ -206,12 +225,8 @@ export function ResolveAndOrganizeWorkspace({
         }
       } catch (err) {
         if (seq !== loadSeqRef.current) return;
-        const isTimeout = err instanceof BridgeCallError && err.code === "timeout";
-        if (isTimeout) {
-          setDegraded(true);
-          setQueryError(null);
-        } else {
-          setQueryError(err instanceof Error ? err.message : "Failed to load rows");
+        setQueryError(err instanceof Error ? err.message : "Failed to load rows");
+        if (accumulated.length === 0) {
           setRows([]);
           setFilteredCount(0);
           setNextCursor(null);
@@ -232,7 +247,22 @@ export function ResolveAndOrganizeWorkspace({
         setLoading(true);
         setQueryError(null);
         try {
-          const first = await bridge.queryReviewRows({ ...currentQuery, cursor: null });
+          const result = await withDegradedBridgeRetry(() =>
+            bridge.queryReviewRows({ ...currentQuery, cursor: null }),
+          );
+          if (!result.ok) {
+            if (result.timedOut) {
+              setDegraded(true);
+              setQueryError(null);
+            } else {
+              setQueryError(
+                result.error instanceof Error ? result.error.message : "Failed to load rows",
+              );
+            }
+            return;
+          }
+
+          const first = result.value;
           if (first.pageInfo.totalFiltered > LARGE_LIBRARY_THRESHOLD) {
             setRows(first.rows);
             setFilteredCount(first.pageInfo.totalFiltered);
@@ -245,13 +275,7 @@ export function ResolveAndOrganizeWorkspace({
           }
           await loadAllFiltered();
         } catch (err) {
-          const isTimeout = err instanceof BridgeCallError && err.code === "timeout";
-          if (isTimeout) {
-            setDegraded(true);
-            setQueryError(null);
-          } else {
-            setQueryError(err instanceof Error ? err.message : "Failed to load rows");
-          }
+          setQueryError(err instanceof Error ? err.message : "Failed to load rows");
         } finally {
           setLoading(false);
           setLoadingAll(false);
@@ -265,21 +289,30 @@ export function ResolveAndOrganizeWorkspace({
     async (cursor: string | null) => {
       setLoadingMore(true);
       try {
-        const page = await bridge.queryReviewRows({
-          ...currentQuery,
-          cursor,
-        });
+        const result = await withDegradedBridgeRetry(() =>
+          bridge.queryReviewRows({
+            ...currentQuery,
+            cursor,
+          }),
+        );
+        if (!result.ok) {
+          if (result.timedOut) {
+            setDegraded(true);
+            setQueryError(null);
+          } else {
+            setQueryError(
+              result.error instanceof Error ? result.error.message : "Failed to load rows",
+            );
+          }
+          return;
+        }
+        const page = result.value;
         setFilteredCount(page.pageInfo.totalFiltered);
         setNextCursor(page.pageInfo.nextCursor);
         setRows((prev) => [...prev, ...page.rows]);
+        setDegraded(false);
       } catch (err) {
-        const isTimeout = err instanceof BridgeCallError && err.code === "timeout";
-        if (isTimeout) {
-          setDegraded(true);
-          setQueryError(null);
-        } else {
-          setQueryError(err instanceof Error ? err.message : "Failed to load rows");
-        }
+        setQueryError(err instanceof Error ? err.message : "Failed to load rows");
       } finally {
         setLoadingMore(false);
       }

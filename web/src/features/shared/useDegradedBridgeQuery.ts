@@ -1,7 +1,55 @@
 import { useCallback, useRef, useState } from "react";
 import { BridgeCallError } from "../../bridge/bridgeErrors";
 
-const RETRY_DELAYS_MS = [1000, 3000, 5000] as const;
+export const DEGRADED_BRIDGE_RETRY_DELAYS_MS = [1000, 3000, 5000] as const;
+
+export function isBridgeTimeoutError(err: unknown): boolean {
+  return err instanceof BridgeCallError && err.code === "timeout";
+}
+
+export type DegradedBridgeRetrySuccess<T> = {
+  ok: true;
+  value: T;
+  attempts: number;
+};
+
+export type DegradedBridgeRetryTimeout = {
+  ok: false;
+  timedOut: true;
+  attempts: number;
+};
+
+export type DegradedBridgeRetryFailure = {
+  ok: false;
+  timedOut: false;
+  error: unknown;
+  attempts: number;
+};
+
+export type DegradedBridgeRetryResult<T> =
+  | DegradedBridgeRetrySuccess<T>
+  | DegradedBridgeRetryTimeout
+  | DegradedBridgeRetryFailure;
+
+export async function withDegradedBridgeRetry<T>(
+  fetcher: () => Promise<T>,
+): Promise<DegradedBridgeRetryResult<T>> {
+  for (let attempt = 0; attempt <= DEGRADED_BRIDGE_RETRY_DELAYS_MS.length; attempt += 1) {
+    try {
+      const value = await fetcher();
+      return { ok: true, value, attempts: attempt };
+    } catch (err) {
+      if (!isBridgeTimeoutError(err)) {
+        return { ok: false, timedOut: false, error: err, attempts: attempt };
+      }
+      if (attempt >= DEGRADED_BRIDGE_RETRY_DELAYS_MS.length) {
+        return { ok: false, timedOut: true, attempts: attempt + 1 };
+      }
+      await new Promise((r) => setTimeout(r, DEGRADED_BRIDGE_RETRY_DELAYS_MS[attempt]));
+    }
+  }
+  return { ok: false, timedOut: true, attempts: DEGRADED_BRIDGE_RETRY_DELAYS_MS.length + 1 };
+}
 
 export type DegradedQueryState<T> = {
   data: T | null;
@@ -27,36 +75,28 @@ export function useDegradedBridgeQuery<T>(
     const seq = ++seqRef.current;
     setLoading(true);
     setError(null);
-    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
-      try {
-        const result = await fetcher();
-        if (seq !== seqRef.current) return;
-        setData(result);
-        setDegraded(false);
-        setRetryCount(attempt);
-        setLoading(false);
-        return;
-      } catch (err) {
-        if (seq !== seqRef.current) return;
-        const isTimeout = err instanceof BridgeCallError && err.code === "timeout";
-        if (!isTimeout) {
-          setError(err instanceof Error ? err.message : "Query failed");
-          setLoading(false);
-          return;
-        }
-        setDegraded(true);
-        setRetryCount(attempt + 1);
-        if (attempt >= RETRY_DELAYS_MS.length) {
-          setError(null);
-          setLoading(false);
-          return;
-        }
-        await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
-      }
-    }
-    if (seq === seqRef.current) {
+    const result = await withDegradedBridgeRetry(fetcher);
+    if (seq !== seqRef.current) return;
+
+    if (result.ok) {
+      setData(result.value);
+      setDegraded(false);
+      setRetryCount(result.attempts);
       setLoading(false);
+      return;
     }
+
+    if (result.timedOut) {
+      setDegraded(true);
+      setRetryCount(result.attempts);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
+    setError(result.error instanceof Error ? result.error.message : "Query failed");
+    setDegraded(false);
+    setLoading(false);
   }, [fetcher]);
 
   return {

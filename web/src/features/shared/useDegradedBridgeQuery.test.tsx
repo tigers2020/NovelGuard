@@ -1,10 +1,21 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BridgeCallError } from "../../bridge/bridgeErrors";
-import { useDegradedBridgeQuery } from "./useDegradedBridgeQuery";
+import { useDegradedBridgeQuery, withDegradedBridgeRetry } from "./useDegradedBridgeQuery";
 
 afterEach(() => {
   vi.useRealTimers();
+});
+
+describe("withDegradedBridgeRetry", () => {
+  it("returns value on first success", async () => {
+    const fetcher = vi.fn().mockResolvedValue({ rows: [1] });
+    await expect(withDegradedBridgeRetry(fetcher)).resolves.toEqual({
+      ok: true,
+      value: { rows: [1] },
+      attempts: 0,
+    });
+  });
 });
 
 describe("useDegradedBridgeQuery", () => {
