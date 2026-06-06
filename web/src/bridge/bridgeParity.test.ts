@@ -232,7 +232,8 @@ describe("bridge parity", () => {
   });
 
   it("apply after discard rejects NO_PENDING_APPLY", async () => {
-    const sel = { type: "explicit_rows" as const, rowIds: ["row-1"] };
+    const sel = { type: "explicit_rows" as const, rowIds: ["row-2"] };
+    await mockBridge.updateReviewDecisions({ selection: sel, command: "approve" });
     const preview = await mockBridge.getMovePreview(sel);
     await mockBridge.discardMovePreview({ previewToken: preview.previewToken });
     await expect(mockBridge.applyResolvedActions({ selection: sel, previewToken: preview.previewToken })).rejects.toMatchObject({
@@ -241,10 +242,9 @@ describe("bridge parity", () => {
   });
 
   it("getMovePreview returns token fields", async () => {
-    const preview = await mockBridge.getMovePreview({
-      type: "explicit_rows",
-      rowIds: ["row-1"],
-    });
+    const sel = { type: "explicit_rows" as const, rowIds: ["row-2"] };
+    await mockBridge.updateReviewDecisions({ selection: sel, command: "approve" });
+    const preview = await mockBridge.getMovePreview(sel);
     expect(preview.previewToken).toMatch(/^preview-/);
     expect(preview.hasPendingApply).toBe(true);
     expect(typeof preview.libraryRevision).toBe("number");
@@ -252,7 +252,8 @@ describe("bridge parity", () => {
   });
 
   it("apply after library revision bump rejects STALE_PREVIEW", async () => {
-    const sel = { type: "explicit_rows" as const, rowIds: ["row-1"] };
+    const sel = { type: "explicit_rows" as const, rowIds: ["row-2"] };
+    await mockBridge.updateReviewDecisions({ selection: sel, command: "approve" });
     const preview = await mockBridge.getMovePreview(sel);
     bumpLibraryRevisionForTest({ clearPending: false });
     await expect(
@@ -263,13 +264,12 @@ describe("bridge parity", () => {
   });
 
   it("apply with changed selection rejects SELECTION_CHANGED", async () => {
-    const preview = await mockBridge.getMovePreview({
-      type: "explicit_rows",
-      rowIds: ["row-1"],
-    });
+    const sel = { type: "explicit_rows" as const, rowIds: ["row-2"] };
+    await mockBridge.updateReviewDecisions({ selection: sel, command: "approve" });
+    const preview = await mockBridge.getMovePreview(sel);
     await expect(
       mockBridge.applyResolvedActions({
-        selection: { type: "explicit_rows", rowIds: ["row-2"] },
+        selection: { type: "explicit_rows", rowIds: ["row-1"] },
         previewToken: preview.previewToken,
       }),
     ).rejects.toMatchObject({ reason: "SELECTION_CHANGED" });
@@ -775,7 +775,8 @@ describe("quality repair parity (PR-42)", () => {
   });
 
   it("getQualityRepairPreview rejects MOVE_PREVIEW_ACTIVE when move preview pending", async () => {
-    const sel = { type: "explicit_rows" as const, rowIds: ["row-1"] };
+    const sel = { type: "explicit_rows" as const, rowIds: ["row-2"] };
+    await mockBridge.updateReviewDecisions({ selection: sel, command: "approve" });
     const movePreview = await mockBridge.getMovePreview(sel);
     const issueId = firstEncodingIssueId();
     await expect(
@@ -915,6 +916,22 @@ describe("auto-approve parity (NOV-20)", () => {
     });
     expect(preview.rows.some((row) => row.id === "row-2")).toBe(true);
     expect(preview.summary.operationCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it("getMovePreview rows include display fields", async () => {
+    await mockBridge.updateReviewDecisions({
+      selection: { type: "explicit_rows", rowIds: ["row-2"] },
+      command: "approve",
+    });
+    const preview = await mockBridge.getMovePreview({
+      type: "explicit_rows",
+      rowIds: ["row-2"],
+    });
+    const row = preview.rows.find((r) => r.id === "row-2");
+    expect(row).toBeDefined();
+    expect(row!.name.length).toBeGreaterThan(0);
+    expect(row!.sourcePath.length).toBeGreaterThan(0);
+    expect(row!.destPath.length).toBeGreaterThan(0);
   });
 
   it("getMovePreview includes approved near move_duplicate rows", async () => {

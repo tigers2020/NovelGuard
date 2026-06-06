@@ -9,10 +9,14 @@ from app.bridge_contract import ApplyFailedError, PreviewApplyError
 from app.preview_apply_guard import PreviewApplyGuard
 from application.audit_log import AuditLog
 from application.library_session import LibrarySession
+from application.move_source_hash import content_hash_for_move
 from application.plan_fingerprint import plan_fingerprint
 from application.ports.filesystem_apply import FilesystemApplyPort
-from domain.apply_path_policy import resolve_destination_path, resolve_under_library_root
-from infrastructure.content_hasher import hash_file
+from domain.apply_path_policy import (
+    DEFAULT_MOVE_DUPLICATE_FOLDER,
+    resolve_duplicate_destination_path,
+    resolve_under_library_root,
+)
 
 
 class ApplyResolvedActionsUseCase:
@@ -69,14 +73,29 @@ class ApplyResolvedActionsUseCase:
             )
 
             for op in operations:
-                drift = self._check_drift(root, op)
-                if drift:
+                drift_reason = self._check_drift_reason(root, op)
+                if drift_reason:
                     self._guard.clear()
                     self._session.set_has_pending_apply(False)
-                    raise PreviewApplyError("STALE_PREVIEW")
+                    if drift_reason == "destination_exists":
+                        raise PreviewApplyError(
+                            "DESTINATION_EXISTS",
+                            f"이동 대상에 이미 파일이 있습니다: {op.dest_path}",
+                        )
+                    if drift_reason == "source_missing":
+                        raise PreviewApplyError(
+                            "STALE_PREVIEW",
+                            f"원본 파일을 찾을 수 없습니다: {op.source_path}",
+                        )
+                    raise PreviewApplyError(
+                        "STALE_PREVIEW",
+                        f"미리보기 이후 파일이 변경되었습니다: {op.source_path}",
+                    )
 
                 src, src_reason = resolve_under_library_root(root, op.source_path)
-                dest, dest_reason = resolve_destination_path(root, op.dest_path)
+                dest, dest_reason = resolve_duplicate_destination_path(
+                    root, DEFAULT_MOVE_DUPLICATE_FOLDER, op.dest_path
+                )
                 if src_reason or dest is None or src is None:
                     failed_row_id = op.row_id
                     error_message = src_reason or dest_reason or "invalid path"
@@ -194,19 +213,23 @@ class ApplyResolvedActionsUseCase:
         self._guard.clear()
         self._session.set_has_pending_apply(False)
 
-    def _check_drift(self, root: Path, op: Any) -> bool:
+    def _check_drift_reason(self, root: Path, op: Any) -> str | None:
         src, reason = resolve_under_library_root(root, op.source_path)
         if reason or src is None or not src.is_file():
-            return True
+            return "source_missing"
         try:
-            current_hash = hash_file(src)
+            current_hash = content_hash_for_move(src, size_bytes=op.source_size)
         except OSError:
-            return True
+            return "source_missing"
         if current_hash != op.source_content_hash:
-            return True
+            return "source_changed"
         if src.stat().st_size != op.source_size:
-            return True
-        dest, dest_reason = resolve_destination_path(root, op.dest_path)
+            return "source_changed"
+        dest, dest_reason = resolve_duplicate_destination_path(
+            root, DEFAULT_MOVE_DUPLICATE_FOLDER, op.dest_path
+        )
         if dest_reason or dest is None:
-            return True
-        return self._filesystem.file_exists(dest)
+            return "invalid_path"
+        if self._filesystem.file_exists(dest):
+            return "destination_exists"
+        return None

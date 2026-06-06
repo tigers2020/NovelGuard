@@ -222,10 +222,25 @@ def validate_move_preview(payload: Any) -> None:
     ):
         if key not in payload:
             raise PageContractError(f"Move preview missing {key}")
-    if not isinstance(payload.get("rows"), list):
+    rows = payload.get("rows")
+    if not isinstance(rows, list):
         raise PageContractError("Move preview rows must be an array")
-    if payload.get("hasPendingApply") is not True:
-        raise PageContractError("Move preview hasPendingApply must be true")
+    for row in rows:
+        if not isinstance(row, dict):
+            raise PageContractError("Move preview row must be a dict")
+        for key in ("id", "action", "name", "sourcePath", "destPath"):
+            value = row.get(key)
+            if not isinstance(value, str) or not value:
+                raise PageContractError(f"Move preview row missing or empty {key}")
+    summary = payload.get("summary")
+    if not isinstance(summary, dict):
+        raise PageContractError("Move preview summary must be a dict")
+    op_count = summary.get("operationCount", 0)
+    if not isinstance(op_count, int):
+        raise PageContractError("Move preview summary.operationCount must be an int")
+    has_pending = payload.get("hasPendingApply")
+    if has_pending is not (op_count > 0):
+        raise PageContractError("Move preview hasPendingApply must match operationCount > 0")
 
 
 _REVIEW_STATUSES = frozenset({"unreviewed", "approved", "conflict", "excluded"})
