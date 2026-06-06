@@ -1,7 +1,7 @@
 # Apply Preview Display Rows — Implementation Plan
 
 > **Status:** `draft` / **not executed on main**
-> **WIP code:** `wip/mixed-035-036-salvage` (commit `ee7b6aa7`) — cherry-pick to `feature/apply-preview-display-rows` after stabilization PR merges.
+> **WIP code:** `wip/mixed-035-036-salvage` (commit `ee7b6aa7`) — after stabilization merges, use `git restore --source wip/mixed-035-036-salvage -- <036 code paths only>` on `feature/apply-preview-display-rows`. **Do not** `git cherry-pick ee7b6aa7` (mixed docs + code).
 > **Do not run this plan on `main` until spec 036 is re-approved post-stabilization.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
