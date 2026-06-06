@@ -33,6 +33,7 @@ from automation.runners.cursor_stall import (
 from automation.runners.queue import JobQueue, JobRecord
 from automation.runners.runtime_state import get_runtime_state
 from automation.runners.worker_context import get_cancel_event, stop_requested
+from automation.runners.git_guard import branch_change_error
 from automation.runners.worker_lock import (
     clear_lock,
     clear_stale_file_lock,
@@ -208,6 +209,13 @@ def _working_tree_dirty(repo: Path) -> bool:
     return bool((status.stdout or "").strip())
 
 
+def _current_branch(repo: Path) -> str:
+    result = _git(repo, "rev-parse", "--abbrev-ref", "HEAD", check=False)
+    if result.returncode != 0:
+        return "?"
+    return (result.stdout or "").strip()
+
+
 def prepare_branch(
     repo: Path,
     payload: dict[str, Any],
@@ -375,6 +383,9 @@ def process_job(cfg: dict[str, Any], record: JobRecord, *, prompt: str) -> dict[
             state.log_path = str(log_path)
             state.cursor_output_buffered = False
 
+        agent_branch = _current_branch(repo)
+        result["start_branch"] = agent_branch
+
         if tui:
             stall_seconds, stall_max_retries, stall_poll = cursor_stall_config(cfg)
             stall_retries = 0
@@ -472,6 +483,15 @@ def process_job(cfg: dict[str, Any], record: JobRecord, *, prompt: str) -> dict[
         if tui:
             result["cursor"]["stall_retries"] = stall_retries
 
+        end_branch = _current_branch(repo)
+        result["end_branch"] = end_branch
+        branch_err = branch_change_error(agent_branch, end_branch)
+        if branch_err:
+            result["branch_guard_failed"] = True
+            result["branch_guard_error"] = branch_err
+            with log_path.open("a", encoding="utf-8") as log_file:
+                log_file.write(f"\n--- branch guard ---\n{branch_err}\n")
+
         if git_prepare:
             diff_stat = _git(repo, "diff", "--stat", check=False)
             result["diff_stat"] = diff_stat.stdout or ""
@@ -479,7 +499,7 @@ def process_job(cfg: dict[str, Any], record: JobRecord, *, prompt: str) -> dict[
         result["verify"] = run_verify(cfg, payload, repo)
         result["verify_ok"] = all(v["returncode"] == 0 for v in result["verify"])
 
-        ok = cursor.returncode == 0 and result["verify_ok"]
+        ok = cursor.returncode == 0 and result["verify_ok"] and branch_err is None
         result["status"] = "succeeded" if ok else "failed"
 
     result["log_path"] = str(log_path)

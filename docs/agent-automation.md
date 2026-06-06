@@ -119,11 +119,14 @@ Per-repo lock so only one job mutates a repo at a time.
 
 1. Command ingested → `status = queued`
 2. Worker: `git fetch`; checkout `main`; `git pull`
-3. `git checkout -b ai/job-<id>`
-4. Run Cursor CLI (`cursor-agent` / `agent` — confirm flags with `--help` on your install)
-5. Verify: `ruff`, `mypy`, `pytest`, `npm run lint` as applicable
-6. Emit: patch or diff stat, summary, test output, logs on failure
-7. Notify channel; await human for commit/PR/merge if not pre-authorized
+3. `git checkout -b ai/job-<id>` (orchestrator only — not the agent)
+4. Run Cursor CLI with `.automation/bin` on `PATH` (`git_guard` blocks agent branch ops)
+5. Post-cursor: fail job if `start_branch` ≠ `end_branch`
+6. Verify: `ruff`, `mypy`, `pytest`, `npm run lint` as applicable
+7. Emit: patch or diff stat, summary, test output, logs on failure
+8. Notify channel; await human for commit/PR/merge if not pre-authorized
+
+See [docs/agents/git-safety.md](agents/git-safety.md).
 
 ---
 

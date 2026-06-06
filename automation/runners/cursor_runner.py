@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, Any, TextIO
 
+from automation.runners.git_guard import prepend_git_guard_path
+
 PROMPT_DELIVERY = "subprocess-stdin"
 
 _active_proc: subprocess.Popen[str] | None = None
@@ -170,6 +172,7 @@ def run_prompt_streaming(
         text=True,
         encoding="utf-8",
         errors="replace",
+        env=prepend_git_guard_path(),
     )
 
     with _proc_lock:
@@ -268,6 +271,7 @@ def run_prompt(
         capture_output=True,
         encoding="utf-8",
         errors="replace",
+        env=prepend_git_guard_path(),
     )
     display_cmd = cmd + [f"<stdin:{stdin_path.name}>"]
 
