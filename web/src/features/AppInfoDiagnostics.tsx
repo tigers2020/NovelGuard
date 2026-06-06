@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useBridge } from "../app/providers/snapshotHooks";
+import { UI_FALLBACK } from "../lib/uiFallbackCopy";
 import type { AppInfo } from "../types/appInfo";
 
 export function AppInfoDiagnostics() {
@@ -19,7 +20,7 @@ export function AppInfoDiagnostics() {
       })
       .catch((err: unknown) => {
         if (alive) {
-          setError(err instanceof Error ? err.message : "getAppInfo failed");
+          setError(err instanceof Error ? err.message : UI_FALLBACK.loadAppInfo);
         }
       });
     return () => {
@@ -37,7 +38,7 @@ export function AppInfoDiagnostics() {
           {info.appName} {info.version} · {info.buildType} · Python {info.pythonRuntime}
         </p>
       ) : (
-        <p className="mt-1 text-sm text-muted">Loading…</p>
+        <p className="mt-1 text-sm text-muted">불러오는 중…</p>
       )}
     </section>
   );
