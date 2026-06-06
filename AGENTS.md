@@ -11,7 +11,7 @@ Layers: `domain` → `application` → `infrastructure` → `web` → `app`.
 IA / UX contract: [docs/architecture/main-ux-contract.md](docs/architecture/main-ux-contract.md).  
 Entry points & verification: [docs/entry_points.md](docs/entry_points.md).
 
-**Safety:** no destructive file moves without dry-run preview + user approval.
+**Safety:** no destructive file moves without dry-run preview + user approval. Partial-success recovery / undo contract: [docs/superpowers/specs/2026-06-06-partial-recovery-undo-design.md](docs/superpowers/specs/2026-06-06-partial-recovery-undo-design.md) (design; not yet implemented).
 
 ---
 
