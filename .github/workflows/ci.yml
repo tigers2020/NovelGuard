@@ -57,3 +57,9 @@ jobs:
 
       - name: fixture library smoke
         run: python scripts/fixture_library_smoke.py
+
+      - name: generate large library fixture
+        run: python scripts/generate_large_library_fixture.py
+
+      - name: large library loading smoke
+        run: python scripts/large_library_loading_smoke.py --skip-generate
