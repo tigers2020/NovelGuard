@@ -617,41 +617,54 @@ class LibrarySession:
                 ResolveAutoApproveJobCancelled,
                 _iso_now,
                 build_resolve_auto_approve_job_snapshot,
-                run_resolve_auto_approve_dry_run,
+                run_resolve_auto_approve_job,
             )
 
             final_status = "complete"
             error_message: str | None = None
-            summary: dict[str, Any] | None = None
+            job_result: Any = None
+
+            class _JobMutator:
+                def apply_review_decisions(
+                    self,
+                    selection: dict[str, Any],
+                    command: str,
+                    *,
+                    keeper_file_id: str | None = None,
+                ) -> int:
+                    return LibrarySession.apply_review_decisions_for_auto_approve_job(
+                        self_outer,
+                        selection,
+                        command,
+                        keeper_file_id=keeper_file_id,
+                    )
+
+                def finalize_projection(self) -> None:
+                    self_outer.finalize_auto_approve_job_projection()
+
+                def library_revision(self) -> int:
+                    return self_outer.library_revision()
+
+            self_outer = self
 
             def _cancel_check() -> bool:
                 with self._lock:
                     return self._resolve_auto_approve_cancel_requested
 
-            def _on_progress(counts: dict[str, int]) -> None:
+            def _on_progress(counts: dict[str, Any]) -> None:
                 with self._lock:
                     if not self._resolve_auto_approve_running:
                         return
                     current = dict(self._resolve_auto_approve_job)
-                    current.update(
-                        {
-                            "processedRows": counts.get("processedRows", current["processedRows"]),
-                            "totalRows": counts.get("totalRows", current["totalRows"]),
-                            "scannedCount": counts.get("scannedCount", current["scannedCount"]),
-                            "eligibleCount": counts.get("eligibleCount", current["eligibleCount"]),
-                            "keeperCount": counts.get("keeperCount", current["keeperCount"]),
-                            "moveCandidateCount": counts.get(
-                                "moveCandidateCount", current["moveCandidateCount"]
-                            ),
-                            "skippedConflictCount": counts.get(
-                                "skippedConflictCount", current["skippedConflictCount"]
-                            ),
-                            "skippedExcludedCount": counts.get(
-                                "skippedExcludedCount", current["skippedExcludedCount"]
-                            ),
-                            "label": "미검토 대상 집계 중…",
-                        }
-                    )
+                    for key, value in counts.items():
+                        if key == "phase":
+                            current["phase"] = value
+                        elif key == "label":
+                            current["label"] = value
+                        elif key == "persistedRevision":
+                            current["persistedRevision"] = value
+                        elif key in current:
+                            current[key] = value
                     self._resolve_auto_approve_job = current
 
             try:
@@ -660,18 +673,19 @@ class LibrarySession:
                     files_by_id = dict(self._files_by_id)
                     members_by_group = self.build_review_members_by_group()
 
-                summary = run_resolve_auto_approve_dry_run(
+                job_result = run_resolve_auto_approve_job(
                     rows,
                     query,
                     files_by_id=files_by_id,
                     members_by_group=members_by_group,
+                    mutator=_JobMutator(),
                     on_progress=_on_progress,
                     cancel_check=_cancel_check,
                 )
             except ResolveAutoApproveJobCancelled:
                 final_status = "cancelled"
             except Exception as exc:
-                _LOGGER.exception("resolve auto-approve dry-run job failed")
+                _LOGGER.exception("resolve auto-approve job failed")
                 final_status = "error"
                 error_message = str(exc)
             else:
@@ -681,7 +695,9 @@ class LibrarySession:
             finished_at = _iso_now()
             with self._lock:
                 started_at = self._resolve_auto_approve_job.get("startedAt")
-                if final_status == "complete" and summary is not None:
+                current = dict(self._resolve_auto_approve_job)
+                if final_status == "complete" and job_result is not None:
+                    summary = job_result.summary
                     self._resolve_auto_approve_job = build_resolve_auto_approve_job_snapshot(
                         status="complete",
                         phase="idle",
@@ -693,7 +709,11 @@ class LibrarySession:
                         eligible_count=int(summary["unreviewedCount"]),
                         skipped_conflict_count=int(summary["skippedConflictCount"]),
                         skipped_excluded_count=int(summary["skippedExcludedCount"]),
-                        label="집계 완료",
+                        keeper_set_count=job_result.keeper_set_count,
+                        approved_row_count=job_result.approved_row_count,
+                        mutation_count=job_result.mutation_count,
+                        persisted_revision=job_result.persisted_revision,
+                        label="처리 완료",
                         started_at=started_at if isinstance(started_at, str) else None,
                         finished_at=finished_at,
                         summary=summary,
@@ -702,26 +722,49 @@ class LibrarySession:
                     self._resolve_auto_approve_job = build_resolve_auto_approve_job_snapshot(
                         status="cancelled",
                         phase="idle",
+                        processed_rows=current.get("processedRows", 0),
+                        total_rows=current.get("totalRows", 0),
+                        keeper_count=current.get("keeperCount", 0),
+                        move_candidate_count=current.get("moveCandidateCount", 0),
+                        scanned_count=current.get("scannedCount", 0),
+                        eligible_count=current.get("eligibleCount", 0),
+                        skipped_conflict_count=current.get("skippedConflictCount", 0),
+                        skipped_excluded_count=current.get("skippedExcludedCount", 0),
+                        keeper_set_count=current.get("keeperSetCount", 0),
+                        approved_row_count=current.get("approvedRowCount", 0),
+                        mutation_count=current.get("mutationCount", 0),
+                        persisted_revision=current.get("persistedRevision"),
                         label="취소됨",
                         error=None,
                         started_at=started_at if isinstance(started_at, str) else None,
                         finished_at=finished_at,
+                        summary=current.get("summary"),
                     )
                 else:
                     self._resolve_auto_approve_job = build_resolve_auto_approve_job_snapshot(
                         status="error",
                         phase="idle",
-                        label="집계 실패",
+                        processed_rows=current.get("processedRows", 0),
+                        total_rows=current.get("totalRows", 0),
+                        keeper_set_count=current.get("keeperSetCount", 0),
+                        approved_row_count=current.get("approvedRowCount", 0),
+                        mutation_count=current.get("mutationCount", 0),
+                        persisted_revision=current.get("persistedRevision"),
+                        label="처리 실패",
                         error=error_message or "unknown error",
                         started_at=started_at if isinstance(started_at, str) else None,
                         finished_at=finished_at,
+                        summary=current.get("summary"),
                     )
                 self._resolve_auto_approve_running = False
                 self._resolve_auto_approve_cancel_requested = False
                 self._resolve_auto_approve_thread = None
 
             if final_status == "complete":
-                self._append_resolve_auto_approve_audit("resolve_auto_approve_job_completed")
+                self._append_resolve_auto_approve_audit(
+                    "resolve_auto_approve_job_completed",
+                    mutationCount=job_result.mutation_count if job_result else 0,
+                )
             elif final_status == "cancelled":
                 self._append_resolve_auto_approve_audit("resolve_auto_approve_job_cancelled")
             else:
@@ -881,17 +924,43 @@ class LibrarySession:
         *,
         keeper_file_id: str | None = None,
     ) -> dict[str, Any]:
-        from application.review_decisions import UpdateReviewDecisionsUseCase
-
         with self._lock:
-            use_case = UpdateReviewDecisionsUseCase(self, self._index)
-            updated = use_case.execute(
+            updated = self._apply_review_decisions_locked(
                 selection,
                 command,
                 keeper_file_id=keeper_file_id,
+                refresh_cache=True,
+                run_post_scan=True,
             )
-            if updated > 0:
-                self._rebuild_review_index(list(self._files_by_id.values()))
+            return {
+                "updatedCount": updated,
+                "libraryRevision": self._library_revision,
+            }
+
+    def _apply_review_decisions_locked(
+        self,
+        selection: dict[str, Any],
+        command: str,
+        *,
+        keeper_file_id: str | None = None,
+        refresh_cache: bool,
+        run_post_scan: bool,
+    ) -> int:
+        from application.review_decisions import UpdateReviewDecisionsUseCase
+
+        use_case = UpdateReviewDecisionsUseCase(self, self._index)
+        updated = use_case.execute(
+            selection,
+            command,
+            keeper_file_id=keeper_file_id,
+        )
+        if updated > 0:
+            if refresh_cache:
+                self._rebuild_review_index(
+                    list(self._files_by_id.values()),
+                    sync_projection=run_post_scan,
+                )
+            if run_post_scan:
                 folder = self._index.folder_path
                 if folder:
                     try:
@@ -900,11 +969,33 @@ class LibrarySession:
                         )
                     except Exception:
                         _LOGGER.exception("post-scan detection failed after review update")
-                self._library_revision += 1
-            return {
-                "updatedCount": updated,
-                "libraryRevision": self._library_revision,
-            }
+            self._library_revision += 1
+        return updated
+
+    def apply_review_decisions_for_auto_approve_job(
+        self,
+        selection: dict[str, Any],
+        command: str,
+        *,
+        keeper_file_id: str | None = None,
+    ) -> int:
+        with self._lock:
+            return self._apply_review_decisions_locked(
+                selection,
+                command,
+                keeper_file_id=keeper_file_id,
+                refresh_cache=False,
+                run_post_scan=False,
+            )
+
+    def finalize_auto_approve_job_projection(self) -> None:
+        with self._lock:
+            if not self._files_by_id:
+                return
+            self._rebuild_review_index(
+                list(self._files_by_id.values()),
+                sync_projection=True,
+            )
 
     def set_apply_in_progress(self, value: bool) -> None:
         with self._lock:

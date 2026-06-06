@@ -183,11 +183,13 @@ def summarize_resolve_auto_approve(
     keeper_count = len(keeper_row_ids)
     unreviewed_count = len(file_rows)
     move_candidate_count = max(0, unreviewed_count - keeper_count)
+    approve_row_ids = [str(row["id"]) for row in file_rows]
 
     return {
         "unreviewedCount": unreviewed_count,
         "keeperCount": keeper_count,
         "moveCandidateCount": move_candidate_count,
+        "approveRowIds": approve_row_ids,
         "exactCount": exact_count,
         "nearCount": near_count,
         "relationCount": relation_count,

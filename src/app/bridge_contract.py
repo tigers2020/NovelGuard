@@ -648,6 +648,11 @@ def validate_resolve_auto_approve_summary(payload: Any) -> None:
     keeper_row_ids = payload.get("keeperRowIds")
     if not isinstance(keeper_row_ids, list):
         raise PageContractError("keeperRowIds must be a list")
+    approve_row_ids = payload.get("approveRowIds")
+    if not isinstance(approve_row_ids, list):
+        raise PageContractError("approveRowIds must be a list")
+    if not all(isinstance(row_id, str) for row_id in approve_row_ids):
+        raise PageContractError("approveRowIds must contain strings")
     samples = payload.get("samples")
     if not isinstance(samples, dict):
         raise PageContractError("samples must be a dict")

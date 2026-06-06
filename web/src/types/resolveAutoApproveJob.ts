@@ -25,6 +25,10 @@ export type ResolveAutoApproveJobSnapshot = {
   eligibleCount: number;
   skippedConflictCount: number;
   skippedExcludedCount: number;
+  keeperSetCount: number;
+  approvedRowCount: number;
+  mutationCount: number;
+  persistedRevision: number | null;
   label: string;
   error: string | null;
   startedAt: string | null;
@@ -43,6 +47,10 @@ export const idleResolveAutoApproveJobSnapshot = (): ResolveAutoApproveJobSnapsh
   eligibleCount: 0,
   skippedConflictCount: 0,
   skippedExcludedCount: 0,
+  keeperSetCount: 0,
+  approvedRowCount: 0,
+  mutationCount: 0,
+  persistedRevision: null,
   label: "",
   error: null,
   startedAt: null,

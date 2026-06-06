@@ -8,6 +8,7 @@ export type ResolveAutoApproveSummary = {
   skippedConflictCount: number;
   skippedExcludedCount: number;
   keeperRowIds: string[];
+  approveRowIds: string[];
   samples: {
     keepers: string[];
     moveCandidates: string[];

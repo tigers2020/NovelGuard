@@ -110,6 +110,7 @@ export function summarizeMockResolveAutoApprove(
     skippedConflictCount: skippedRows.filter((row) => row.status === "conflict").length,
     skippedExcludedCount: skippedRows.filter((row) => row.status === "excluded").length,
     keeperRowIds: base.keeperRowIds,
+    approveRowIds: fileRows.map((row) => row.id),
     samples: {
       keepers: [],
       moveCandidates: [],
