@@ -616,7 +616,9 @@ def validate_finalize_result(payload: Any) -> None:
 
 
 def validate_resolve_auto_approve_job_snapshot(payload: Any) -> None:
-    from application.resolve_auto_approve_job import validate_resolve_auto_approve_job_snapshot as _validate
+    from application.resolve_auto_approve_job import (
+        validate_resolve_auto_approve_job_snapshot as _validate,
+    )
 
     try:
         _validate(payload)
