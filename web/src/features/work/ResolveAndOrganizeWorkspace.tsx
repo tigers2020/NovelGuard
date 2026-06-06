@@ -40,8 +40,7 @@ import {
   bulkMutationTargetCount,
 } from "../../constants/reviewBulk";
 import { MAX_QUERY_LIMIT } from "../../contracts/reviewPageContract";
-
-const LARGE_LIBRARY_THRESHOLD = 500;
+import { shouldLoadFirstPageOnly } from "./resolve/resolveLargeLibraryPolicy";
 
 function loadColumnSizing(): Record<string, number> {
   try {
@@ -263,7 +262,7 @@ export function ResolveAndOrganizeWorkspace({
           }
 
           const first = result.value;
-          if (first.pageInfo.totalFiltered > LARGE_LIBRARY_THRESHOLD) {
+          if (shouldLoadFirstPageOnly(first.pageInfo.totalFiltered)) {
             setRows(first.rows);
             setFilteredCount(first.pageInfo.totalFiltered);
             setNextCursor(first.pageInfo.nextCursor);

@@ -20,6 +20,7 @@ import {
   persistShellFileDockLayout,
 } from "./shellFileDockStorage";
 import { deriveShellFileDockState } from "./shellFileDockState";
+import { shouldClearRowsOnFetchFailure } from "./shellFileDockQueryPolicy";
 
 const SEARCH_DEBOUNCE_MS = 220;
 const PAGE_LIMIT = 100;
@@ -137,7 +138,7 @@ export function ShellFileDock({
               ? err.message
               : "Failed to load files";
         setQueryError(message);
-        if (!append) {
+        if (shouldClearRowsOnFetchFailure(false, append)) {
           setRows([]);
           setFilteredCount(0);
           setNextCursor(null);
