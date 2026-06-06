@@ -20,6 +20,13 @@ DryRunItemReason = Literal[
     "malformed_item",
     "unsupported_operation",
 ]
+UndoExecutionItemStatus = Literal[
+    "recovered",
+    "already_recovered",
+    "recovery_failed",
+    "excluded",
+]
+UndoExecutionItemReason = DryRunItemReason | Literal["move_error"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,5 +213,45 @@ class UndoDryRunPlan:
             "recoverableCount": self.recoverable_count,
             "blockedCount": self.blocked_count,
             "manualRequiredCount": self.manual_required_count,
+            "items": [item.to_dict() for item in self.items],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class UndoExecutionItemResult:
+    operation_id: str
+    sequence: int
+    status: UndoExecutionItemStatus
+    reason: UndoExecutionItemReason | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "operationId": self.operation_id,
+            "sequence": self.sequence,
+            "status": self.status,
+            "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class UndoExecutionResult:
+    undo_plan_id: str
+    manifest_status: UndoManifestStatus
+    no_op: bool
+    recovered_count: int
+    already_recovered_count: int
+    failed_count: int
+    excluded_count: int
+    items: tuple[UndoExecutionItemResult, ...]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "undoPlanId": self.undo_plan_id,
+            "manifestStatus": self.manifest_status,
+            "noOp": self.no_op,
+            "recoveredCount": self.recovered_count,
+            "alreadyRecoveredCount": self.already_recovered_count,
+            "failedCount": self.failed_count,
+            "excludedCount": self.excluded_count,
             "items": [item.to_dict() for item in self.items],
         }

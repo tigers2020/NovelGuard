@@ -56,3 +56,14 @@ class JsonlRecoveryStore:
         if not isinstance(payload, dict):
             raise UndoManifestValidationError("MANIFEST_MALFORMED", "manifest must be an object")
         return payload
+
+    def update_undo_manifest(self, manifest: dict[str, Any]) -> Path:
+        undo_plan_id = manifest["undoPlanId"]
+        path = self.undo_manifest_path(undo_plan_id)
+        if not path.is_file():
+            raise UndoManifestValidationError(
+                "MANIFEST_NOT_FOUND",
+                f"undo plan not found: {undo_plan_id}",
+            )
+        path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        return path

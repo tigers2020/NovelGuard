@@ -44,7 +44,7 @@ def plan_move_undo_dry_run(
     manifest_path: str | None = None,
 ) -> UndoDryRunPlan:
     items = tuple(
-        _inspect_move_back_item(library_root=library_root, item=item) for item in manifest.items
+        inspect_move_undo_item(library_root=library_root, item=item) for item in manifest.items
     )
     recoverable_count = sum(1 for item in items if item.status == "recoverable")
     blocked_count = sum(1 for item in items if item.status == "blocked")
@@ -62,7 +62,7 @@ def plan_move_undo_dry_run(
     )
 
 
-def _inspect_move_back_item(
+def inspect_move_undo_item(
     *,
     library_root: Path,
     item: UndoManifestItem,
