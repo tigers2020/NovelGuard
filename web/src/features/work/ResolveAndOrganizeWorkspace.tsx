@@ -26,8 +26,10 @@ import { mergeReviewColumnVisibility } from "./resolve/reviewGridLayout";
 import { DetailPanel } from "./resolve/DetailPanel";
 import { BatchActionBar } from "./resolve/BatchActionBar";
 import { AutoSelectKeepersConfirmDialog } from "./resolve/AutoSelectKeepersConfirmDialog";
-import { computeAutoSelectSummary } from "./resolve/computeAutoSelectSummary";
 import { BulkFilterConfirmDialog } from "./resolve/BulkFilterConfirmDialog";
+import { ResolveAutoApproveJobProgress } from "./resolve/ResolveAutoApproveJobProgress";
+import { useResolveAutoApproveJob } from "./resolve/useResolveAutoApproveJob";
+import type { ResolveAutoApproveSummary } from "../../types/resolveAutoApproveSummary";
 import {
   countExecutableMovePreviewRows,
   hasExecutableMovePreviewRows,
@@ -94,11 +96,16 @@ export function ResolveAndOrganizeWorkspace({
   const [bulkMutating, setBulkMutating] = useState(false);
   const [autoSelectConfirmOpen, setAutoSelectConfirmOpen] = useState(false);
   const [autoSelectMutating, setAutoSelectMutating] = useState(false);
+  const [autoSelectSummaryLoading, setAutoSelectSummaryLoading] = useState(false);
+  const [autoApproveSummary, setAutoApproveSummary] = useState<ResolveAutoApproveSummary | null>(
+    null,
+  );
   const [isWideLayout, setIsWideLayout] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches,
   );
   const detailSeqRef = useRef(0);
   const loadSeqRef = useRef(0);
+  const selectedRowIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");
@@ -131,6 +138,18 @@ export function ResolveAndOrganizeWorkspace({
         : undefined,
     };
   }, [viewMode, search, sorting, rowTypeFilterTypes]);
+
+  const autoApproveQuery = useMemo<ReviewRowsQuery>(
+    () => ({
+      ...currentQuery,
+      cursor: null,
+      filters: {
+        ...currentQuery.filters,
+        status: ["unreviewed"] satisfies ReviewStatus[],
+      },
+    }),
+    [currentQuery],
+  );
 
   const loadDetail = useCallback(
     async (row: ReviewRow | null) => {
@@ -239,6 +258,60 @@ export function ResolveAndOrganizeWorkspace({
     },
     [bridge, currentQuery, loadDetail],
   );
+
+  const reloadFirstPage = useCallback(
+    async (preserveRowId?: string | null) => {
+      const seq = ++loadSeqRef.current;
+      setLoading(true);
+      setQueryError(null);
+      try {
+        const result = await withDegradedBridgeRetry(() =>
+          bridge.queryReviewRows({ ...currentQuery, cursor: null }),
+        );
+        if (seq !== loadSeqRef.current) return;
+        if (!result.ok) {
+          if (result.timedOut) {
+            setDegraded(true);
+            setQueryError(null);
+          } else {
+            setQueryError(
+              result.error instanceof Error ? result.error.message : "Failed to load rows",
+            );
+          }
+          return;
+        }
+        const first = result.value;
+        setRows(first.rows);
+        setFilteredCount(first.pageInfo.totalFiltered);
+        setNextCursor(first.pageInfo.nextCursor);
+        setDegraded(false);
+        if (preserveRowId != null) {
+          const rebound = first.rows.find((r) => r.id === preserveRowId) ?? null;
+          setSelectedRow(rebound);
+          void loadDetail(rebound);
+        }
+      } catch (err) {
+        if (seq !== loadSeqRef.current) return;
+        setQueryError(err instanceof Error ? err.message : "Failed to load rows");
+      } finally {
+        if (seq === loadSeqRef.current) {
+          setLoading(false);
+        }
+      }
+    },
+    [bridge, currentQuery, loadDetail],
+  );
+
+  useEffect(() => {
+    selectedRowIdRef.current = selectedRow?.id ?? null;
+  }, [selectedRow?.id]);
+
+  const { job: resolveAutoApproveJob, isRunning: autoApproveJobRunning, startJob, cancelJob } =
+    useResolveAutoApproveJob({
+      onJobTerminal: () => reloadFirstPage(selectedRowIdRef.current),
+    });
+
+  const resolveActionsBlocked = autoApproveJobRunning || bulkMutating || autoSelectMutating;
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -381,12 +454,6 @@ export function ResolveAndOrganizeWorkspace({
     [rows],
   );
 
-  const autoSelectSummary = useMemo(() => {
-    if (!autoSelectConfirmOpen) return null;
-    const loadedFileRowCount = rows.filter((row) => row.rowKind === "file").length;
-    return computeAutoSelectSummary(rows, { filteredCount, loadedFileRowCount });
-  }, [autoSelectConfirmOpen, rows, filteredCount]);
-
   const previewCtaText = useMemo(
     () =>
       previewCtaLabel({
@@ -399,52 +466,39 @@ export function ResolveAndOrganizeWorkspace({
 
   const showPreviewCta = rowTypeFilter === "exact";
 
-  const openAutoSelectConfirm = useCallback(() => {
+  const openAutoSelectConfirm = useCallback(async () => {
+    if (autoApproveJobRunning || autoSelectSummaryLoading) return;
     setQueryError(null);
-    setAutoSelectConfirmOpen(true);
-  }, []);
+    setAutoSelectSummaryLoading(true);
+    try {
+      const summary = await bridge.summarizeResolveAutoApprove(autoApproveQuery);
+      if (summary.unreviewedCount === 0) {
+        setQueryError("현재 필터에 미검토 파일 행이 없습니다.");
+        return;
+      }
+      setAutoApproveSummary(summary);
+      setAutoSelectConfirmOpen(true);
+    } catch (err) {
+      setQueryError(err instanceof Error ? err.message : "Failed to summarize auto-approve");
+    } finally {
+      setAutoSelectSummaryLoading(false);
+    }
+  }, [autoApproveJobRunning, autoApproveQuery, autoSelectSummaryLoading, bridge]);
 
-  const runAutoSelectKeepersAndApprove = useCallback(async () => {
-    const targetCount = autoSelectSummary?.mutationTargetCount ?? 0;
-    if (targetCount === 0) return;
+  const runResolveAutoApproveJob = useCallback(async () => {
+    if (!autoApproveSummary || autoApproveSummary.unreviewedCount === 0) return;
     setAutoSelectMutating(true);
     try {
       setQueryError(null);
-      const cursors = bulkMutationChunkCursors(targetCount);
-      for (const cursor of cursors) {
-        const chunkQuery: ReviewRowsQuery = {
-          ...currentQuery,
-          cursor,
-          filters: { ...currentQuery.filters, status: ["unreviewed"] satisfies ReviewStatus[] },
-        };
-        const chunkSummary = await bridge.summarizeAutoSelectKeepers(chunkQuery);
-        if (chunkSummary.keeperRowIds.length > 0) {
-          await bridge.updateReviewDecisions({
-            selection: {
-              type: "explicit_rows",
-              rowIds: chunkSummary.keeperRowIds,
-            },
-            command: "setKeeper",
-          });
-        }
-        await bridge.updateReviewDecisions({
-          selection: {
-            type: "current_query",
-            query: chunkQuery,
-            excludeRowIds: [],
-          },
-          command: "approve",
-        });
-      }
-      await refreshSnapshot();
-      await loadAllFiltered();
+      await startJob(autoApproveQuery);
+      setAutoSelectConfirmOpen(false);
+      setAutoApproveSummary(null);
     } catch (err) {
-      setQueryError(err instanceof Error ? err.message : "Review update failed");
+      setQueryError(err instanceof Error ? err.message : "Failed to start auto-approve job");
     } finally {
       setAutoSelectMutating(false);
-      setAutoSelectConfirmOpen(false);
     }
-  }, [autoSelectSummary, bridge, currentQuery, loadAllFiltered, refreshSnapshot]);
+  }, [autoApproveQuery, autoApproveSummary, startJob]);
 
   const runDetailReviewCommand = useCallback(
     async (
@@ -452,6 +506,7 @@ export function ResolveAndOrganizeWorkspace({
       selection: SelectionScope,
       keeperFileId?: string,
     ) => {
+      if (autoApproveJobRunning) return;
       const preserveRowId = selectedRow?.id ?? null;
       setDetailMutating(true);
       try {
@@ -465,7 +520,7 @@ export function ResolveAndOrganizeWorkspace({
         setDetailMutating(false);
       }
     },
-    [bridge, loadAllFiltered, refreshSnapshot, selectedRow?.id],
+    [autoApproveJobRunning, bridge, loadAllFiltered, refreshSnapshot, selectedRow?.id],
   );
 
   const runBulkExcludeFiltered = useCallback(async () => {
@@ -572,8 +627,12 @@ export function ResolveAndOrganizeWorkspace({
             onOpenFinalize={onOpenFinalize}
             showPreviewCta={showPreviewCta}
             onPreview={() => onOpenPreview(previewSelection)}
-            previewDisabled={Boolean(previewBlockedReason)}
-            previewDisabledReason={previewBlockedReason}
+            previewDisabled={Boolean(previewBlockedReason) || resolveActionsBlocked}
+            previewDisabledReason={
+              autoApproveJobRunning
+                ? "자동 선정·승인 작업이 진행 중입니다."
+                : previewBlockedReason
+            }
             previewLabel={previewCtaText}
           />
           <VirtualizedReviewGrid
@@ -608,7 +667,7 @@ export function ResolveAndOrganizeWorkspace({
                 detail={detail}
                 loading={detailLoading}
                 error={detailError}
-                mutating={detailMutating}
+                mutating={detailMutating || autoApproveJobRunning}
                 onSetKeeper={handleSetKeeper}
                 onMarkConflict={handleMarkConflict}
                 onReset={handleReset}
@@ -639,7 +698,7 @@ export function ResolveAndOrganizeWorkspace({
             detail={detail}
             loading={detailLoading}
             error={detailError}
-            mutating={detailMutating}
+            mutating={detailMutating || autoApproveJobRunning}
             onSetKeeper={handleSetKeeper}
             onMarkConflict={handleMarkConflict}
             onReset={handleReset}
@@ -660,27 +719,54 @@ export function ResolveAndOrganizeWorkspace({
         loadedCount={rows.length}
         loadingAll={loadingAll}
         reviewOnlyGuidance={reviewOnlyGuidance}
+        jobProgress={
+          resolveAutoApproveJob.status !== "idle" ? (
+            <ResolveAutoApproveJobProgress
+              job={resolveAutoApproveJob}
+              onCancel={autoApproveJobRunning ? () => void cancelJob() : undefined}
+            />
+          ) : null
+        }
         onExcludeAllFiltered={() => setBulkExcludeConfirmOpen(true)}
         onAutoSelectKeepers={() => void openAutoSelectConfirm()}
-        autoSelectDisabled={bulkMutating || autoSelectMutating || filteredCount === 0}
-        autoSelectDisabledReason={
-          filteredCount === 0 ? "현재 필터에 미검토 파일 행이 없습니다." : undefined
+        autoSelectDisabled={
+          resolveActionsBlocked || autoSelectSummaryLoading || filteredCount === 0
         }
-        bulkQueryDisabled={Boolean(reviewOnlyBlockedReason)}
-        bulkQueryDisabledReason={reviewOnlyBlockedReason}
+        autoSelectDisabledReason={
+          autoApproveJobRunning
+            ? "자동 선정·승인 작업이 진행 중입니다."
+            : autoSelectSummaryLoading
+              ? "미검토 대상 집계 중…"
+              : filteredCount === 0
+                ? "현재 필터에 미검토 파일 행이 없습니다."
+                : undefined
+        }
+        bulkQueryDisabled={Boolean(reviewOnlyBlockedReason) || autoApproveJobRunning}
+        bulkQueryDisabledReason={
+          autoApproveJobRunning
+            ? "자동 선정·승인 작업이 진행 중입니다."
+            : reviewOnlyBlockedReason
+        }
         onPreview={() => onOpenPreview(previewSelection)}
-        previewDisabled={Boolean(previewBlockedReason)}
-        previewDisabledReason={previewBlockedReason}
+        previewDisabled={Boolean(previewBlockedReason) || resolveActionsBlocked}
+        previewDisabledReason={
+          autoApproveJobRunning
+            ? "자동 선정·승인 작업이 진행 중입니다."
+            : previewBlockedReason
+        }
         previewLabel={previewCtaText}
       />
 
-      {autoSelectSummary && (
+      {autoApproveSummary && (
         <AutoSelectKeepersConfirmDialog
           open={autoSelectConfirmOpen}
-          summary={autoSelectSummary}
+          summary={autoApproveSummary}
           mutating={autoSelectMutating}
-          onCancel={() => setAutoSelectConfirmOpen(false)}
-          onConfirm={() => void runAutoSelectKeepersAndApprove()}
+          onCancel={() => {
+            setAutoSelectConfirmOpen(false);
+            setAutoApproveSummary(null);
+          }}
+          onConfirm={() => void runResolveAutoApproveJob()}
         />
       )}
 
