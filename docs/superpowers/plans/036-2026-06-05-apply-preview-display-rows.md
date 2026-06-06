@@ -1,8 +1,6 @@
 # Apply Preview Display Rows — Implementation Plan
 
-> **Status:** `draft` / **not executed on main**
-> **WIP code:** `wip/mixed-035-036-salvage` (commit `ee7b6aa7`) — after stabilization merges, use `git restore --source wip/mixed-035-036-salvage -- <036 code paths only>` on `feature/apply-preview-display-rows`. **Do not** `git cherry-pick ee7b6aa7` (mixed docs + code).
-> **Do not run this plan on `main` until spec 036 is re-approved post-stabilization.
+> **Status:** `approved` / **Done on `main`** — PR #60 (`d66f40ed`, 2026-06-06)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -12,7 +10,7 @@
 
 **Tech Stack:** Python 3.12 (`src/`), React 19 + TypeScript + Vitest (`web/`), pytest, Playwright e2e.
 
-**Spec:** [036-2026-06-05-apply-preview-display-rows-design.md](../specs/036-2026-06-05-apply-preview-display-rows-design.md) (draft — re-approve after stabilization)
+**Spec:** [036-2026-06-05-apply-preview-display-rows-design.md](../specs/036-2026-06-05-apply-preview-display-rows-design.md) (approved)
 
 **Test policy:** Extend **existing** files only (`tests/test_bridge_contract.py`, `web/src/bridge/bridgeParity.test.ts`, `web/e2e/smoke.spec.ts`). Do **not** add new `*.test.ts` / `test_*.py` without user `TEST_ALLOWED`.
 
@@ -455,3 +453,13 @@ Expected: exit 0
 | Summary chips unchanged | No task modifies `SummaryChips` |
 
 No placeholders. Types consistent: `name`, `sourcePath`, `destPath` everywhere.
+
+## Implementation status
+
+**Done** (2026-06-06) on `main` via PR #60 (`d66f40ed`).
+
+| Command | Result | Date |
+|---------|--------|------|
+| `pytest tests/test_bridge_contract.py -q` | PASS (157) | 2026-06-06 |
+| `cd web && npm run test:contracts` | PASS (102) | 2026-06-06 |
+| CI `verify` on PR #60 | PASS | 2026-06-06 |
