@@ -28,6 +28,7 @@ from application.log_buffer import attach_session_log_handler
 from application.ports.filesystem_apply import FilesystemApplyPort
 from application.ports.filesystem_repair import FilesystemRepairPort
 from application.ports.library_index import LibraryIndexPort
+from application.recovery_store import JsonlRecoveryStore
 from application.settings_store import SettingsStore
 from infrastructure.filesystem_scanner import ScanStreamResult, scan_folder_stream
 from infrastructure.local_filesystem_apply import LocalFilesystemApplyAdapter
@@ -46,6 +47,29 @@ class SessionAuditLog(AuditLog):
     def append(self, event: str, **fields: object) -> None:
         self._path = self._session.audit_log_path()
         super().append(event, **fields)
+
+
+class SessionRecoveryStore(JsonlRecoveryStore):
+    """Recovery store whose paths follow the active library binding on LibrarySession."""
+
+    def __init__(self, session: LibrarySession) -> None:
+        super().__init__(
+            checkpoints_path=session.recovery_checkpoints_path(),
+            undo_plans_dir=session.undo_plans_dir(),
+        )
+        self._session = session
+
+    def _refresh_paths(self) -> None:
+        self._checkpoints_path = self._session.recovery_checkpoints_path()
+        self._undo_plans_dir = self._session.undo_plans_dir()
+
+    def append_checkpoint(self, record: dict[str, object]) -> None:
+        self._refresh_paths()
+        super().append_checkpoint(record)
+
+    def write_undo_manifest(self, manifest: dict[str, object]) -> Path:
+        self._refresh_paths()
+        return super().write_undo_manifest(manifest)
 
 
 def _scan_with_content_probe(
@@ -115,6 +139,8 @@ def create_library_session(
             library_id=pending.library_id,
             db_path=db_path or pending.db_path,
             audit_log_path=audit_log_path,
+            recovery_checkpoints_path=pending.recovery_checkpoints_path,
+            undo_plans_dir=pending.undo_plans_dir,
             finalize_save_root=pending.finalize_save_root,
             repair_backup_root=pending.repair_backup_root,
         )
@@ -148,7 +174,10 @@ def create_bridge_api(
     preview_use_case = BuildPreviewPlanUseCase(
         resolved_session, move_guard, repair_guard, audit, fs
     )
-    apply_use_case = ApplyResolvedActionsUseCase(resolved_session, move_guard, audit, fs)
+    recovery_store = SessionRecoveryStore(resolved_session)
+    apply_use_case = ApplyResolvedActionsUseCase(
+        resolved_session, move_guard, audit, fs, recovery_store=recovery_store
+    )
     repair_preview_use_case = BuildQualityRepairPlanUseCase(
         resolved_session, move_guard, repair_guard, audit
     )

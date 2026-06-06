@@ -118,6 +118,14 @@ def apply_audit_path(library_id: str) -> Path:
     return library_state_dir(library_id) / "apply-audit.jsonl"
 
 
+def recovery_checkpoints_path(library_id: str) -> Path:
+    return library_state_dir(library_id) / "recovery-checkpoints.jsonl"
+
+
+def undo_plans_dir(library_id: str) -> Path:
+    return library_state_dir(library_id) / "undo-plans"
+
+
 def save_dir_for_library(library_root: Path) -> Path:
     return normalize_library_root(library_root) / "SAVE"
 
@@ -135,6 +143,8 @@ class LibraryRuntimePaths:
     library_id: str
     db_path: Path
     audit_log_path: Path
+    recovery_checkpoints_path: Path
+    undo_plans_dir: Path
     finalize_save_root: Path
     repair_backup_root: Path
 
@@ -148,6 +158,8 @@ def library_runtime_paths(library_root: Path) -> LibraryRuntimePaths:
         library_id=library_id,
         db_path=library_db_path(library_id),
         audit_log_path=apply_audit_path(library_id),
+        recovery_checkpoints_path=recovery_checkpoints_path(library_id),
+        undo_plans_dir=undo_plans_dir(library_id),
         finalize_save_root=save_root / "finalize",
         repair_backup_root=save_root / "repair_backup",
     )
@@ -162,6 +174,8 @@ def pending_library_runtime_paths() -> LibraryRuntimePaths:
         library_id=PENDING_LIBRARY_ID,
         db_path=library_db_path(PENDING_LIBRARY_ID),
         audit_log_path=apply_audit_path(PENDING_LIBRARY_ID),
+        recovery_checkpoints_path=recovery_checkpoints_path(PENDING_LIBRARY_ID),
+        undo_plans_dir=undo_plans_dir(PENDING_LIBRARY_ID),
         finalize_save_root=save_root / "finalize",
         repair_backup_root=save_root / "repair_backup",
     )
@@ -170,3 +184,4 @@ def pending_library_runtime_paths() -> LibraryRuntimePaths:
 def ensure_library_state_dirs(paths: LibraryRuntimePaths) -> None:
     paths.db_path.parent.mkdir(parents=True, exist_ok=True)
     paths.audit_log_path.parent.mkdir(parents=True, exist_ok=True)
+    paths.undo_plans_dir.mkdir(parents=True, exist_ok=True)
