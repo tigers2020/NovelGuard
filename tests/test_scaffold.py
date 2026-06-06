@@ -110,6 +110,7 @@ def test_move_apply_recovery_manifest_shape(tmp_path: Path) -> None:
     from application.move_apply_recovery_run import MoveApplyRecoveryRun, classify_move_run_status
     from application.recovery_store import JsonlRecoveryStore
     from domain.apply_models import PreviewOperation
+
     store = JsonlRecoveryStore(
         checkpoints_path=tmp_path / "recovery-checkpoints.jsonl",
         undo_plans_dir=tmp_path / "undo-plans",
@@ -156,7 +157,9 @@ def test_move_apply_recovery_manifest_shape(tmp_path: Path) -> None:
     assert manifest["items"][0]["fromPath"] == "../duplicate/chapter.txt"
     assert manifest["items"][0]["toPath"] == "chapter.txt"
     assert manifest["createdAt"] == "2026-06-06T12:00:00Z"
-    checkpoint_lines = (tmp_path / "recovery-checkpoints.jsonl").read_text(encoding="utf-8").splitlines()
+    checkpoint_lines = (
+        (tmp_path / "recovery-checkpoints.jsonl").read_text(encoding="utf-8").splitlines()
+    )
     assert len(checkpoint_lines) == 1
     checkpoint = json.loads(checkpoint_lines[0])
     assert checkpoint["operationType"] == "move_duplicate"

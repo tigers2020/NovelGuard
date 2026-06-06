@@ -6,7 +6,9 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 MoveRunStatus = Literal["completed", "failed", "partially_applied"]
-UndoManifestStatus = Literal["pending", "executing", "completed", "partial", "expired", "superseded"]
+UndoManifestStatus = Literal[
+    "pending", "executing", "completed", "partial", "expired", "superseded"
+]
 CheckpointItemStatus = Literal["applied", "failed", "skipped"]
 Recoverability = Literal["recoverable", "manual", "unrecoverable"]
 UndoAction = Literal["move_back"]

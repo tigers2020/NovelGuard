@@ -1956,7 +1956,9 @@ def test_partial_apply_batch_records_audit_and_raises(
     checkpoints_path = api._session.recovery_checkpoints_path()
     assert checkpoints_path.exists()
     checkpoints = [
-        json.loads(line) for line in checkpoints_path.read_text(encoding="utf-8").splitlines() if line
+        json.loads(line)
+        for line in checkpoints_path.read_text(encoding="utf-8").splitlines()
+        if line
     ]
     assert len(checkpoints) == 2
     assert all(cp["operationType"] == "move_duplicate" for cp in checkpoints)
@@ -1988,7 +1990,9 @@ def test_apply_success_writes_recovery_manifest(
     checkpoints_path = api._session.recovery_checkpoints_path()
     assert checkpoints_path.exists()
     checkpoints = [
-        json.loads(line) for line in checkpoints_path.read_text(encoding="utf-8").splitlines() if line
+        json.loads(line)
+        for line in checkpoints_path.read_text(encoding="utf-8").splitlines()
+        if line
     ]
     assert len(checkpoints) == 1
     assert checkpoints[0]["status"] == "applied"
