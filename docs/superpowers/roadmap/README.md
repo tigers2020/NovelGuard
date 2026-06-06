@@ -40,6 +40,6 @@ Roadmap entries are **proposed** until a matching spec is approved. Do not treat
 
 ## Authority
 
-- **Behavior truth:** code + tests + [current_architecture.md](../../current_architecture.md)
+- **Behavior truth:** code + tests + [main-ux-contract.md](../../architecture/main-ux-contract.md)
 - **Done when:** matching plan’s “Implementation status” is **Done** and verification is recorded there
 - **Next work:** roadmap proposes order; **spec approval** locks scope

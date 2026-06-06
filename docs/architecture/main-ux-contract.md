@@ -34,7 +34,8 @@ This is the **Hybrid 3-mode** IA from spec 000, reconciled by spec 021. It is **
 |-------|--------|-------|
 | work-hub single vertical scroll | **Deferred** (LOCK-33-13) | Do not treat roadmap prose as implemented |
 | Finalize as 4th WorkMode tab | **Superseded** by spec 021 | Finalize capability via `FinalizeSubflowDialog` |
-| Bulk auto-approve server job | **Contract-review** — spec `035-2026-06-05-resolve-bulk-auto-approve-job-design.md` | Policy in spec 033 locked; server job **not implemented** on main |
+| Bulk auto-approve server job | **Done** — PR #66 / #67 | `startResolveAutoApproveJob` + UI polling |
+| Finalize async bridge job | **Done** — PR #68 | `startFinalizeJob` / `getFinalizeJob` / `cancelFinalize`; non-blocking bridge |
 | Apply preview display rows | **Done** — PR #60 (`d66f40ed`) | Spec/plan approved PR #61 |
 
 ## Application boundary (preserve)

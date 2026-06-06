@@ -1,6 +1,6 @@
 # Entry points
 
-## Python scaffold
+## Python entry
 
 ```bash
 python src/main.py

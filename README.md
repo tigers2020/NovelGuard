@@ -1,50 +1,65 @@
 # NovelGuard
 
-프로젝트를 **전면 초기화**한 상태입니다. 도메인·GUI·프론트엔드 코드는 제거되었고, 처음부터 다시 구현할 수 있는 최소 스캐폴드만 남아 있습니다.
+로컬 우선 소설 라이브러리 도구 — 폴더 스캔, exact/near/relation 중복 검출, 검토·이동 적용, 품질 이슈 분석, finalize(적용·검증)까지 한 데스크톱 앱에서 처리합니다.
 
-## 유지된 것
+**안전:** 파괴적 파일 이동·삭제는 dry-run 미리보기와 사용자 승인 후에만 실행됩니다.
 
-- Git 저장소(히스토리는 그대로; 이번 초기화는 새 커밋으로 반영)
-- [AGENTS.md](AGENTS.md) — 에이전트·검증 게이트
-- `.cursor/rules/`, `persona/`, `protocols/` — 개발 절차
-- `.venv`, `.env`(로컬, gitignore) — 로컬 환경
+## 스택
 
-## 현재 구조
+| Layer | Path |
+|-------|------|
+| UI | `web/` — React + TypeScript + Tailwind v4 ([DESIGN.md](DESIGN.md)) |
+| App / bridge | `src/app/` — pywebview `BridgeApi`, contract validation |
+| Application | `src/application/` — `LibrarySession`, scan/apply/finalize jobs |
+| Domain / infra | `src/domain/`, `src/infrastructure/` |
 
-```
-NovelGuard/
-├── web/                 # React + Tailwind UI (v1)
-├── src/app/             # pywebview host + bridge stub
-├── run.bat              # desktop launcher (Windows)
-└── docs/superpowers/    # approved spec + plan
-```
+레이어·IA 정본: [docs/architecture/main-ux-contract.md](docs/architecture/main-ux-contract.md)  
+실행·검증 명령: [docs/entry_points.md](docs/entry_points.md)
+
+## 주요 기능 (main)
+
+- **Scan** — `.txt` / `.md` 폴더 스캔, SQLite 인덱스, 스트리밍 해시
+- **Resolve & Organize** — 가상화 그리드, keeper/이동 결정, move preview + stale guard, bulk auto-approve job
+- **Quality** — 빈 파일·인코딩 등 detect-only 이슈, repair 서브플로우
+- **Finalize** — `startFinalizeJob` / `getFinalizeJob` / `cancelFinalize` 비동기 bridge job (UI 폴링·취소)
+- **Settings / Logs** — 별도 라우트
+
+브라우저 dev는 `mockBridge`; 데스크톱은 `LibrarySession` 실동작.
 
 ## 실행
 
-**Desktop (Windows):** `run.bat` or `novelguard-webview` after `pip install -e ".[gui]"` and `cd web && npm run build`
+**Desktop (Windows):**
 
-**Browser dev:** `cd web && npm run dev` (mock bridge)
+```bash
+pip install -e ".[gui]"
+cd web && npm install && npm run build
+run.bat
+# or: novelguard-webview
+```
 
-**Python scaffold:** `python src/main.py`
+**Browser dev (mock bridge):**
+
+```bash
+cd web && npm install && npm run dev
+```
+
+`VITE_USE_MOCK_BRIDGE=true` — [docs/entry_points.md](docs/entry_points.md)
 
 ## 검증
 
 ```bash
 pip install -e ".[dev]"
 cd web && npm install
+
+# Python gate (pytest, ruff, mypy, black, web lint + vitest, packaging smokes)
 python scripts/verify_phase_completion.py
+
+# Web (touch web/ 시)
+npm run lint
+npm run test:contracts
+npm run build
 ```
 
-`verify_phase_completion.py` runs pytest → ruff → mypy → black → `npm run lint`.
+Bridge 계약: `pytest tests/test_bridge_contract.py -v` + `npm run test:contracts`
 
-## 잠긴 폴더
-
-초기화 시 다른 프로세스가 파일을 잡고 있으면 `_delete_*` 이름으로 남을 수 있습니다. IDE·앱을 종료한 뒤 해당 폴더를 수동으로 삭제하세요.
-
-## 다음 단계
-
-1. `docs/superpowers/specs/`에 새 설계 작성 → 승인
-2. `docs/superpowers/plans/`에 구현 플랜 작성 → 승인
-3. `src/` 백엔드 레이어 + `web/` React UI ([DESIGN.md](DESIGN.md)) 재구축
-
-정본 정책: [AGENTS.md](AGENTS.md)
+에이전트·PR 규칙: [AGENTS.md](AGENTS.md)

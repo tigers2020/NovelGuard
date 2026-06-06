@@ -6,7 +6,7 @@ Current NovelGuard documentation lives here.
 | ---- | ---- |
 | Superpowers workflow index | [superpowers/README.md](superpowers/README.md) |
 | Deep agent workflow | [superpowers/agent-workflow.md](superpowers/agent-workflow.md) |
-| Current architecture | [current_architecture.md](current_architecture.md) |
+| UX / IA contract (locked) | [architecture/main-ux-contract.md](architecture/main-ux-contract.md) |
 | Entry points | [entry_points.md](entry_points.md) |
 | Test policy | [agent-testing-policy.md](agent-testing-policy.md) |
 | Agent operating prompts | [agent-operating-prompt.md](agent-operating-prompt.md) |

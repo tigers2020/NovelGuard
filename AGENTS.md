@@ -7,7 +7,9 @@ Canonical repo guide for humans, Cursor, Codex, CLI runners, and automations.
 NovelGuard — local-first novel scan, duplicate detection, review, cleanup.
 
 Stack: Python 3.12+ (`src/`), React+TS (`web/`), Tailwind v4 ([DESIGN.md](DESIGN.md)).  
-Layers: `domain` → `application` → `infrastructure` → `web` → `app` ([docs/current_architecture.md](docs/current_architecture.md)).
+Layers: `domain` → `application` → `infrastructure` → `web` → `app`.  
+IA / UX contract: [docs/architecture/main-ux-contract.md](docs/architecture/main-ux-contract.md).  
+Entry points & verification: [docs/entry_points.md](docs/entry_points.md).
 
 **Safety:** no destructive file moves without dry-run preview + user approval.
 
@@ -58,6 +60,8 @@ Details: [docs/agents/git-safety.md](docs/agents/git-safety.md).
 | Large spec / plan | [docs/superpowers/agent-workflow.md](docs/superpowers/agent-workflow.md) |
 | Testing policy | [docs/agent-testing-policy.md](docs/agent-testing-policy.md) |
 | UI system | [DESIGN.md](DESIGN.md) |
+| UX / IA (locked) | [docs/architecture/main-ux-contract.md](docs/architecture/main-ux-contract.md) |
+| Run & verify commands | [docs/entry_points.md](docs/entry_points.md) |
 
 ---
 
@@ -73,9 +77,11 @@ Details: [docs/agents/git-safety.md](docs/agents/git-safety.md).
 
 ```bash
 python scripts/verify_phase_completion.py
-cd web && npm run lint          # web touched
-cd web && npm run test:contracts
-cd web && npm run test:e2e      # UI/E2E affected
+npm run lint --prefix web       # web touched
+npm run test:contracts --prefix web
+npm run build --prefix web      # web touched (production gate)
+npm run test:e2e --prefix web   # UI/E2E affected
+pytest tests/test_bridge_contract.py -v   # Python bridge parity
 ```
 
 Targeted: `pytest tests/path::test -v`  

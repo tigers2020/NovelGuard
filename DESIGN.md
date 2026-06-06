@@ -6,15 +6,15 @@ default_theme: dark
 ui_stack: react-tailwind-v4
 ui_root: web/
 ia_decision: hybrid-mode-resolve-workspace
-last_reviewed: 2026-06-01
+last_reviewed: 2026-06-06
 ---
 
 # NovelGuard Design System & UX/UI Guidelines
 
 **Canonical source** for UX/UI principles, design tokens, and React component contracts.
 
-| Layer | Stack | Path (target) |
-|-------|--------|----------------|
+| Layer | Stack | Path |
+|-------|--------|------|
 | **UI** | React + TypeScript + Tailwind CSS v4 | `web/` |
 | **Backend** | Python 3.12+ (`src/` layout) | `src/domain`, `application`, `infrastructure` |
 
@@ -64,7 +64,7 @@ Prefer **Material 3 / Fluent 2 / Carbon** as pattern references — implement wi
 
 ---
 
-## Frontend layout (target)
+## Frontend layout
 
 ```
 web/
@@ -86,10 +86,13 @@ web/
 
 ## Information architecture (IA)
 
-- **Locked (2026-06-01):** Hybrid **mode-based Work** — Scan · Resolve & Organize · Quality. Spec: [docs/superpowers/specs/2026-06-01-novelguard-ui-overhaul-design.md](docs/superpowers/specs/2026-06-01-novelguard-ui-overhaul-design.md).
+**Canonical IA:** [docs/architecture/main-ux-contract.md](docs/architecture/main-ux-contract.md) — code + tests win over older wizard/work-hub prose.
+
+- **Locked:** Hybrid **3-mode Work** — Scan · Resolve & Organize · Quality (`WorkModeTabs`, keep-alive workspaces).
+- **Subflows (dialog only):** Apply, Finalize (`FinalizeSubflowDialog` + async `startFinalizeJob` polling), Preflight, repair — not top-level tabs.
 - Primary review UI is **Resolve & Organize** (virtualized, query-backed grid) — not a four-card dashboard.
 - Wizard / stepper: **subflow only**; progress: **GlobalCommandBar** only.
-- File list: shell **summary strip** + full table in Work-owned workspace (not modal sheet as primary UI).
+- File list: global **`ShellFileDock`** summary + mode workspaces (not a duplicate dock inside Work).
 
 ### App shell (React)
 
@@ -108,7 +111,7 @@ web/
 </AppShell>
 ```
 
-**Work route (planned):** `WorkModeTabs`, `ScanWorkspace`, `ResolveAndOrganizeWorkspace` (FacetPanel + VirtualizedReviewGrid + DetailPanel + BatchActionBar), `QualityWorkspace`. Reference mock: `Sample/MockUp/MockUp.jsx`.
+**Work route (implemented):** `WorkRoute` → `WorkModeTabs` + `ScanWorkspace`, `ResolveAndOrganizeWorkspace` (FacetPanel + VirtualizedReviewGrid + DetailPanel + BatchActionBar + bulk auto-approve job UI), `QualityWorkspace`. Finalize via `FinalizeSubflowDialog` / `FinalizeWorkspace` — not a 4th tab.
 
 ---
 
@@ -239,6 +242,16 @@ const buttonVariants = cva(
 - Destructive **apply** still requires preview + confirm dialog — `danger` is not a shortcut.
 - `disabled` + `title` or inline text for **why** disabled.
 
+### Test contracts (canonical)
+
+| Surface | Authority |
+|---------|-----------|
+| Bridge / snapshot shapes | `npm run test:contracts`, `tests/test_bridge_contract.py` |
+| Feature workspaces | `data-state` on section roots (Scan, Resolve, Finalize, dock, command bar) |
+| UI primitives | `data-slot` when present on `components/ui/*` (vitest / e2e) |
+
+Legacy Qt `objectName` / QSS registry was removed (2026-06-01). **Do not** revive objectName or QSS tables; extend bridge contracts or `data-state` / `data-slot` instead.
+
 ### Layout & data primitives
 
 | Component | File | `data-slot` (tests) | Notes |
@@ -307,7 +320,7 @@ Dialogs: use `@headlessui/react` or Radix primitives — focus trap, `aria-label
 
 ---
 
-## Settings UX (target)
+## Settings UX
 
 - Simple / expert toggle
 - Category nav or search (`<SettingsNav />`)
@@ -333,14 +346,12 @@ Dialogs: use `@headlessui/react` or Radix primitives — focus trap, `aria-label
 
 | Priority | Work |
 |----------|------|
-| **P0** | IA spec approved → implement per [ui-overhaul spec](docs/superpowers/specs/2026-06-01-novelguard-ui-overhaul-design.md) |
-| **P1** | Scaffold `web/` (Vite + React + TS + Tailwind v4) |
-| **P1** | `components/ui` primitives: Button, Card, Table, Dialog, PipelineProgress |
-| **P2** | Duplicate review master–detail |
-| **P2** | File dock column density |
-| **P2** | Unified dry-run / confirm dialogs |
-| **P3** | Structured logs table |
-| **P3** | Settings nav + simple/expert |
+| **P2** | Korean fallback copy on bridge/query errors (see audit P2) |
+| **P2** | File dock column density polish |
+| **P3** | Settings simple/expert split refinement |
+| **P3** | Structured logs table density |
+
+IA shell, 3-mode Work, virtualized resolve/quality grids, apply/finalize subflows, and async finalize bridge job are **on main** — track new UI scope via spec + [main-ux-contract](docs/architecture/main-ux-contract.md), not this backlog alone.
 
 ---
 
@@ -350,3 +361,4 @@ Dialogs: use `@headlessui/react` or Radix primitives — focus trap, `aria-label
 |------|--------|
 | 2026-06-01 | Initial guidelines + Calm SaaS tokens; IA P0 open |
 | 2026-06-01 | **React + Tailwind v4** as sole UI implementation target; removed Qt/QSS dual contract |
+| 2026-06-06 | Aligned IA/backlog with main (3-mode Work, async finalize job); bridge + `data-slot` as test contracts |
