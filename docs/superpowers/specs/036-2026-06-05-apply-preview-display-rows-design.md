@@ -1,9 +1,10 @@
 ---
 title: Apply preview display rows — filename and move path in confirm step
-status: draft
+status: approved
 date: 2026-06-05
-implementation: wip-on-branch
-wip_branch: wip/mixed-035-036-salvage
+implementation: on-main
+merged_pr: 60
+merged_commit: d66f40ed
 risk: safe
 kind: feature
 layer: crosslayer
@@ -17,9 +18,8 @@ related_specs:
   - docs/superpowers/specs/033-2026-06-05-auto-keeper-bulk-approve-policy.md
 ---
 
-> **Status:** `draft` / **not on main** — implementation preserved on `wip/mixed-035-036-salvage`
+> **Status:** `approved` / **implemented on `main`** — merged via PR #60 (`d66f40ed`, 2026-06-06)
 > **Current main contract:** [main-ux-contract.md](../../architecture/main-ux-contract.md)
-> **Target PR:** `feature/apply-preview-display-rows` — move/apply preview only; do not mix with bulk auto-approve job.
 
 # Apply preview display rows
 
