@@ -84,6 +84,21 @@ describe("BatchActionBar", () => {
     expect(screen.getByTestId("batch-review-only-banner").textContent).toContain("Exact (이동)");
   });
 
+  it("renders job progress slot when provided", () => {
+    render(
+      <BatchActionBar
+        filteredCount={10}
+        loadedCount={10}
+        jobProgress={<div data-testid="job-progress-slot">progress</div>}
+        onExcludeAllFiltered={noop}
+        onAutoSelectKeepers={noop}
+        onPreview={noop}
+      />,
+    );
+
+    expect(screen.getByTestId("job-progress-slot")).toBeTruthy();
+  });
+
   it("hides review-only banner when guidance is unset", () => {
     render(
       <BatchActionBar

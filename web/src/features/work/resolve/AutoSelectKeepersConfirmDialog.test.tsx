@@ -1,19 +1,26 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AutoSelectKeepersConfirmDialog } from "./AutoSelectKeepersConfirmDialog";
-import type { AutoSelectSummary } from "./computeAutoSelectSummary";
+import type { ResolveAutoApproveSummary } from "../../../types/resolveAutoApproveSummary";
 
-const baseSummary: AutoSelectSummary = {
+const baseSummary: ResolveAutoApproveSummary = {
   unreviewedCount: 10,
   keeperCount: 4,
   moveCandidateCount: 6,
   exactCount: 3,
   nearCount: 4,
   relationCount: 3,
-  capped: false,
-  mutationTargetCount: 10,
-  partialLoad: false,
-  keeperPreviewUsesMtime: true,
+  skippedConflictCount: 0,
+  skippedExcludedCount: 0,
+  keeperRowIds: [],
+  approveRowIds: [],
+  samples: {
+    keepers: [],
+    moveCandidates: [],
+    exact: [],
+    near: [],
+    relation: [],
+  },
 };
 
 describe("AutoSelectKeepersConfirmDialog", () => {
@@ -44,37 +51,6 @@ describe("AutoSelectKeepersConfirmDialog", () => {
       screen.getByText(/이동 계획 미리보기에서 최종 이동 대상을 검토합니다/),
     ).toBeTruthy();
     expect(screen.queryByTestId("bulk-auto-select-cap-warning")).toBeNull();
-  });
-
-  it("shows cap warning when capped", () => {
-    render(
-      <AutoSelectKeepersConfirmDialog
-        open
-        summary={{
-          ...baseSummary,
-          capped: true,
-          mutationTargetCount: 500,
-          unreviewedCount: 501,
-        }}
-        onConfirm={vi.fn()}
-        onCancel={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByTestId("bulk-auto-select-cap-warning")).toBeTruthy();
-    expect(screen.getByText(/500건을 초과합니다/)).toBeTruthy();
-  });
-
-  it("shows partial load warning when partialLoad", () => {
-    render(
-      <AutoSelectKeepersConfirmDialog
-        open
-        summary={{ ...baseSummary, partialLoad: true }}
-        onConfirm={vi.fn()}
-        onCancel={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByTestId("batch-partial-load-warning")).toBeTruthy();
+    expect(screen.queryByTestId("batch-partial-load-warning")).toBeNull();
   });
 });

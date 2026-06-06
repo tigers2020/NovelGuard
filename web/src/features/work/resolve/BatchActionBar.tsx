@@ -1,8 +1,11 @@
+import type { ReactNode } from "react";
+
 export function BatchActionBar({
   filteredCount,
   loadedCount,
   loadingAll = false,
   reviewOnlyGuidance,
+  jobProgress,
   onExcludeAllFiltered,
   onAutoSelectKeepers,
   autoSelectDisabled = false,
@@ -18,6 +21,7 @@ export function BatchActionBar({
   loadedCount: number;
   loadingAll?: boolean;
   reviewOnlyGuidance?: string;
+  jobProgress?: ReactNode;
   onExcludeAllFiltered: () => void;
   onAutoSelectKeepers: () => void;
   autoSelectDisabled?: boolean;
@@ -33,6 +37,7 @@ export function BatchActionBar({
 
   return (
     <div className="shrink-0 border-t border-outline bg-surface">
+      {jobProgress}
       {reviewOnlyGuidance ? (
         <div className="px-4 pt-3">
           <div
