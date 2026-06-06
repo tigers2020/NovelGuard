@@ -113,9 +113,7 @@ class BuildPreviewPlanUseCase:
                     "action": "move_duplicate",
                     "name": file_record.name,
                     "sourcePath": op.source_path,
-                    "destPath": format_move_duplicate_dest_display(
-                        root, target_folder, dest_rel
-                    ),
+                    "destPath": format_move_duplicate_dest_display(root, target_folder, dest_rel),
                 }
             )
 
@@ -182,4 +180,3 @@ class BuildPreviewPlanUseCase:
             "rows": [],
             "summary": {"rowCount": 0, "operationCount": 0},
         }
-

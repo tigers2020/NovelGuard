@@ -19,5 +19,3 @@ def content_hash_for_move(path: Path, *, size_bytes: int) -> str:
         head, tail = read_head_tail(path, size_bytes, SAMPLE_BYTES)
         return content_fingerprint(size_bytes, head, tail)
     return hash_file(path)
-
-

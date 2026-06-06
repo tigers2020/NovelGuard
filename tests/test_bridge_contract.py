@@ -1932,9 +1932,7 @@ def test_partial_apply_batch_records_audit_and_raises(
 
     batch = move_rows[:3]
     moved = [
-        row["name"]
-        for row in batch
-        if (_sibling_duplicate_root(tmp_path) / row["name"]).exists()
+        row["name"] for row in batch if (_sibling_duplicate_root(tmp_path) / row["name"]).exists()
     ]
     unmoved = [row["name"] for row in batch if (tmp_path / row["name"]).exists()]
     assert len(moved) == 2
