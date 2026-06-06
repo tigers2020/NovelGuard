@@ -77,6 +77,7 @@ Details: [docs/agents/git-safety.md](docs/agents/git-safety.md).
 
 ```bash
 python scripts/verify_phase_completion.py
+python -m pytest -m large_library  # opt-in ~7.2k SLO gate (after generate_large_library_fixture.py)
 npm run lint --prefix web       # web touched
 npm run test:contracts --prefix web
 npm run build --prefix web      # web touched (production gate)

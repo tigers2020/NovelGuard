@@ -43,7 +43,8 @@ Post checklist: record `## Operator sign-off` on [NOV-42](https://linear.app/zka
 
 ```bash
 python scripts/generate_large_library_fixture.py
-python scripts/large_library_loading_smoke.py
+python -m pytest -m large_library
+# or: python scripts/large_library_loading_smoke.py
 python scripts/verify_phase_completion.py
 pytest tests/test_bridge_contract.py -q
 cd web && npm run test -- src/bridge/bridgeParity.test.ts

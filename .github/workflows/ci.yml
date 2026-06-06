@@ -61,5 +61,7 @@ jobs:
       - name: generate large library fixture
         run: python scripts/generate_large_library_fixture.py
 
-      - name: large library loading smoke
-        run: python scripts/large_library_loading_smoke.py --skip-generate
+      - name: large library performance gate
+        env:
+          REQUIRE_LARGE_LIBRARY: "1"
+        run: python -m pytest tests/test_nov37_large_library_smoke.py -m large_library -k full_slo -q
