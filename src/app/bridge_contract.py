@@ -602,6 +602,36 @@ def validate_finalize_result(payload: Any) -> None:
             raise PageContractError(f"cleanup.{key} must be a list")
 
 
+def validate_resolve_auto_approve_summary(payload: Any) -> None:
+    if not isinstance(payload, dict):
+        raise PageContractError("resolve auto-approve summary must be a dict")
+    for key in (
+        "unreviewedCount",
+        "keeperCount",
+        "moveCandidateCount",
+        "exactCount",
+        "nearCount",
+        "relationCount",
+        "skippedConflictCount",
+        "skippedExcludedCount",
+    ):
+        value = payload.get(key)
+        if not isinstance(value, int) or value < 0:
+            raise PageContractError(f"{key} must be a non-negative int")
+    keeper_row_ids = payload.get("keeperRowIds")
+    if not isinstance(keeper_row_ids, list):
+        raise PageContractError("keeperRowIds must be a list")
+    samples = payload.get("samples")
+    if not isinstance(samples, dict):
+        raise PageContractError("samples must be a dict")
+    for sample_key in ("keepers", "moveCandidates", "exact", "near", "relation"):
+        names = samples.get(sample_key)
+        if not isinstance(names, list) or len(names) > 5:
+            raise PageContractError(f"samples.{sample_key} must be a list with at most 5 items")
+        if not all(isinstance(name, str) for name in names):
+            raise PageContractError(f"samples.{sample_key} must contain strings")
+
+
 def validate_selection_scope(selection: Any) -> None:
     if not isinstance(selection, dict):
         raise InvalidSelectionScopeError("SelectionScope must be a dict")

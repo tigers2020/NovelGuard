@@ -542,6 +542,17 @@ class LibrarySession:
                 files_by_id=self._files_by_id,
             )
 
+    def summarize_resolve_auto_approve(self, query: dict[str, Any]) -> dict[str, Any]:
+        from application.summarize_resolve_auto_approve import summarize_resolve_auto_approve
+
+        with self._lock:
+            return summarize_resolve_auto_approve(
+                self._review_rows_cache,
+                query,
+                files_by_id=self._files_by_id,
+                members_by_group=self.build_review_members_by_group(),
+            )
+
     def library_revision(self) -> int:
         with self._lock:
             return self._library_revision

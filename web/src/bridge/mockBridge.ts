@@ -39,6 +39,7 @@ import {
   persistMockExactNonKeeperApprovals,
   resolveInsightCounts,
   summarizeMockAutoSelectKeepers,
+  summarizeMockResolveAutoApprove,
 } from "./mockReviewState";
 import type { DuplicateGroupDetail, ReviewRow } from "../types/review";
 import { buildMockDuplicateGroupDetail } from "./mockDuplicateGroupDetail";
@@ -821,6 +822,10 @@ export const mockBridge: NovelGuardBridge = {
 
   async summarizeAutoSelectKeepers(query: ReviewRowsQuery) {
     return summarizeMockAutoSelectKeepers(mergedReviewRows(), query);
+  },
+
+  async summarizeResolveAutoApprove(query: ReviewRowsQuery) {
+    return summarizeMockResolveAutoApprove(mergedReviewRows(), query);
   },
 
   async discardMovePreview(request: DiscardMovePreviewRequest) {
