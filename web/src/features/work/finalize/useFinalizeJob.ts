@@ -21,12 +21,51 @@ export function useFinalizeJob({
   const bridge = useBridge();
   const refreshSnapshot = useRefreshSnapshot();
   const job = useSnapshot().finalizeJob;
+  const isRunning = job.status === "running" || job.status === "queued";
   const lastHandledTerminalKeyRef = useRef<string | null>(null);
   const onJobTerminalRef = useRef(onJobTerminal);
 
   useEffect(() => {
     onJobTerminalRef.current = onJobTerminal;
   }, [onJobTerminal]);
+
+  useEffect(() => {
+    if (!isRunning) {
+      return;
+    }
+
+    let cancelled = false;
+    let timeoutId: number | undefined;
+
+    const poll = async () => {
+      if (cancelled) {
+        return;
+      }
+      try {
+        const latest = await bridge.getFinalizeJob();
+        if (!cancelled) {
+          await refreshSnapshot();
+        }
+        if (!isFinalizeJobTerminal(latest.status) && !cancelled) {
+          timeoutId = window.setTimeout(() => void poll(), 1000);
+        }
+      } catch {
+        if (!cancelled) {
+          await refreshSnapshot();
+          timeoutId = window.setTimeout(() => void poll(), 1000);
+        }
+      }
+    };
+
+    timeoutId = window.setTimeout(() => void poll(), 1000);
+
+    return () => {
+      cancelled = true;
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [bridge, refreshSnapshot, isRunning]);
 
   useEffect(() => {
     const key = terminalJobKey(job);
@@ -53,8 +92,6 @@ export function useFinalizeJob({
     await bridge.cancelFinalize();
     await refreshSnapshot();
   }, [bridge, refreshSnapshot]);
-
-  const isRunning = job.status === "running" || job.status === "queued";
 
   return { job, isRunning, startJob, cancelJob };
 }
