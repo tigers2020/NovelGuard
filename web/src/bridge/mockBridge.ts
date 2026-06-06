@@ -838,16 +838,18 @@ export const mockBridge: NovelGuardBridge = {
 
   async startResolveAutoApproveJob(query: ReviewRowsQuery) {
     if (resolveAutoApproveJob.status === "running") {
-      throw new BridgeCallError("JOB_ALREADY_RUNNING", {
-        code: "JOB_ALREADY_RUNNING",
+      throw new BridgeCallError("Bridge call rejected: JOB_ALREADY_RUNNING", {
+        code: "rejected",
         method: "startResolveAutoApproveJob",
+        reason: "JOB_ALREADY_RUNNING",
       });
     }
     const preview = summarizeMockResolveAutoApprove(mergedReviewRows(), query);
     if (preview.unreviewedCount === 0) {
-      throw new BridgeCallError("NO_UNREVIEWED_TARGETS", {
-        code: "NO_UNREVIEWED_TARGETS",
+      throw new BridgeCallError("Bridge call rejected: NO_UNREVIEWED_TARGETS", {
+        code: "rejected",
         method: "startResolveAutoApproveJob",
+        reason: "NO_UNREVIEWED_TARGETS",
       });
     }
     resolveAutoApproveCancelRequested = false;
