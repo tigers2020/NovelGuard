@@ -62,8 +62,7 @@ def assert_slo_report(report: dict) -> None:
         failures.append("query_file_rows_p95_ms missing")
     elif file_rows_p95 > FILE_ROWS_P95_SLO_MS:
         failures.append(
-            f"query_file_rows_p95_ms={file_rows_p95:.1f}ms exceeds "
-            f"{FILE_ROWS_P95_SLO_MS}ms SLO"
+            f"query_file_rows_p95_ms={file_rows_p95:.1f}ms exceeds " f"{FILE_ROWS_P95_SLO_MS}ms SLO"
         )
 
     if not isinstance(review_first, (int, float)):
