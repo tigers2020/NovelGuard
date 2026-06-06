@@ -16,6 +16,9 @@ cursor:
   # -p = --print (headless). Prompt on stdin, not argv.
   args: ["-p", "--trust", "--force", "--approve-mcps"]
   dry_run: false
+  stall_seconds: 900
+  stall_max_retries: 1
+  stall_poll_seconds: 5
 
 queue:
   path: automation/jobs/queue.sqlite

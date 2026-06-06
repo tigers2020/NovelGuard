@@ -10,6 +10,8 @@ from typing import TextIO
 
 from automation.runners.cursor_runner import get_cursor_pid, is_cursor_proc_running
 
+_DEFAULT_STALL_SECONDS = 900.0
+
 
 @dataclass(frozen=True)
 class StallDiagnosis:
@@ -137,7 +139,7 @@ def write_stall_diagnosis(
 def cursor_stall_config(cfg: dict) -> tuple[float, int, float]:
     """Return (stall_seconds, max_retries, poll_seconds)."""
     cursor_cfg = cfg.get("cursor") or {}
-    stall_seconds = float(cursor_cfg.get("stall_seconds", 300))
+    stall_seconds = float(cursor_cfg.get("stall_seconds", _DEFAULT_STALL_SECONDS))
     max_retries = int(cursor_cfg.get("stall_max_retries", 1))
     poll_seconds = float(cursor_cfg.get("stall_poll_seconds", 5))
     return stall_seconds, max_retries, poll_seconds
