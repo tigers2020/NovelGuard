@@ -336,6 +336,16 @@ function resolveSelectedRows(selection: SelectionScope): ReviewRow[] {
   return mergedReviewRows().filter((row) => idSet.has(row.id));
 }
 
+function buildMoveDuplicateDestRelative(targetFolder: string, sourceRelativePath: string): string {
+  const folder = targetFolder.trim().replace(/\\/g, "/").replace(/^\/|\/$/g, "") || "duplicate";
+  let rel = sourceRelativePath.replace(/\\/g, "/").replace(/^\//, "");
+  if (rel === folder || rel.startsWith(`${folder}/`)) {
+    rel = rel.slice(folder.length).replace(/^\//, "");
+  }
+  const lib = "library";
+  return rel ? `../${folder}/${lib}/${rel}` : `../${folder}/${lib}`;
+}
+
 function buildMockPreviewPlan(selection: SelectionScope): {
   rows: MovePreviewRow[];
   summary: {
@@ -354,7 +364,15 @@ function buildMockPreviewPlan(selection: SelectionScope): {
     if (row.status !== "approved") continue;
     if (row.type !== "exact" && row.type !== "near" && row.type !== "relation") continue;
     if (row.proposedAction !== "move_duplicate") continue;
-    rows.push({ id: row.id, action: "move_duplicate" });
+    const targetFolder = row.targetFolder ?? "duplicate/";
+    const sourcePath = row.path ?? row.name;
+    rows.push({
+      id: row.id,
+      action: "move_duplicate",
+      name: row.name,
+      sourcePath,
+      destPath: buildMoveDuplicateDestRelative(targetFolder, sourcePath),
+    });
   }
 
   const operations = rows.map((r) => ({ rowId: r.id, action: r.action }));
@@ -722,20 +740,23 @@ export const mockBridge: NovelGuardBridge = {
     const rev = libraryRevision;
     const plan = buildMockPreviewPlan(selection);
 
-    pendingPreview = {
-      token,
-      libraryRevision: rev,
-      selectionFingerprint: fp,
-      rows: plan.rows,
-      planFingerprint: plan.planFingerprint,
-    };
-    state.hasPendingApply = true;
+    const hasOps = plan.summary.operationCount > 0;
+    if (hasOps) {
+      pendingPreview = {
+        token,
+        libraryRevision: rev,
+        selectionFingerprint: fp,
+        rows: plan.rows,
+        planFingerprint: plan.planFingerprint,
+      };
+      state.hasPendingApply = true;
+    }
 
     const result: MovePreviewResult = {
       previewToken: token,
       libraryRevision: rev,
       selectionFingerprint: fp,
-      hasPendingApply: true,
+      hasPendingApply: hasOps,
       rows: plan.rows,
       summary: plan.summary,
     };

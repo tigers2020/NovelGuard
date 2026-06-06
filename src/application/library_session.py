@@ -152,6 +152,7 @@ class LibrarySession:
         self._backup_files: list[FileRecord] | None = None
         self._backup_folder: str | None = None
         self._has_pending_apply = False
+        self._deferred_revision_bumps = 0
         self._review_rows_cache: list[dict[str, Any]] = []
         self._duplicate_group_count = 0
         self._queue_count = 0
@@ -551,7 +552,10 @@ class LibrarySession:
 
     def set_has_pending_apply(self, value: bool) -> None:
         with self._lock:
+            was_pending = self._has_pending_apply
             self._has_pending_apply = value
+            if was_pending and not value:
+                self._flush_deferred_revision_bumps_locked()
 
     def set_has_pending_quality_repair(self, value: bool) -> None:
         with self._lock:
@@ -626,9 +630,39 @@ class LibrarySession:
                         return record
             return None
 
+    def reconcile_members_already_at_move_target(self, file_ids: list[str]) -> int:
+        """Persist excluded status for duplicate members already under the move target folder."""
+        with self._lock:
+            folder = self._index.folder_path
+            if not folder or not file_ids:
+                return 0
+            updated = 0
+            for file_id in file_ids:
+                if file_id not in self._files_by_id:
+                    continue
+                self._index.upsert_review_member(folder, file_id, "excluded")
+                updated += 1
+            if updated:
+                self._rebuild_review_index(list(self._files_by_id.values()))
+                self._library_revision += 1
+            return updated
+
     def increment_library_revision(self) -> None:
         with self._lock:
             self._library_revision += 1
+
+    def bump_library_revision_unless_pending_apply(self) -> None:
+        """Defer revision bumps while a move preview is pending (background analysis safe)."""
+        with self._lock:
+            if self._has_pending_apply:
+                self._deferred_revision_bumps += 1
+                return
+            self._library_revision += 1
+
+    def _flush_deferred_revision_bumps_locked(self) -> None:
+        if self._deferred_revision_bumps:
+            self._library_revision += self._deferred_revision_bumps
+            self._deferred_revision_bumps = 0
 
     def build_review_members_by_group(self) -> dict[str, set[str]]:
         from domain.duplicate_exact import find_exact_duplicate_groups
@@ -1406,7 +1440,7 @@ class LibrarySession:
                     self._exact_auto_approved_count = exact_auto_approved_count
                     self._scan_state = "success"
                     self._scan_last_run = scan_timestamp()
-                    self._library_revision += 1
+                    self.bump_library_revision_unless_pending_apply()
 
                 if defer_projection:
                     self._sync_file_review_projection()
@@ -1451,8 +1485,7 @@ class LibrarySession:
                     block_pipeline=block_pipeline,
                 )
                 self._run_relation_phase(folder, files)
-                with self._lock:
-                    self._library_revision += 1
+                self.bump_library_revision_unless_pending_apply()
                 _finish_active_phase()
 
                 _begin_phase("near")
@@ -1464,8 +1497,7 @@ class LibrarySession:
                     block_pipeline=block_pipeline,
                 )
                 self._run_near_duplicate_phase(folder, files)
-                with self._lock:
-                    self._library_revision += 1
+                self.bump_library_revision_unless_pending_apply()
                 _finish_active_phase()
 
                 if defer_projection:
@@ -1503,7 +1535,7 @@ class LibrarySession:
                 with self._lock:
                     self._post_scan_running = False
                     self._clear_background_progress()
-                    self._library_revision += 1
+                self.bump_library_revision_unless_pending_apply()
                 log_phase_end("worker", worker_t0, status=worker_status)
 
         threading.Thread(target=_worker, name="novelguard-post-scan", daemon=True).start()

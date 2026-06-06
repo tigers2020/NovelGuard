@@ -33,11 +33,27 @@ export function validateMovePreviewResult(payload: unknown): asserts payload is 
   if (typeof p.selectionFingerprint !== "string" || p.selectionFingerprint.length === 0) {
     throw new MovePreviewContractError("selectionFingerprint invalid");
   }
-  if (p.hasPendingApply !== true) {
-    throw new MovePreviewContractError("hasPendingApply must be true on preview");
+  const summary = p.summary as Record<string, unknown>;
+  const opCount = summary.operationCount;
+  if (typeof opCount !== "number") {
+    throw new MovePreviewContractError("summary.operationCount must be a number");
+  }
+  if (Boolean(p.hasPendingApply) !== opCount > 0) {
+    throw new MovePreviewContractError("hasPendingApply must match operationCount > 0");
   }
   if (!Array.isArray(p.rows)) {
     throw new MovePreviewContractError("rows must be an array");
+  }
+  for (const row of p.rows) {
+    if (typeof row !== "object" || row === null) {
+      throw new MovePreviewContractError("row must be an object");
+    }
+    const r = row as Record<string, unknown>;
+    for (const key of ["id", "action", "name", "sourcePath", "destPath"] as const) {
+      if (typeof r[key] !== "string" || r[key].length === 0) {
+        throw new MovePreviewContractError(`row missing or empty ${key}`);
+      }
+    }
   }
   if (typeof p.summary !== "object" || p.summary === null) {
     throw new MovePreviewContractError("summary must be an object");

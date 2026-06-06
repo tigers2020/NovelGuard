@@ -56,6 +56,17 @@ from infrastructure.sqlite_library_index import SqliteLibraryIndex
 from tests.fixtures.bridge_contract_fixtures import VALID_SNAPSHOT
 
 
+def _sibling_duplicate_root(library_root: Path) -> Path:
+    return library_root.parent / "duplicate" / library_root.name
+
+
+def _resolve_preview_dest(library_root: Path, dest_display: str) -> Path:
+    norm = dest_display.replace("\\", "/")
+    if norm.startswith("../"):
+        return (library_root.parent / norm[3:]).resolve()
+    return (library_root / norm).resolve()
+
+
 def _memory_api() -> BridgeApi:
     return create_bridge_api(
         create_library_session(MemoryLibraryIndex(), settings=AppSettings()),
@@ -180,7 +191,7 @@ def test_bridge_api_get_move_preview_requires_selection() -> None:
     api = _memory_api()
     preview = api.get_move_preview({"type": "explicit_rows", "rowIds": ["row-1"]})
     assert "rows" in preview
-    assert preview["hasPendingApply"] is True
+    assert preview["hasPendingApply"] is (preview["summary"]["operationCount"] > 0)
     assert "previewToken" in preview
     assert isinstance(preview["libraryRevision"], int)
 
@@ -1558,7 +1569,7 @@ def test_sqlite_quality_issues_folder_scoped(tmp_path: Path) -> None:
 def _move_op(
     *,
     source: str = "a/keep.txt",
-    dest: str = "duplicate/a/keep.txt",
+    dest: str = "a/keep.txt",
 ) -> PreviewOperation:
     return PreviewOperation(
         row_id="file:g1:f1",
@@ -1576,7 +1587,7 @@ def test_apply_path_policy_blocks_path_traversal(tmp_path: Path) -> None:
     root.mkdir()
     result = validate_move_operation(
         root,
-        _move_op(source="../outside.txt", dest="duplicate/outside.txt"),
+        _move_op(source="../outside.txt", dest="outside.txt"),
         destination_exists=False,
     )
     assert not result.allowed
@@ -1598,12 +1609,14 @@ def test_apply_path_policy_blocks_absolute_dest(tmp_path: Path) -> None:
 
 def test_apply_path_policy_blocks_destination_exists(tmp_path: Path) -> None:
     root = tmp_path / "lib"
-    (root / "duplicate").mkdir(parents=True)
-    (root / "duplicate" / "dup.txt").write_text("exists", encoding="utf-8")
+    root.mkdir()
+    ext_dup = tmp_path / "duplicate" / "lib"
+    ext_dup.mkdir(parents=True)
+    (ext_dup / "dup.txt").write_text("exists", encoding="utf-8")
     (root / "src.txt").write_text("src", encoding="utf-8")
     result = validate_move_operation(
         root,
-        _move_op(source="src.txt", dest="duplicate/dup.txt"),
+        _move_op(source="src.txt", dest="dup.txt"),
         destination_exists=True,
     )
     assert not result.allowed
@@ -1629,7 +1642,7 @@ def test_filesystem_apply_moves_file(tmp_path: Path) -> None:
     root.mkdir()
     src = root / "src.txt"
     src.write_text("payload", encoding="utf-8")
-    dest = root / "duplicate" / "src.txt"
+    dest = tmp_path / "duplicate" / "lib" / "src.txt"
     adapter = LocalFilesystemApplyAdapter()
     assert adapter.move_file(src, dest).outcome == "ok"
     assert dest.read_text(encoding="utf-8") == "payload"
@@ -1753,7 +1766,7 @@ def test_real_apply_moves_duplicate_file(
     api.apply_resolved_actions({"selection": sel, "previewToken": preview["previewToken"]})
     src_name = move_row["name"]
     assert not (tmp_path / src_name).exists()
-    assert (tmp_path / "duplicate" / src_name).exists()
+    assert (_sibling_duplicate_root(tmp_path) / src_name).exists()
     snap = api.get_snapshot()
     assert snap["work"]["resolve"]["hasPendingApply"] is False
 
@@ -1819,7 +1832,7 @@ def test_apply_succeeds_for_approved_near_after_preview(
     api.apply_resolved_actions({"selection": sel, "previewToken": preview["previewToken"]})
     src_name = move_row["name"]
     assert not (tmp_path / src_name).exists()
-    assert (tmp_path / "duplicate" / src_name).exists()
+    assert (_sibling_duplicate_root(tmp_path) / src_name).exists()
     snap = api.get_snapshot()
     assert snap["work"]["resolve"]["hasPendingApply"] is False
 
@@ -1850,6 +1863,24 @@ def test_bridge_stale_revision_clears_pending(tmp_path: Path) -> None:
         api.apply_resolved_actions({"selection": sel, "previewToken": preview["previewToken"]})
     assert exc.value.reason == "STALE_PREVIEW"
     assert api.get_snapshot()["work"]["resolve"]["hasPendingApply"] is False
+
+
+def test_move_preview_targets_sibling_duplicate_folder(tmp_path: Path) -> None:
+    (tmp_path / "a.txt").write_text("dup\n", encoding="utf-8")
+    (tmp_path / "b.txt").write_text("dup\n", encoding="utf-8")
+    session = create_library_session(MemoryLibraryIndex())
+    session.select_folder(str(tmp_path))
+    api = create_bridge_api(session)
+    api.start_scan()
+    _scan_until_idle(api)
+    page = api.query_review_rows({"viewMode": "all", "limit": 50})
+    move_row = next(row for row in page["rows"] if row.get("proposedAction") == "move_duplicate")
+    preview = api.get_move_preview({"type": "explicit_rows", "rowIds": [move_row["id"]]})
+    validate_move_preview(preview)
+    assert preview["summary"]["operationCount"] == 1
+    row = preview["rows"][0]
+    assert row["destPath"].startswith("../duplicate/")
+    assert not row["destPath"].startswith("duplicate/")
 
 
 def test_apply_reuse_token_raises_no_pending(tmp_path: Path) -> None:
@@ -1900,7 +1931,9 @@ def test_partial_apply_batch_records_audit_and_raises(
     assert exc.value.details.get("succeededCount") == 2
 
     batch = move_rows[:3]
-    moved = [row["name"] for row in batch if (tmp_path / "duplicate" / row["name"]).exists()]
+    moved = [
+        row["name"] for row in batch if (_sibling_duplicate_root(tmp_path) / row["name"]).exists()
+    ]
     unmoved = [row["name"] for row in batch if (tmp_path / row["name"]).exists()]
     assert len(moved) == 2
     assert len(unmoved) == 1

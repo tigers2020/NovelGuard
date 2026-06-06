@@ -6,6 +6,7 @@ export type PreviewApplyErrorCode =
   | "INVALID_PREVIEW_TOKEN"
   | "NO_PENDING_APPLY"
   | "STALE_PREVIEW"
+  | "DESTINATION_EXISTS"
   | "SELECTION_CHANGED"
   | "APPLY_FAILED"
   | "LIBRARY_BUSY"
@@ -25,6 +26,9 @@ export interface ApplyFailedDetails {
 export interface MovePreviewRow {
   id: string;
   action: string;
+  name: string;
+  sourcePath: string;
+  destPath: string;
 }
 
 export interface MovePreviewSummary {
@@ -32,13 +36,14 @@ export interface MovePreviewSummary {
   conflictCount?: number;
   operationCount?: number;
   blockedCount?: number;
+  alreadyInTargetCount?: number;
 }
 
 export interface MovePreviewResult {
   previewToken: string;
   libraryRevision: number;
   selectionFingerprint: string;
-  hasPendingApply: true;
+  hasPendingApply: boolean;
   rows: MovePreviewRow[];
   summary: MovePreviewSummary;
 }

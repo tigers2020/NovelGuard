@@ -36,6 +36,7 @@ function applyErrorMessage(err: unknown): {
     const details = err.details;
     const byReason: Record<PreviewApplyErrorCode, string> = {
       STALE_PREVIEW: "라이브러리가 변경되었습니다. 다시 미리보기하세요.",
+      DESTINATION_EXISTS: "이동 대상 경로에 이미 파일이 있습니다. 충돌 항목을 확인한 뒤 다시 미리보기하세요.",
       SELECTION_CHANGED: "선택이 변경되었습니다. 다시 미리보기하세요.",
       NO_PENDING_APPLY: "적용 가능한 미리보기가 없습니다.",
       MISSING_PREVIEW_TOKEN: "미리보기 토큰이 없습니다.",
@@ -81,6 +82,13 @@ function SummaryChips({ summary }: { summary: MovePreviewSummary }) {
       testId: "apply-summary-conflicts",
     });
   }
+  if (summary.alreadyInTargetCount) {
+    chips.push({
+      label: "이미 이동됨",
+      value: summary.alreadyInTargetCount,
+      testId: "apply-summary-already-in-target",
+    });
+  }
   if (summary.blockedCount) {
     chips.push({
       label: "차단",
@@ -105,8 +113,26 @@ function SummaryChips({ summary }: { summary: MovePreviewSummary }) {
   );
 }
 
-function PreviewRowsTable({ rows }: { rows: MovePreviewResult["rows"] }) {
+function PreviewRowsTable({
+  rows,
+  alreadyInTargetCount,
+}: {
+  rows: MovePreviewResult["rows"];
+  alreadyInTargetCount?: number;
+}) {
   if (rows.length === 0) {
+    if (alreadyInTargetCount && alreadyInTargetCount > 0) {
+      return (
+        <p
+          className="mt-3 text-sm text-success"
+          data-testid="apply-preview-already-done"
+          role="status"
+        >
+          {alreadyInTargetCount}개 파일은 이미 라이브러리 옆 duplicate 폴더에 있습니다. 검토 상태를 정리했습니다.
+          다이얼로그를 닫고 그리드를 확인하세요.
+        </p>
+      );
+    }
     return (
       <p className="mt-3 text-sm text-on-surface-variant" data-testid="apply-preview-empty">
         실행 가능한 이동이 없습니다. 충돌·차단 요약을 확인하세요.
@@ -122,15 +148,22 @@ function PreviewRowsTable({ rows }: { rows: MovePreviewResult["rows"] }) {
       <table className="w-full text-left text-sm">
         <thead className="sticky top-0 bg-surface-elevated text-on-surface-variant">
           <tr>
-            <th className="px-3 py-2 font-semibold">행 ID</th>
-            <th className="px-3 py-2 font-semibold">동작</th>
+            <th className="px-3 py-2 font-semibold">파일</th>
+            <th className="px-3 py-2 font-semibold">이동 경로</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
             <tr key={row.id} className="border-t border-outline" data-testid={`apply-preview-row-${row.id}`}>
-              <td className="px-3 py-2 font-mono text-xs text-on-surface">{row.id}</td>
-              <td className="px-3 py-2 text-on-surface">{row.action}</td>
+              <td
+                className="max-w-[12rem] truncate px-3 py-2 text-on-surface"
+                title={row.name}
+              >
+                {row.name}
+              </td>
+              <td className="px-3 py-2 font-mono text-xs text-on-surface">
+                {row.sourcePath} → {row.destPath}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -180,6 +213,9 @@ export function ApplySubflowDialog({
 
   const readyPreview = effectivePreviewState.status === "ready" ? effectivePreviewState.preview : null;
   const operationCount = readyPreview?.summary.operationCount ?? 0;
+  const alreadyInTargetCount = readyPreview?.summary.alreadyInTargetCount ?? 0;
+  const previewReconciledOnly =
+    readyPreview !== null && operationCount === 0 && alreadyInTargetCount > 0;
 
   const handleClose = async () => {
     if (activePreviewToken && step !== "done") {
@@ -203,11 +239,18 @@ export function ApplySubflowDialog({
     setPreviewError(null);
     setApplyError(null);
     setApplyOutcome(null);
+    if (previewState.status === "stale") {
+      setPreviewState({ status: "idle" });
+    }
     try {
       const result = await bridge.getMovePreview(selection);
       setActivePreviewToken(result.previewToken);
       setPreviewState({ status: "ready", preview: result });
       setStep("confirm");
+      await refreshSnapshot();
+      if ((result.summary.operationCount ?? 0) === 0 && (result.summary.alreadyInTargetCount ?? 0) > 0) {
+        setActivePreviewToken(null);
+      }
     } catch (err) {
       setPreviewError(err instanceof Error ? err.message : "Preview failed");
       setPreviewState({ status: "error", message: "Preview failed" });
@@ -243,10 +286,18 @@ export function ApplySubflowDialog({
       if (reason === "APPLY_FAILED" && details?.partialSuccess && (details.succeededCount ?? 0) > 0) {
         void refreshSnapshot();
       }
-      if (reason === "STALE_PREVIEW" || reason === "SELECTION_CHANGED") {
+      if (
+        reason === "STALE_PREVIEW" ||
+        reason === "DESTINATION_EXISTS" ||
+        reason === "SELECTION_CHANGED"
+      ) {
+        await refreshSnapshot();
         setPreviewState({
           status: "stale",
-          reason: reason === "STALE_PREVIEW" ? "library_changed" : "selection_changed",
+          reason:
+            reason === "SELECTION_CHANGED"
+              ? "selection_changed"
+              : "library_changed",
         });
       }
       setStep("confirm");
@@ -319,7 +370,10 @@ export function ApplySubflowDialog({
         {readyPreview && (step === "confirm" || step === "apply") && !previewError && (
           <>
             <SummaryChips summary={readyPreview.summary} />
-            <PreviewRowsTable rows={readyPreview.rows} />
+            <PreviewRowsTable
+              rows={readyPreview.rows}
+              alreadyInTargetCount={readyPreview.summary.alreadyInTargetCount}
+            />
           </>
         )}
 
@@ -348,6 +402,16 @@ export function ApplySubflowDialog({
           >
             {step === "done" ? "닫기" : "취소"}
           </button>
+          {previewReconciledOnly && (
+            <button
+              type="button"
+              data-testid="apply-reconciled-close"
+              onClick={() => void handleClose()}
+              className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-background"
+            >
+              확인
+            </button>
+          )}
           {step === "done" && (
             <button
               type="button"
@@ -360,7 +424,7 @@ export function ApplySubflowDialog({
               최종 검증 열기
             </button>
           )}
-          {step === "preview" && (
+          {(step === "preview" || effectivePreviewState.status === "stale") && (
             <button
               type="button"
               disabled={busy}
@@ -368,7 +432,7 @@ export function ApplySubflowDialog({
               onClick={() => void runPreview()}
               className="rounded-md bg-primary px-3 py-2 text-sm font-semibold text-background"
             >
-              미리보기
+              {effectivePreviewState.status === "stale" ? "다시 미리보기" : "미리보기"}
             </button>
           )}
           {canApply && (

@@ -309,6 +309,19 @@ test.describe("NovelGuard smoke", () => {
     await expect(page.getByTestId("apply-preview-run")).toBeVisible();
   });
 
+  test("apply confirm table shows filename and move path", async ({ page }) => {
+    await openResolveWorkspace(page);
+    await prepareExecutableMoveFilter(page);
+    await openApplyDialog(page);
+    await clickApplyPreviewRun(page);
+    const table = page.getByTestId("apply-preview-table");
+    await expect(table).toBeVisible({ timeout: 15_000 });
+    await expect(table.getByRole("columnheader", { name: "파일" })).toBeVisible();
+    await expect(table.getByRole("columnheader", { name: "이동 경로" })).toBeVisible();
+    await expect(table.getByRole("columnheader", { name: "행 ID" })).toHaveCount(0);
+    await expect(table.locator("tbody td").first()).not.toContainText(/^file:/);
+  });
+
   test("NOV-19 preview disabled when filter has no executable rows", async ({ page }) => {
     await openResolveWorkspace(page, { prepareMovePreview: false });
     await page.getByTestId("resolve-type-filter-near").click();
@@ -597,6 +610,21 @@ test.describe("NovelGuard smoke", () => {
     });
     await expect(page.getByTestId("apply-stale-banner")).toBeVisible({ timeout: 5_000 });
     await expect(page.getByTestId("apply-confirm-run")).toHaveCount(0);
+    await expect(page.getByTestId("apply-preview-run")).toHaveText("다시 미리보기");
+  });
+
+  test("re-preview after stale clears banner and restores apply", async ({ page }) => {
+    await page.setViewportSize({ width: 1920, height: 900 });
+    await openResolveWorkspace(page);
+    await runApplyPreview(page);
+    await expect(page.getByTestId("apply-confirm-run")).toBeVisible();
+    await page.evaluate(() => {
+      (window as unknown as { __NOVELGUARD_TEST_BUMP_REVISION__?: () => void }).__NOVELGUARD_TEST_BUMP_REVISION__?.();
+    });
+    await expect(page.getByTestId("apply-stale-banner")).toBeVisible({ timeout: 5_000 });
+    await page.getByTestId("apply-preview-run").click();
+    await expect(page.getByTestId("apply-stale-banner")).toHaveCount(0, { timeout: 5_000 });
+    await expect(page.getByTestId("apply-confirm-run")).toBeVisible({ timeout: 5_000 });
   });
 
   test("pywebview host without api shows unavailable", async ({ page }) => {
