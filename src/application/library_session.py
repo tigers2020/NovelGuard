@@ -617,7 +617,6 @@ class LibrarySession:
                 ResolveAutoApproveJobCancelled,
                 _iso_now,
                 build_resolve_auto_approve_job_snapshot,
-                idle_resolve_auto_approve_job_snapshot,
                 run_resolve_auto_approve_dry_run,
             )
 
