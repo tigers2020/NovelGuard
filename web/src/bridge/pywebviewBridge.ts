@@ -89,7 +89,7 @@ export function createPywebviewBridge(api: PyApi): NovelGuardBridge {
         const page = await call<FileRowsPage>(api, "query_file_rows", query);
         validateFileRowsPage(page);
         return page;
-      }, { method: "query_file_rows", timeoutMs: 20_000 }),
+      }, { method: "query_file_rows" }),
     queryQualityRows: (query: QualityRowsQuery) =>
       callBridge(async () => {
         const page = await call<QualityRowsPage>(api, "query_quality_rows", query);

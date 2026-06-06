@@ -25,9 +25,18 @@ Commit under test:
 4. [ ] Scan section reaches success; `deepAnalysisStatus` becomes `complete` **or** error banner is shown with actionable message.
 5. [ ] Resolve tab loads duplicate groups after deep analysis completes (smoke sample: open one group).
 
+## Slice 1 (NOV-36) — degraded loading
+
+1. [ ] FileDock first page within 30s of indexReady OR degraded banner (no hard timeout alert)
+2. [ ] Resolve first page within 30s; no full-preload stall when >500 rows
+3. [ ] Partial rows remain visible during retry
+4. [ ] DEBUG logs contain `bridge_timing`, `lock_wait`, `sqlite_query`, `post_scan_phase` events
+
 ## Automated regression (developer / CI)
 
 ```bash
+python scripts/generate_large_library_fixture.py
+python scripts/large_library_loading_smoke.py
 python scripts/verify_phase_completion.py
 pytest tests/test_bridge_contract.py -q
 cd web && npm run test -- src/bridge/bridgeParity.test.ts
