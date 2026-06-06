@@ -29,10 +29,10 @@ if TYPE_CHECKING:
 
 def _install_signal_handlers(*, startup_ignore_seconds: float, debug: bool) -> None:
     """Ignore spurious startup SIGINT (Windows/Cursor) and optionally trace sources."""
-    startup_time = time.monotonic()
+    handler_start = time.monotonic()
 
     def _on_signal(signum: int, frame: FrameType | None) -> None:
-        age = time.monotonic() - startup_time
+        age = time.monotonic() - handler_start
         if debug:
             where = "unknown"
             if frame is not None:
@@ -53,9 +53,28 @@ def _install_signal_handlers(*, startup_ignore_seconds: float, debug: bool) -> N
             return
         raise KeyboardInterrupt
 
-    signal.signal(signal.SIGINT, _on_signal)
-    if hasattr(signal, "SIGBREAK"):
-        signal.signal(signal.SIGBREAK, _on_signal)
+    def _arm_handlers() -> None:
+        signal.signal(signal.SIGINT, _on_signal)
+        if hasattr(signal, "SIGBREAK"):
+            signal.signal(signal.SIGBREAK, _on_signal)
+
+    # On Windows a handler that only "returns" can still leave a pending KeyboardInterrupt.
+    if (
+        startup_ignore_seconds > 0
+        and sys.platform == "win32"
+        and not debug
+    ):
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        if hasattr(signal, "SIGBREAK"):
+            signal.signal(signal.SIGBREAK, signal.SIG_IGN)
+
+        def _enable_after_shield() -> None:
+            time.sleep(startup_ignore_seconds)
+            _arm_handlers()
+
+        threading.Thread(target=_enable_after_shield, daemon=True, name="sigint-shield").start()
+    else:
+        _arm_handlers()
 
     if not debug:
         return
@@ -368,188 +387,145 @@ def main(argv: list[str] | None = None) -> int:
 
     startup_time = time.monotonic()
     while True:
+        exit_code = 0
+        webhook_stop_event = threading.Event()
+        locks_dir: Path | None = None
+        lock_acquired = False
         try:
-            cfg = load_config()
-            break
-        except KeyboardInterrupt:
-            if not _ignore_startup_keyboard_interrupt(startup_time, sigint_ignore):
-                print("\n[daemon] stopped (interrupt)", flush=True)
-                return 130
+            while True:
+                try:
+                    cfg = load_config()
+                    break
+                except KeyboardInterrupt:
+                    if _ignore_startup_keyboard_interrupt(startup_time, sigint_ignore):
+                        continue
+                    print("\n[daemon] stopped (interrupt)", flush=True)
+                    return 130
 
-    if display_mode == "tui":
-        try:
-            from automation.runners.tui_dashboard import ensure_rich_available
+            if display_mode == "tui":
+                try:
+                    from automation.runners.tui_dashboard import ensure_rich_available
 
-            ensure_rich_available()
-        except RuntimeError as exc:
-            print(str(exc), file=sys.stderr)
-            return 2
-    daemon_cfg = cfg.get("daemon") or {}
-    linear = cfg.get("linear") or {}
-    poll = args.poll or float(daemon_cfg.get("poll_seconds") or 15)
-    webhook = not args.no_webhook and bool(daemon_cfg.get("webhook", True))
-    host = str(linear.get("webhook_host") or "127.0.0.1")
-    port = int(linear.get("webhook_port") or 8765)
-    path = str(linear.get("webhook_path") or "/linear/webhook")
+                    ensure_rich_available()
+                except RuntimeError as exc:
+                    print(str(exc), file=sys.stderr)
+                    return 2
+            daemon_cfg = cfg.get("daemon") or {}
+            linear = cfg.get("linear") or {}
+            poll = args.poll or float(daemon_cfg.get("poll_seconds") or 15)
+            webhook = not args.no_webhook and bool(daemon_cfg.get("webhook", True))
+            host = str(linear.get("webhook_host") or "127.0.0.1")
+            port = int(linear.get("webhook_port") or 8765)
+            path = str(linear.get("webhook_path") or "/linear/webhook")
 
-    locks_dir = resolve_locks_dir(cfg)
-    webhook_enabled = False
-    webhook_stop_event = threading.Event()
+            locks_dir = resolve_locks_dir(cfg)
+            webhook_enabled = False
 
-    try:
-        acquire_daemon_lock(locks_dir)
-    except RuntimeError as exc:
-        print(f"[daemon] {exc}", file=sys.stderr)
-        return 1
-
-    from automation.runners.emit import emit_or_print, init_emit
-    from automation.runners.event_bus import EventBus
-    from automation.runners.runtime_state import get_runtime_state, init_runtime_state
-
-    bus = EventBus()
-    init_runtime_state(
-        webhook_enabled=webhook,
-        host=host,
-        port=port,
-        path=path,
-        poll=poll,
-    )
-    init_emit(mode=display_mode, bus=bus)
-
-    emit_or_print("daemon", "config.ok", "config ok", plain_prefix="[daemon] config ok")
-
-    cleared = release_stale_locks(cfg)
-    if cleared:
-        emit_or_print(
-            "daemon",
-            "locks.cleared",
-            ", ".join(cleared),
-            plain_prefix=f"[daemon] cleared stale locks: {', '.join(cleared)}",
-        )
-
-    from automation.runners.job_worker import _queue
-
-    daemon_queue = _queue(cfg)
-    recovered = daemon_queue.recover_orphaned_running(locks_dir)
-    if recovered:
-        emit_or_print(
-            "daemon",
-            "queue.recovered",
-            ", ".join(recovered),
-            plain_prefix=f"[daemon] re-queued orphaned jobs: {', '.join(recovered)}",
-        )
-
-    emit_or_print("daemon", "lock.ok", "lock ok", plain_prefix="[daemon] lock ok")
-
-    exit_code = 0
-    try:
-        if webhook:
-            emit_or_print(
-                "daemon",
-                "webhook.starting",
-                f"http://{host}:{port}{path}",
-                plain_prefix=f"[daemon] starting webhook http://{host}:{port}{path}",
-            )
-            _start_webhook_background(
-                host,
-                port,
-                cfg=cfg,
-                debug=args.debug_interrupts,
-                stop_event=webhook_stop_event,
-            )
-            webhook_enabled = True
-            get_runtime_state().webhook_status = "running"
-            emit_or_print(
-                "daemon",
-                "webhook.running",
-                "webhook running",
-                plain_prefix="[daemon] webhook running",
-            )
-
-            emit_or_print(
-                "daemon",
-                "webhook.ngrok",
-                f"ngrok http {port}",
-                plain_prefix=f"[daemon] ngrok: keep existing tunnel or run: ngrok http {port}",
-            )
-            public = str(linear.get("webhook_public_url") or "").rstrip("/")
-            if public:
-                emit_or_print(
-                    "daemon",
-                    "webhook.url",
-                    f"{public}{path}",
-                    plain_prefix=f"[daemon] Linear webhook URL: {public}{path}",
-                )
-            else:
-                emit_or_print(
-                    "daemon",
-                    "webhook.url",
-                    f"https://<ngrok-host>{path}",
-                    plain_prefix=f"[daemon] Linear webhook URL: https://<ngrok-host>{path}",
-                )
-
-        emit_or_print(
-            "daemon",
-            "worker.poll",
-            f"poll every {poll}s",
-            plain_prefix=f"[daemon] worker poll every {poll}s (Ctrl+C to stop)",
-        )
-
-        while True:
-            stop_event: threading.Event | None = None
-            worker_thread: threading.Thread | None = None
             try:
-                if display_mode == "plain":
-                    stop_event = threading.Event()
-                    _worker_loop(
-                        cfg,
-                        poll,
-                        webhook_enabled,
-                        host,
-                        port,
-                        path,
-                        stop_event,
-                        display_mode,
-                        bus,
-                        daemon_queue,
-                        locks_dir,
+                acquire_daemon_lock(locks_dir)
+            except RuntimeError as exc:
+                print(f"[daemon] {exc}", file=sys.stderr)
+                return 1
+            lock_acquired = True
+
+            from automation.runners.emit import emit_or_print, init_emit
+            from automation.runners.event_bus import EventBus
+            from automation.runners.runtime_state import get_runtime_state, init_runtime_state
+
+            bus = EventBus()
+            init_runtime_state(
+                webhook_enabled=webhook,
+                host=host,
+                port=port,
+                path=path,
+                poll=poll,
+            )
+            init_emit(mode=display_mode, bus=bus)
+
+            emit_or_print("daemon", "config.ok", "config ok", plain_prefix="[daemon] config ok")
+
+            cleared = release_stale_locks(cfg)
+            if cleared:
+                emit_or_print(
+                    "daemon",
+                    "locks.cleared",
+                    ", ".join(cleared),
+                    plain_prefix=f"[daemon] cleared stale locks: {', '.join(cleared)}",
+                )
+
+            from automation.runners.job_worker import _queue
+
+            daemon_queue = _queue(cfg)
+            recovered = daemon_queue.recover_orphaned_running(locks_dir)
+            if recovered:
+                emit_or_print(
+                    "daemon",
+                    "queue.recovered",
+                    ", ".join(recovered),
+                    plain_prefix=f"[daemon] re-queued orphaned jobs: {', '.join(recovered)}",
+                )
+
+            emit_or_print("daemon", "lock.ok", "lock ok", plain_prefix="[daemon] lock ok")
+
+            if webhook:
+                emit_or_print(
+                    "daemon",
+                    "webhook.starting",
+                    f"http://{host}:{port}{path}",
+                    plain_prefix=f"[daemon] starting webhook http://{host}:{port}{path}",
+                )
+                _start_webhook_background(
+                    host,
+                    port,
+                    cfg=cfg,
+                    debug=args.debug_interrupts,
+                    stop_event=webhook_stop_event,
+                )
+                webhook_enabled = True
+                get_runtime_state().webhook_status = "running"
+                emit_or_print(
+                    "daemon",
+                    "webhook.running",
+                    "webhook running",
+                    plain_prefix="[daemon] webhook running",
+                )
+
+                emit_or_print(
+                    "daemon",
+                    "webhook.ngrok",
+                    f"ngrok http {port}",
+                    plain_prefix=f"[daemon] ngrok: keep existing tunnel or run: ngrok http {port}",
+                )
+                public = str(linear.get("webhook_public_url") or "").rstrip("/")
+                if public:
+                    emit_or_print(
+                        "daemon",
+                        "webhook.url",
+                        f"{public}{path}",
+                        plain_prefix=f"[daemon] Linear webhook URL: {public}{path}",
                     )
                 else:
-                    from automation.runners.tui_dashboard import run_live
+                    emit_or_print(
+                        "daemon",
+                        "webhook.url",
+                        f"https://<ngrok-host>{path}",
+                        plain_prefix=f"[daemon] Linear webhook URL: https://<ngrok-host>{path}",
+                    )
 
-                    stop_event = threading.Event()
-                    from automation.runners.worker_context import set_stop_event
+            emit_or_print(
+                "daemon",
+                "worker.poll",
+                f"poll every {poll}s",
+                plain_prefix=f"[daemon] worker poll every {poll}s (Ctrl+C to stop)",
+            )
 
-                    set_stop_event(stop_event)
-
-                    def refresh_stats() -> None:
-                        state = get_runtime_state()
-                        try:
-                            stats = daemon_queue.stats()
-                            state.queued = stats.get("queued")
-                            state.running = stats.get("running")
-                            state.succeeded = stats.get("succeeded")
-                            state.failed = stats.get("failed")
-                        except Exception:
-                            pass
-                        if state.cursor_running or state.verify_running:
-                            from automation.runners.cursor_runner import get_cursor_pid
-                            from automation.runners.git_snapshot import read_git_status_short
-
-                            state.cursor_pid = get_cursor_pid()
-                            count, lines = read_git_status_short(
-                                state.active_repo_path, max_lines=10
-                            )
-                            state.git_changed_count = count
-                            state.git_status_lines = tuple(lines)
-                        else:
-                            state.cursor_pid = None
-                            state.git_changed_count = None
-                            state.git_status_lines = ()
-
-                    worker_thread = threading.Thread(
-                        target=_worker_loop,
-                        args=(
+            while True:
+                stop_event: threading.Event | None = None
+                worker_thread: threading.Thread | None = None
+                try:
+                    if display_mode == "plain":
+                        stop_event = threading.Event()
+                        _worker_loop(
                             cfg,
                             poll,
                             webhook_enabled,
@@ -561,50 +537,101 @@ def main(argv: list[str] | None = None) -> int:
                             bus,
                             daemon_queue,
                             locks_dir,
-                        ),
-                        daemon=False,
-                    )
-                    worker_thread.start()
-                    try:
-                        run_live(
-                            stop_event=stop_event,
-                            worker_thread=worker_thread,
-                            state=get_runtime_state(),
-                            bus=bus,
-                            refresh_stats=refresh_stats,
                         )
-                    except KeyboardInterrupt:
+                    else:
+                        from automation.runners.tui_dashboard import run_live
+
+                        stop_event = threading.Event()
+                        from automation.runners.worker_context import set_stop_event
+
+                        set_stop_event(stop_event)
+
+                        def refresh_stats() -> None:
+                            state = get_runtime_state()
+                            try:
+                                stats = daemon_queue.stats()
+                                state.queued = stats.get("queued")
+                                state.running = stats.get("running")
+                                state.succeeded = stats.get("succeeded")
+                                state.failed = stats.get("failed")
+                            except Exception:
+                                pass
+                            if state.cursor_running or state.verify_running:
+                                from automation.runners.cursor_runner import get_cursor_pid
+                                from automation.runners.git_snapshot import read_git_status_short
+
+                                state.cursor_pid = get_cursor_pid()
+                                count, lines = read_git_status_short(
+                                    state.active_repo_path, max_lines=10
+                                )
+                                state.git_changed_count = count
+                                state.git_status_lines = tuple(lines)
+                            else:
+                                state.cursor_pid = None
+                                state.git_changed_count = None
+                                state.git_status_lines = ()
+
+                        worker_thread = threading.Thread(
+                            target=_worker_loop,
+                            args=(
+                                cfg,
+                                poll,
+                                webhook_enabled,
+                                host,
+                                port,
+                                path,
+                                stop_event,
+                                display_mode,
+                                bus,
+                                daemon_queue,
+                                locks_dir,
+                            ),
+                            daemon=False,
+                        )
+                        worker_thread.start()
+                        try:
+                            run_live(
+                                stop_event=stop_event,
+                                worker_thread=worker_thread,
+                                state=get_runtime_state(),
+                                bus=bus,
+                                refresh_stats=refresh_stats,
+                            )
+                        except KeyboardInterrupt:
+                            stop_event.set()
+                            if worker_thread.is_alive():
+                                worker_thread.join(timeout=5.0)
+                            raise
+                    break
+                except KeyboardInterrupt:
+                    if stop_event is not None:
                         stop_event.set()
-                        if worker_thread.is_alive():
-                            worker_thread.join(timeout=5.0)
-                        raise
-                break
-            except KeyboardInterrupt:
-                if stop_event is not None:
-                    stop_event.set()
-                if worker_thread is not None and worker_thread.is_alive():
-                    worker_thread.join(timeout=5.0)
-                if _ignore_startup_keyboard_interrupt(startup_time, sigint_ignore):
-                    continue
-                raise
-    except KeyboardInterrupt:
-        print("\n[daemon] stopped (interrupt)", flush=True)
-        if args.debug_interrupts:
-            print("[daemon] DEBUG: KeyboardInterrupt traceback:", file=sys.stderr, flush=True)
+                    if worker_thread is not None and worker_thread.is_alive():
+                        worker_thread.join(timeout=5.0)
+                    if _ignore_startup_keyboard_interrupt(startup_time, sigint_ignore):
+                        continue
+                    raise
+
+            return exit_code
+        except KeyboardInterrupt:
+            if _ignore_startup_keyboard_interrupt(startup_time, sigint_ignore):
+                continue
+            print("\n[daemon] stopped (interrupt)", flush=True)
+            if args.debug_interrupts:
+                print("[daemon] DEBUG: KeyboardInterrupt traceback:", file=sys.stderr, flush=True)
+                traceback.print_exc()
+            return 130
+        except BaseException as exc:
+            print(f"\n[daemon] fatal: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
             traceback.print_exc()
-        exit_code = 130
-    except BaseException as exc:
-        print(f"\n[daemon] fatal: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
-        traceback.print_exc()
-        exit_code = 1
-    finally:
-        from automation.runners.worker_context import set_stop_event
+            return 1
+        finally:
+            from automation.runners.worker_context import set_stop_event
 
-        webhook_stop_event.set()
-        set_stop_event(None)
-        release_daemon_lock(locks_dir)
-
-    return exit_code
+            webhook_stop_event.set()
+            set_stop_event(None)
+            if lock_acquired and locks_dir is not None:
+                release_daemon_lock(locks_dir)
 
 
 if __name__ == "__main__":

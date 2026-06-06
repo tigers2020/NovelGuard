@@ -31,9 +31,11 @@ Stop and report on instruction conflict.
 
 ## Git branch policy
 
-Agents **must not** create, rename, switch, delete, merge, or rebase branches.
+**No branch creation without a special reason.** Default: stay on the current branch; do not open a new branch “to be safe” or “for cleanup.”
 
-Forbidden for agents (enforced by `scripts/git_guard.py` on automation PATH):
+Agents **must not** create, rename, switch, delete, merge, or rebase branches unless the user explicitly requested that exact operation.
+
+Forbidden for agents (also enforced by `scripts/git_guard.py` on automation PATH):
 
 - `git checkout -b`, `git switch -c`, `git branch <name>`, `git branch -D`
 - `git merge`, `git rebase`, `git reset --hard`, `git worktree add`

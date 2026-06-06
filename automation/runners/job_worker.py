@@ -391,7 +391,8 @@ def process_job(cfg: dict[str, Any], record: JobRecord, *, prompt: str) -> dict[
             stall_retries = 0
             cursor = None
 
-            with log_path.open("w", encoding="utf-8") as log_file:
+            log_file = log_path.open("w", encoding="utf-8")
+            try:
                 log_file.write(f"prompt_log: {prompt_log}\n\n")
                 log_file.flush()
 
@@ -455,6 +456,8 @@ def process_job(cfg: dict[str, Any], record: JobRecord, *, prompt: str) -> dict[
                 log_file.write(
                     f"\n--- stdout ---\n{cursor.stdout}\n\n" f"--- stderr ---\n{cursor.stderr}\n"
                 )
+            finally:
+                log_file.close()
 
             if state is not None:
                 state.cursor_running = False
