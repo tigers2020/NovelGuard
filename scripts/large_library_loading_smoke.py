@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import logging
 import statistics
@@ -39,6 +40,18 @@ def _wait_scan_success(api, timeout: float = 600.0) -> dict:
         time.sleep(0.1)
         snap = api.get_snapshot()
     raise TimeoutError("scan did not reach success")
+
+
+def _wait_pipeline_idle(api, timeout: float = 300.0) -> dict:
+    deadline = time.monotonic() + timeout
+    snap = api.get_snapshot()
+    while time.monotonic() < deadline:
+        if snap["pipeline"]["phase"] != "idle":
+            time.sleep(0.05)
+            snap = api.get_snapshot()
+            continue
+        break
+    return snap
 
 
 def _timed(call) -> tuple[object, float]:
@@ -95,17 +108,26 @@ def main() -> int:
         _wait_index_ready(api)
         timings["index_ready_ms"] = (time.perf_counter() - index_ready_at) * 1000.0
         _wait_scan_success(api)
+        _wait_pipeline_idle(api)
 
         file_samples: list[float] = []
         for _ in range(5):
-            _, ms = _timed(lambda: api.query_file_rows({"limit": 100, "cursor": None}))
+            _, ms = _timed(
+                lambda bridge=api: bridge.query_file_rows({"limit": 100, "cursor": None})
+            )
             file_samples.append(ms)
         timings["query_file_rows_p95_ms"] = statistics.quantiles(file_samples, n=20)[-1]
 
         _, review_ms = _timed(
-            lambda: api.query_review_rows({"viewMode": "all", "limit": 100, "cursor": None})
+            lambda bridge=api: bridge.query_review_rows(
+                {"viewMode": "all", "limit": 100, "cursor": None}
+            )
         )
         timings["query_review_rows_first_ms"] = review_ms
+
+        del api, session, index, settings
+        gc.collect()
+        time.sleep(0.05)
 
     report = {
         "status": "PASS",

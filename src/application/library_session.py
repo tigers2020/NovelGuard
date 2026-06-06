@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import threading
-import time
 from collections.abc import Callable
-from contextlib import contextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
 from application import scan_pipeline_constants
 from application.app_settings import AppSettings, InvalidSettingValueError
+from application.bridge_timing import log_phase_end, log_phase_start
 from application.dto_mapper import (
     build_snapshot,
     scan_timestamp,
@@ -50,6 +49,42 @@ _MAX_QUERY_LIMIT = 200
 _DEFAULT_QUERY_LIMIT = 100
 _WORK_MODES = frozenset({"scan", "resolve", "quality"})
 _LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class _RelationPhaseInputs:
+    folder: str
+    files: tuple[FileRecord, ...]
+    files_by_id: dict[str, FileRecord]
+    near_groups_by_id: dict[str, NearDuplicateGroup]
+    library_revision: int
+    include_relation: bool
+
+
+@dataclass(frozen=True)
+class _RelationPhaseResult:
+    relation_groups_by_id: dict[str, RelationGroup]
+    relation_rows: list[dict[str, Any]]
+    valid_group_ids: set[str]
+    valid_file_ids: set[str]
+
+
+@dataclass(frozen=True)
+class _NearPhaseInputs:
+    folder: str
+    files: tuple[FileRecord, ...]
+    files_by_id: dict[str, FileRecord]
+    library_revision: int
+    scan_last_run: str | None
+
+
+@dataclass(frozen=True)
+class _NearPhaseComputeResult:
+    detection_result: Any
+    near_rows: list[dict[str, Any]]
+    near_groups_by_id: dict[str, NearDuplicateGroup]
+    valid_group_ids: set[str]
+    valid_file_ids: set[str]
 
 
 def _record_for_quality_recheck(record: FileRecord) -> FileRecord:
@@ -393,30 +428,8 @@ class LibrarySession:
                 scan_options=self._scan_options_labels(),
             )
 
-    @contextmanager
-    def _timed_lock(self, phase: str):
-        t0 = time.perf_counter()
-        self._lock.acquire()
-        wait_ms = int((time.perf_counter() - t0) * 1000)
-        if wait_ms > 50:
-            _LOGGER.debug(
-                "%s",
-                json.dumps(
-                    {
-                        "event": "lock_wait",
-                        "phase": phase,
-                        "lock_wait_ms": wait_ms,
-                        "holder_phase": self._background_phase,
-                    }
-                ),
-            )
-        try:
-            yield
-        finally:
-            self._lock.release()
-
     def query_review_rows(self, query: dict[str, Any]) -> dict[str, Any]:
-        with self._timed_lock("query_review_rows"):
+        with self._lock:
             limit = _clamp_query_limit(query)
             return query_review_page(self._review_rows_cache, query, limit=limit)
 
@@ -948,7 +961,24 @@ class LibrarySession:
         self._run_near_duplicate_phase(folder, files)
         self._run_relation_phase(folder, files)
 
-    def _run_relation_phase(self, folder: str, files: list[FileRecord]) -> None:
+    def _snapshot_relation_phase_inputs(
+        self, folder: str, files: list[FileRecord]
+    ) -> _RelationPhaseInputs:
+        with self._lock:
+            include_relation = self._settings.get_bool(SETTINGS_KEY_INCLUDE_RELATION)
+            return _RelationPhaseInputs(
+                folder=folder,
+                files=tuple(files),
+                files_by_id=dict(self._files_by_id),
+                near_groups_by_id=dict(self._near_groups_by_id),
+                library_revision=self._library_revision,
+                include_relation=include_relation,
+            )
+
+    def _compute_relation_phase(self, inputs: _RelationPhaseInputs) -> _RelationPhaseResult | None:
+        if not inputs.include_relation:
+            return None
+
         from application.relation_batch_id import filename_set_digest, make_relation_batch_id
         from application.relation_membership import (
             build_exact_membership_by_file_id,
@@ -959,87 +989,142 @@ class LibrarySession:
         from domain.duplicate_exact import find_exact_duplicate_groups
         from domain.filename_relation import detect_filename_relations
 
-        with self._lock:
-            if not self._settings.get_bool(SETTINGS_KEY_INCLUDE_RELATION):
-                return
-            near_groups_snapshot = dict(self._near_groups_by_id)
-            files_by_id_snapshot = dict(self._files_by_id)
-            library_revision = self._library_revision
-
+        files = list(inputs.files)
         relation_batch_id = make_relation_batch_id(
-            library_revision=library_revision,
+            library_revision=inputs.library_revision,
             filename_set_digest_value=filename_set_digest(files),
         )
         result = detect_filename_relations(
             files,
             exact_membership_by_file_id=build_exact_membership_by_file_id(files),
-            near_membership_by_file_id=build_near_membership_by_file_id(near_groups_snapshot),
+            near_membership_by_file_id=build_near_membership_by_file_id(inputs.near_groups_by_id),
             relation_batch_id=relation_batch_id,
         )
-        computed_groups = {group.group_id: group for group in result.groups}
-        relation_skeleton = build_relation_review_rows(list(result.groups), files_by_id_snapshot)
-        stored = self._index.load_review_state(folder)
+        relation_groups_by_id = {group.group_id: group for group in result.groups}
+        relation_skeleton = build_relation_review_rows(list(result.groups), inputs.files_by_id)
+        stored = self._index.load_review_state(inputs.folder)
         exact_groups = find_exact_duplicate_groups(files)
         relation_rows = merge_review_state(
             relation_skeleton,
             stored,
             groups=exact_groups,
-            files_by_id=files_by_id_snapshot,
+            files_by_id=inputs.files_by_id,
         )
         valid_group_ids = (
             {group.group_id for group in exact_groups}
-            | set(near_groups_snapshot.keys())
-            | set(computed_groups.keys())
+            | set(inputs.near_groups_by_id.keys())
+            | set(relation_groups_by_id.keys())
         )
         valid_file_ids = {file_record.id for file_record in files}
+        return _RelationPhaseResult(
+            relation_groups_by_id=relation_groups_by_id,
+            relation_rows=relation_rows,
+            valid_group_ids=valid_group_ids,
+            valid_file_ids=valid_file_ids,
+        )
 
+    def _apply_relation_phase(
+        self,
+        folder: str,
+        result: _RelationPhaseResult | None,
+    ) -> None:
         with self._lock:
             self._strip_relation_rows()
-            self._relation_groups_by_id = computed_groups
-            self._review_rows_cache.extend(relation_rows)
-            self._index.prune_review_state(folder, valid_group_ids, valid_file_ids)
-            self._refresh_duplicate_group_count()
-            self._refresh_resolve_counts()
+            self._relation_groups_by_id = {}
+            if result is None:
+                return
+            self._relation_groups_by_id = result.relation_groups_by_id
+            self._review_rows_cache.extend(result.relation_rows)
+        if result is not None:
+            self._index.prune_review_state(folder, result.valid_group_ids, result.valid_file_ids)
+            with self._lock:
+                self._refresh_duplicate_group_count()
+                self._refresh_resolve_counts()
             self._sync_file_review_projection()
 
-    def _run_near_duplicate_phase(self, folder: str, files: list[FileRecord]) -> None:
+    def _run_relation_phase(self, folder: str, files: list[FileRecord]) -> None:
+        inputs = self._snapshot_relation_phase_inputs(folder, files)
+        result = self._compute_relation_phase(inputs)
+        self._apply_relation_phase(folder, result)
+
+    def _snapshot_near_phase_inputs(self, folder: str, files: list[FileRecord]) -> _NearPhaseInputs:
+        with self._lock:
+            return _NearPhaseInputs(
+                folder=folder,
+                files=tuple(files),
+                files_by_id=dict(self._files_by_id),
+                library_revision=self._library_revision,
+                scan_last_run=self._scan_last_run,
+            )
+
+    def _compute_near_phase(self, inputs: _NearPhaseInputs) -> _NearPhaseComputeResult:
         from application.near_batch_id import content_set_digest, make_near_batch_id
         from application.near_duplicate_detect import (
             build_exact_group_by_file_id,
             run_near_duplicate_detection,
         )
+        from application.near_review_rows_builder import build_near_review_rows
+        from application.review_state_merge import merge_review_state
+        from domain.duplicate_exact import find_exact_duplicate_groups
 
-        root = Path(folder)
-        with self._lock:
-            library_revision = self._library_revision
-            scan_last_run = self._scan_last_run
-
+        files = list(inputs.files)
+        folder = inputs.folder
         near_batch_id = make_near_batch_id(
-            library_revision=library_revision,
+            library_revision=inputs.library_revision,
             folder_path=folder,
             content_set_digest_value=content_set_digest(files),
-            scan_completed_at=scan_last_run,
+            scan_completed_at=inputs.scan_last_run,
         )
         exact_group_by_file_id = build_exact_group_by_file_id(files)
         large_library = len(files) >= scan_pipeline_constants.SCAN_NEAR_FAST_LIBRARY_THRESHOLD
-        result = run_near_duplicate_detection(
-            root=root,
+        detection_result = run_near_duplicate_detection(
+            root=Path(folder),
             files=files,
             near_batch_id=near_batch_id,
             exact_group_by_file_id=exact_group_by_file_id,
             large_library=large_library,
         )
+        self._index.replace_near_duplicate_results(folder, detection_result)
+        near_groups_by_id = {group.group_id: group for group in detection_result.groups}
+        near_skeleton = build_near_review_rows(list(detection_result.groups), inputs.files_by_id)
+        stored = self._index.load_review_state(folder)
+        exact_groups = find_exact_duplicate_groups(files)
+        near_rows = merge_review_state(
+            near_skeleton,
+            stored,
+            groups=exact_groups,
+            files_by_id=inputs.files_by_id,
+        )
+        valid_group_ids = {group.group_id for group in exact_groups} | set(near_groups_by_id.keys())
+        valid_file_ids = {file_record.id for file_record in files}
+        return _NearPhaseComputeResult(
+            detection_result=detection_result,
+            near_rows=near_rows,
+            near_groups_by_id=near_groups_by_id,
+            valid_group_ids=valid_group_ids,
+            valid_file_ids=valid_file_ids,
+        )
+
+    def _apply_near_phase(self, folder: str, computed: _NearPhaseComputeResult) -> None:
         with self._lock:
             self._strip_near_rows()
-            self._near_groups_by_id = {}
-            self._index.replace_near_duplicate_results(folder, result)
-            self._merge_near_duplicate_result(folder, files, result)
+            self._near_groups_by_id = computed.near_groups_by_id
+            self._review_rows_cache.extend(computed.near_rows)
+        self._index.prune_review_state(folder, computed.valid_group_ids, computed.valid_file_ids)
+        with self._lock:
+            self._refresh_duplicate_group_count()
+            self._refresh_resolve_counts()
+        self._sync_file_review_projection()
+
+    def _run_near_duplicate_phase(self, folder: str, files: list[FileRecord]) -> None:
+        inputs = self._snapshot_near_phase_inputs(folder, files)
+        computed = self._compute_near_phase(inputs)
+        self._apply_near_phase(folder, computed)
 
     def _restore_near_cache(self, folder: str, files: list[FileRecord]) -> None:
         result = self._index.load_near_duplicate_result(folder)
         if result is None or not result.groups:
             return
-        self._strip_near_rows()
         self._merge_near_duplicate_result(folder, files, result)
 
     def _merge_near_duplicate_result(
@@ -1048,30 +1133,31 @@ class LibrarySession:
         files: list[FileRecord],
         result: Any,
     ) -> None:
+        inputs = self._snapshot_near_phase_inputs(folder, files)
         from application.near_review_rows_builder import build_near_review_rows
         from application.review_state_merge import merge_review_state
         from domain.duplicate_exact import find_exact_duplicate_groups
 
-        self._near_groups_by_id = {group.group_id: group for group in result.groups}
-        near_skeleton = build_near_review_rows(list(result.groups), self._files_by_id)
+        files_list = list(inputs.files)
+        near_groups_by_id = {group.group_id: group for group in result.groups}
+        near_skeleton = build_near_review_rows(list(result.groups), inputs.files_by_id)
         stored = self._index.load_review_state(folder)
-        exact_groups = find_exact_duplicate_groups(files)
+        exact_groups = find_exact_duplicate_groups(files_list)
         near_rows = merge_review_state(
             near_skeleton,
             stored,
             groups=exact_groups,
-            files_by_id=self._files_by_id,
+            files_by_id=inputs.files_by_id,
         )
-        self._review_rows_cache.extend(near_rows)
-
-        valid_group_ids = {group.group_id for group in exact_groups} | set(
-            self._near_groups_by_id.keys()
+        computed = _NearPhaseComputeResult(
+            detection_result=result,
+            near_rows=near_rows,
+            near_groups_by_id=near_groups_by_id,
+            valid_group_ids={group.group_id for group in exact_groups}
+            | set(near_groups_by_id.keys()),
+            valid_file_ids={file_record.id for file_record in files_list},
         )
-        valid_file_ids = {file_record.id for file_record in files}
-        self._index.prune_review_state(folder, valid_group_ids, valid_file_ids)
-        self._refresh_duplicate_group_count()
-        self._refresh_resolve_counts()
-        self._sync_file_review_projection()
+        self._apply_near_phase(folder, computed)
 
     def _rebuild_quality_index(self, folder: str, files: list[FileRecord]) -> None:
         issues = analyze_quality(folder, files)
@@ -1120,17 +1206,6 @@ class LibrarySession:
                 self._pipeline_label = label
                 self._pipeline_percent = self._background_percent
             self._pipeline_cancellable = False
-        _LOGGER.debug(
-            "%s",
-            json.dumps(
-                {
-                    "event": "post_scan_phase",
-                    "phase": phase,
-                    "step": step,
-                    "step_total": step_total,
-                }
-            ),
-        )
 
     def _clear_background_progress(self) -> None:
         with self._lock:
@@ -1272,10 +1347,30 @@ class LibrarySession:
 
     def _start_post_scan_worker(self, folder: str) -> None:
         def _worker() -> None:
+            worker_t0 = log_phase_start("worker")
+            worker_status = "complete"
+            active_phase: str | None = None
+            active_t0: float | None = None
+
+            def _begin_phase(phase: str) -> None:
+                nonlocal active_phase, active_t0
+                if active_phase is not None and active_t0 is not None:
+                    log_phase_end(active_phase, active_t0, status="complete")
+                active_phase = phase
+                active_t0 = log_phase_start(phase)
+
+            def _finish_active_phase(*, status: str = "complete") -> None:
+                nonlocal active_phase, active_t0
+                if active_phase is not None and active_t0 is not None:
+                    log_phase_end(active_phase, active_t0, status=status)
+                active_phase = None
+                active_t0 = None
+
             try:
                 with self._lock:
                     self._deep_analysis_status = "running"
                     self._deep_analysis_error = None
+                _begin_phase("exact_index")
                 self._set_exact_index_progress("파일 메타데이터 로드 중…", 84)
                 files = self._index.files()
                 defer_projection = len(files) > 500
@@ -1312,8 +1407,10 @@ class LibrarySession:
                     self._scan_state = "success"
                     self._scan_last_run = scan_timestamp()
                     self._library_revision += 1
-                    if defer_projection:
-                        self._sync_file_review_projection()
+
+                if defer_projection:
+                    self._sync_file_review_projection()
+                _finish_active_phase()
 
                 deep_analysis_non_blocking = (
                     len(files) >= scan_pipeline_constants.SCAN_DEEP_ANALYSIS_BACKGROUND_THRESHOLD
@@ -1325,6 +1422,7 @@ class LibrarySession:
                         self._pipeline_percent = 0
 
                 block_pipeline = not deep_analysis_non_blocking
+                _begin_phase("queue")
                 self._set_background_progress(
                     phase="queue",
                     label="중복·관계 분석 준비 중…",
@@ -1332,6 +1430,9 @@ class LibrarySession:
                     step_total=step_total,
                     block_pipeline=block_pipeline,
                 )
+                _finish_active_phase()
+
+                _begin_phase("prepare")
                 self._set_background_progress(
                     phase="prepare",
                     label="분석 대상 파일 준비 중…",
@@ -1339,6 +1440,9 @@ class LibrarySession:
                     step_total=step_total,
                     block_pipeline=block_pipeline,
                 )
+                _finish_active_phase()
+
+                _begin_phase("relation")
                 self._set_background_progress(
                     phase="relation",
                     label="파일명 관계 분석 중…",
@@ -1348,8 +1452,10 @@ class LibrarySession:
                 )
                 self._run_relation_phase(folder, files)
                 with self._lock:
-                    self._refresh_duplicate_group_count()
                     self._library_revision += 1
+                _finish_active_phase()
+
+                _begin_phase("near")
                 self._set_background_progress(
                     phase="near",
                     label="근사 중복 분석 중…",
@@ -1359,10 +1465,11 @@ class LibrarySession:
                 )
                 self._run_near_duplicate_phase(folder, files)
                 with self._lock:
-                    self._refresh_duplicate_group_count()
                     self._library_revision += 1
+                _finish_active_phase()
 
                 if defer_projection:
+                    _begin_phase("projection")
                     self._set_background_progress(
                         phase="projection",
                         label="검토 인덱스 동기화 중…",
@@ -1371,8 +1478,11 @@ class LibrarySession:
                         block_pipeline=block_pipeline,
                     )
                     self._sync_file_review_projection()
+                    _finish_active_phase()
             except Exception as exc:
                 _LOGGER.exception("post-scan worker failed")
+                worker_status = "error"
+                _finish_active_phase(status="error")
                 with self._lock:
                     self._scan_state = "error"
                     self._deep_analysis_status = "error"
@@ -1394,6 +1504,7 @@ class LibrarySession:
                     self._post_scan_running = False
                     self._clear_background_progress()
                     self._library_revision += 1
+                log_phase_end("worker", worker_t0, status=worker_status)
 
         threading.Thread(target=_worker, name="novelguard-post-scan", daemon=True).start()
 
